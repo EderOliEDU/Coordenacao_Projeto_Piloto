@@ -1,59 +1,141 @@
-# Docs — Escalas de Resposta e Regra de UI
+# Piloto EI – Coordenação Projeto Piloto Educação Infantil
 
-Este diretório contém o diagrama PlantUML que modela o formulário versionado e a forma como as perguntas são respondidas pelos professores.
+Sistema de acompanhamento de aprendizagem de alunos da Educação Infantil (EI), utilizado por professores para registro e envio de formulários de avaliação.
 
-## Arquivo
-- `diagrama-classes-perguntas.puml`: diagrama de classes do modelo de perguntas/escala/respostas.
+## Visão Geral
 
-## Conceitos principais
+- **Backend**: Node.js + Express + Prisma ORM + SQLite
+- **Frontend**: React + Vite (TypeScript)
+- **Autenticação**: JWT + LDAP/Active Directory (com modo mock para desenvolvimento)
+- **Importação de dados**: Scripts CLI para importação via CSV
 
-### Formulário versionado
-As perguntas podem mudar por versão. Por isso o modelo inclui:
-- `Formulario` (com `versao`)
-- `SecaoFormulario`
-- `Pergunta`
+## Pré-requisitos
 
-Cada pergunta pertence a uma seção e o formulário pode ser publicado por versão.
+- Node.js 18+
+- npm 9+
 
-### Escalas/Legendas reutilizáveis
-Em vez de “fixar” opções em cada pergunta, usamos uma entidade de escala:
-- `EscalaResposta`
-- `OpcaoEscala`
+## Estrutura
 
-A pergunta aponta para a escala (`Pergunta.escalaId`), permitindo reutilização e alteração por versão.
+```
+backend/    → API REST (Express + Prisma)
+frontend/   → Interface web (React + Vite)
+docs/       → Diagramas e documentação técnica
+```
 
-## Escala 1 — Linguagem (por cores)
-Usada **somente** para os itens:
-- LINGUAGEM – ORALIDADE E LEITURA (Consciência fonológica e fonêmica)
-- LINGUAGEM – ESCRITA
-- LINGUAGEM – COMPREENSÃO LEITORA
+## Configuração e Execução
 
-### Opções (chave → cor)
-- PEA-ND  → `#F39C12`
-- PEA-NDA → `#E67E22`
-- PEA-TD  → `#F1C40F`
-- PEA-PD  → `#3498DB`
-- PEA-D   → `#2ECC71`
+### Backend
 
-### Regra de UI (obrigatória)
-- No formulário, **não exibir texto nas opções**.
-- Cada opção deve aparecer apenas como um **swatch/botão colorido**.
-- A “Legenda” (descrições completas) deve ficar em um painel separado **“Consultar legenda”**.
+```bash
+cd backend
+cp .env.example .env
+# Edite .env conforme necessário (LDAP_MOCK=true para dev)
+npm install
+npx prisma migrate dev --name init
+npx ts-node --project tsconfig.seed.json prisma/seed.ts
+npm run dev
+```
 
-## Escala 2 — Fluxo
-Usada para:
-- MATEMÁTICA
-- SENSO DE ORGANIZAÇÃO - CUIDADO DE SI, DO OUTRO E DO AMBIENTE
+### Frontend
 
-Opções:
-- SF: segue o fluxo
-- SFP: segue o fluxo parcialmente
-- NSF: não segue o fluxo
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-(Se desejado, cores podem ser adicionadas futuramente, mas não são obrigatórias.)
+Acesse: http://localhost:5173
 
-## Respostas
-- Uma `Submissao` representa o preenchimento para um aluno em uma turma/escola e versão do formulário.
-- Uma `Resposta` referencia:
-  - a `Pergunta`
-  - a `OpcaoEscala` escolhida (múltipla escolha **única**)
+### Variáveis de Ambiente (backend/.env)
+
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | Caminho do banco SQLite (`file:./dev.db`) |
+| `JWT_SECRET` | Segredo para assinatura dos tokens JWT |
+| `JWT_EXPIRES_IN` | Validade do token (ex: `8h`) |
+| `LDAP_URL` | URL do servidor AD/LDAP |
+| `LDAP_BASE_DN` | Base DN de busca |
+| `LDAP_BIND_DN` | DN da conta de serviço |
+| `LDAP_BIND_PASSWORD` | Senha da conta de serviço |
+| `LDAP_SEARCH_FILTER` | Filtro de busca (ex: `(sAMAccountName={{username}})`) |
+| `LDAP_MOCK` | `"true"` para modo dev (qualquer senha aceita) |
+| `PORT` | Porta do servidor (padrão: 3001) |
+
+## Importação de Dados via CSV
+
+### Via API (multipart/form-data)
+
+```
+POST /api/admin/importar/:tipo
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+arquivo: <arquivo.csv>
+```
+
+Tipos: `escolas`, `turmas`, `professores`, `alocacoes`, `alunos`
+
+### Via CLI
+
+```bash
+cd backend
+npx ts-node src/scripts/importCsv.ts --tipo alunos --arquivo /caminho/alunos.csv
+```
+
+### Formatos CSV
+
+**escolas.csv**
+```csv
+nome,municipio,uf
+Escola Municipal X,São Paulo,SP
+```
+
+**turmas.csv**
+```csv
+nome,codigo,anoLetivo,turno,escolaNome
+Turma A,T001,2024,MANHA,Escola Municipal X
+```
+
+**professores.csv**
+```csv
+nome,login,email,matricula
+João Silva,joao.silva,joao@escola.local,MAT001
+```
+
+**alocacoes.csv**
+```csv
+professorLogin,turmaNome
+joao.silva,Turma A
+```
+
+**alunos.csv**
+```csv
+nome,matricula,dataNascimento,sexo,turmaNome
+Pedro Santos,ALU001,2017-03-15,M,Turma A
+```
+
+## Seed
+
+O seed popula o banco com:
+- 3 escalas de resposta: `ESC_PEA_COR` (cores), `ESC_FLUXO`, `ESC_SIM_NAO`
+- 1 formulário ativo "Formulário Piloto EI" v1.0.0 com 6 seções e ~20 perguntas
+
+```bash
+cd backend && npx ts-node --project tsconfig.seed.json prisma/seed.ts
+```
+
+## Diagrama de Classes
+
+Ver: `docs/diagrama-classes-formulario-v4.puml`
+
+## Fluxo do Usuário
+
+1. Professor acessa `/login` e entra com credenciais de rede
+2. Vê suas turmas atribuídas em `/turmas`
+3. Acessa uma turma e vê a lista de alunos
+4. Clica em um aluno para preencher o formulário
+5. Responde as perguntas usando seletores de cor (PEA) ou botões de texto (Fluxo/Sim-Não)
+6. Salva como rascunho ou envia definitivamente
+
+## Licença
+
+Uso interno – Secretaria de Educação.
