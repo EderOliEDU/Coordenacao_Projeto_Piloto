@@ -16,14 +16,15 @@ const loginLimiter = rateLimit({
 });
 
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {
-  const { login, password } = req.body;
+  const { login, senha, password } = req.body;
+  const pwd = senha || password;
 
-  if (!login || !password) {
+  if (!login || !pwd) {
     return res.status(400).json({ error: 'Login e senha são obrigatórios' });
   }
 
   try {
-    const ldapUser = await authenticate(login, password);
+    const ldapUser = await authenticate(login, pwd);
 
     // Upsert professor
     let professor = await prisma.professor.findUnique({ where: { login: ldapUser.login } });
@@ -38,10 +39,11 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       });
     }
 
+    const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as any;
     const token = jwt.sign(
       { id: professor.id, login: professor.login, nome: professor.nome },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+      { expiresIn }
     );
 
     res.json({ token, professor: { id: professor.id, nome: professor.nome, login: professor.login } });
