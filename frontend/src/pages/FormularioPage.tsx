@@ -80,7 +80,7 @@ export default function FormularioPage() {
       }
 
       const res = await api.post('/submissoes', body)
-      const sid = res.data.id
+      const sid: string = res.data.id
       setSubmissaoId(sid)
       setStatus('RASCUNHO')
 
@@ -105,9 +105,6 @@ export default function FormularioPage() {
   const isEnviada = status === 'ENVIADA'
   const escalas = allEscalas()
 
-  // suppress unused warning for submissaoId
-  void submissaoId
-
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
       {/* Header */}
@@ -115,7 +112,7 @@ export default function FormularioPage() {
         <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>← Voltar</button>
         <div>
           <h1 style={{ margin: 0, fontSize: 20 }}>{formulario.nome}</h1>
-          <p style={{ margin: '2px 0 0', color: '#636e72', fontSize: 13 }}>Aluno: <strong>{aluno.nome}</strong> {aluno.matricula ? `· Mat. ${aluno.matricula}` : ''}</p>
+          <p style={{ margin: '2px 0 0', color: '#636e72', fontSize: 13 }}>Aluno: <strong>{aluno.nome}</strong> {aluno.matricula ? `· Mat. ${aluno.matricula}` : ''}{submissaoId ? ` · #${submissaoId.slice(0, 8)}` : ''}</p>
         </div>
         {isEnviada && (
           <span style={{ marginLeft: 'auto', background: '#00b894', color: '#fff', borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 700 }}>Enviada</span>

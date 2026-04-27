@@ -8,7 +8,7 @@ export interface LdapUser {
 
 /** Escape special LDAP filter characters to prevent injection */
 function escapeLdapFilter(value: string): string {
-  return value.replace(/[\\*()\x00/]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+  return value.replace(/[\\*()\x00/&]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 }
 
 export async function authenticate(login: string, password: string): Promise<LdapUser> {

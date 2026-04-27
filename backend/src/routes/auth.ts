@@ -41,7 +41,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     const token = jwt.sign(
       { id: professor.id, login: professor.login, nome: professor.nome },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' } as any
+      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
 
     res.json({ token, professor: { id: professor.id, nome: professor.nome, login: professor.login } });
