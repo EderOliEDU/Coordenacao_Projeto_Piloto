@@ -35,7 +35,15 @@ async function main() {
 
   if (tipo === 'escolas') {
     for (const r of records) {
-      await prisma.escola.create({ data: { nome: r.nome, municipio: r.municipio, uf: r.uf } });
+      if (r.id) {
+        await prisma.escola.upsert({
+          where: { id: r.id },
+          create: { id: r.id, nome: r.nome, municipio: r.municipio, uf: r.uf },
+          update: { nome: r.nome, municipio: r.municipio, uf: r.uf },
+        });
+      } else {
+        await prisma.escola.create({ data: { nome: r.nome, municipio: r.municipio, uf: r.uf } });
+      }
       count++;
     }
   } else if (tipo === 'turmas') {
