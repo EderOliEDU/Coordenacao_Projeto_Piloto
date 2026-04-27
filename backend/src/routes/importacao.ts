@@ -18,6 +18,7 @@ router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, re
 
   try {
     let count = 0;
+    const warnings: string[] = [];
 
     if (tipo === 'escolas') {
       for (const r of records) {
@@ -37,7 +38,7 @@ router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, re
     } else if (tipo === 'turmas') {
       for (const r of records) {
         const escola = await prisma.escola.findFirst({ where: { nome: r.escolaNome } });
-        if (!escola) { console.warn(`Escola não encontrada: ${r.escolaNome}`); continue; }
+        if (!escola) { warnings.push(`Escola não encontrada: "${r.escolaNome}" — linha ignorada`); continue; }
         await prisma.turma.create({
           data: { nome: r.nome, codigo: r.codigo, anoLetivo: parseInt(r.anoLetivo), turno: r.turno, escolaId: escola.id },
         });
@@ -56,7 +57,8 @@ router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, re
       for (const r of records) {
         const professor = await prisma.professor.findUnique({ where: { login: r.professorLogin } });
         const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
-        if (!professor || !turma) { console.warn(`Professor ou turma não encontrados`); continue; }
+        if (!professor) { warnings.push(`Professor não encontrado: "${r.professorLogin}" — linha ignorada`); continue; }
+        if (!turma) { warnings.push(`Turma não encontrada: "${r.turmaNome}" — linha ignorada`); continue; }
         await prisma.professorTurma.upsert({
           where: { professorId_turmaId: { professorId: professor.id, turmaId: turma.id } },
           create: { professorId: professor.id, turmaId: turma.id },
@@ -67,7 +69,7 @@ router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, re
     } else if (tipo === 'alunos') {
       for (const r of records) {
         const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
-        if (!turma) { console.warn(`Turma não encontrada: ${r.turmaNome}`); continue; }
+        if (!turma) { warnings.push(`Turma não encontrada: "${r.turmaNome}" — aluno "${r.nome}" ignorado`); continue; }
         await prisma.aluno.create({
           data: {
             nome: r.nome,
@@ -83,7 +85,7 @@ router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, re
       return res.status(400).json({ error: `Tipo inválido: ${tipo}` });
     }
 
-    res.json({ message: `Importados ${count} registros`, count });
+    res.json({ message: `Importados ${count} registros`, count, warnings });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

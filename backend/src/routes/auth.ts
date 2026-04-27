@@ -39,7 +39,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       });
     }
 
-    const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as any;
+    const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
     const token = jwt.sign(
       { id: professor.id, login: professor.login, nome: professor.nome },
       process.env.JWT_SECRET!,

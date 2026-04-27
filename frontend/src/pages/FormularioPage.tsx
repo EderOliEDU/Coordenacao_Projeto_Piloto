@@ -12,6 +12,8 @@ interface Formulario { id: string; nome: string; versao: string; secoes: Secao[]
 
 type Respostas = Record<string, string> // perguntaId -> opcaoEscalaId
 
+type Notification = { type: 'success' | 'error'; message: string }
+
 export default function FormularioPage() {
   const { turmaId, alunoId } = useParams<{ turmaId: string; alunoId: string }>()
   const navigate = useNavigate()
@@ -25,6 +27,12 @@ export default function FormularioPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [observacoes, setObservacoes] = useState('')
+  const [notification, setNotification] = useState<Notification | null>(null)
+
+  function showNotification(type: 'success' | 'error', message: string) {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 4000)
+  }
 
   useEffect(() => {
     Promise.all([
@@ -87,13 +95,13 @@ export default function FormularioPage() {
       if (enviar) {
         await api.put(`/submissoes/${sid}/enviar`)
         setStatus('ENVIADA')
-        alert('Formulário enviado com sucesso!')
+        showNotification('success', 'Formulário enviado com sucesso!')
         navigate(`/turmas/${turmaId}/alunos`)
       } else {
-        alert('Rascunho salvo!')
+        showNotification('success', 'Rascunho salvo com sucesso!')
       }
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Erro ao salvar')
+      showNotification('error', err.response?.data?.error || 'Erro ao salvar')
     } finally {
       setSaving(false)
     }
@@ -107,6 +115,18 @@ export default function FormularioPage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      {/* Inline notification */}
+      {notification && (
+        <div style={{
+          position: 'fixed', top: 16, right: 16, zIndex: 1000,
+          background: notification.type === 'success' ? '#00b894' : '#d63031',
+          color: '#fff', padding: '12px 20px', borderRadius: 8,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', fontSize: 14, fontWeight: 500,
+          maxWidth: 360,
+        }}>
+          {notification.message}
+        </div>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>← Voltar</button>
