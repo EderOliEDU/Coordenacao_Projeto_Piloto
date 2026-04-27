@@ -1,12 +1,21 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../services/ldap';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-router.post('/login', async (req: Request, res: Response) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
+});
+
+router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   const { login, password } = req.body;
 
   if (!login || !password) {

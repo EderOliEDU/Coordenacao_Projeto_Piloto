@@ -6,6 +6,11 @@ export interface LdapUser {
   email: string;
 }
 
+/** Escape special LDAP filter characters to prevent injection */
+function escapeLdapFilter(value: string): string {
+  return value.replace(/[\\*()\x00/]/g, (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+}
+
 export async function authenticate(login: string, password: string): Promise<LdapUser> {
   if (process.env.LDAP_MOCK === 'true') {
     // Mock mode: accept any password, return mock user
@@ -21,7 +26,8 @@ export async function authenticate(login: string, password: string): Promise<Lda
         return reject(new Error('Falha ao conectar ao servidor LDAP'));
       }
 
-      const searchFilter = (process.env.LDAP_SEARCH_FILTER || '(sAMAccountName={{username}})').replace('{{username}}', login);
+      const safeLogin = escapeLdapFilter(login);
+      const searchFilter = (process.env.LDAP_SEARCH_FILTER || '(sAMAccountName={{username}})').replace('{{username}}', safeLogin);
 
       client.search(
         process.env.LDAP_BASE_DN!,
