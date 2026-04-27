@@ -1,0 +1,30 @@
+# 0) clone (se ainda não tiver)
+git clone https://github.com/EderOliEDU/Coordenacao_Projeto_Piloto.git
+cd Coordenacao_Projeto_Piloto
+
+# 1) garanta que está atualizado na main
+git checkout main
+git pull origin main
+
+# 2) crie um branch para os docs
+git checkout -b docs/plantuml-diagrama-perguntas
+
+# 3) crie a pasta docs
+mkdir -p docs
+
+# 4) crie/edite os arquivos (abra no editor e cole o conteúdo que enviei)
+# Linux/macOS:
+nano docs/diagrama-classes-perguntas.puml
+nano docs/README.md
+# (ou use: code docs/diagrama-classes-perguntas.puml docs/README.md)
+
+# 5) confira mudanças
+git status
+git diff
+
+# 6) adicione e faça commit
+git add docs/diagrama-classes-perguntas.puml docs/README.md
+git commit -m "docs: add PlantUML diagram and scale/UI documentation"
+
+# 7) envie o branch para o GitHub
+git push -u origin docs/plantuml-diagrama-perguntas
