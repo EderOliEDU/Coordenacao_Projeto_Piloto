@@ -1,3 +1,10 @@
+++++++++ Para atualizar +++++++++++ 
+sudo -u coordenacao -H bash -lc "cd /opt/projeto_piloto_app/app && git pull"
+
+
+
+
+
 # 0) clone (se ainda não tiver)
 git clone https://github.com/EderOliEDU/Coordenacao_Projeto_Piloto.git
 cd Coordenacao_Projeto_Piloto
