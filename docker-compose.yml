@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: piloto-backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      PORT: "3001"
+      NODE_ENV: "${NODE_ENV:-production}"
+      JWT_SECRET: "${JWT_SECRET}"
+      DATABASE_URL: "file:/app/data/app.db"
+      PILOTO_PG_HOST: "${PILOTO_PG_HOST}"
+      PILOTO_PG_PORT: "${PILOTO_PG_PORT:-5432}"
+      PILOTO_PG_DATABASE: "${PILOTO_PG_DATABASE:-projPiloto}"
+      PILOTO_PG_USER: "${PILOTO_PG_USER}"
+      PILOTO_PG_PASSWORD: "${PILOTO_PG_PASSWORD}"
+      PILOTO_PG_SSL: "${PILOTO_PG_SSL:-false}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
+    volumes:
+      # Persistir banco SQLite fora do container
+      - piloto-sqlite:/app/data
+    networks:
+      - piloto-net
+
+volumes:
+  piloto-sqlite:
+
+networks:
+  piloto-net:
+    driver: bridge

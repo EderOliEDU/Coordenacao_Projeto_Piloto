@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Usuário administrador local (gerencia formulários via SQLite)
+model AdminUser {
+  id           String @id @default(uuid())
+  username     String @unique
+  passwordHash String
+}
+
+/// Formulário versionado de avaliação
+model Formulario {
+  id         String            @id @default(uuid())
+  versao     String            @unique
+  titulo     String
+  ativo      Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  secoes     SecaoFormulario[]
+  submissoes Submissao[]
+}
+
+/// Seção de um formulário
+model SecaoFormulario {
+  id           String     @id @default(uuid())
+  titulo       String
+  ordem        Int
+  formularioId String
+  formulario   Formulario @relation(fields: [formularioId], references: [id])
+  perguntas    Pergunta[]
+}
+
+/// Escala de resposta reutilizável (ex.: Linguagem, Fluxo)
+model EscalaResposta {
+  id        String        @id @default(uuid())
+  nome      String        @unique
+  opcoes    OpcaoEscala[]
+  perguntas Pergunta[]
+}
+
+/// Opção dentro de uma escala (chave, descrição, cor)
+model OpcaoEscala {
+  id        String         @id @default(uuid())
+  chave     String
+  descricao String?
+  cor       String?
+  ordem     Int
+  escalaId  String
+  escala    EscalaResposta @relation(fields: [escalaId], references: [id])
+  respostas Resposta[]
+}
+
+/// Pergunta pertencente a uma seção, referenciando uma escala
+model Pergunta {
+  id        String          @id @default(uuid())
+  texto     String
+  ordem     Int
+  secaoId   String
+  secao     SecaoFormulario @relation(fields: [secaoId], references: [id])
+  escalaId  String
+  escala    EscalaResposta  @relation(fields: [escalaId], references: [id])
+  respostas Resposta[]
+}
+
+/// Submissão: preenchimento do formulário para um aluno em uma turma/escola
+model Submissao {
+  id           String     @id @default(uuid())
+  formularioId String
+  formulario   Formulario @relation(fields: [formularioId], references: [id])
+  /// google_id do professor (referência ao PG public.usuarios)
+  professorId  String
+  /// id do aluno no PG (public.alunos.id_aluno)
+  alunoId      String?
+  /// id da turma no PG (public.turmas.id_turma)
+  turmaId      String?
+  /// id da escola no PG (public.escolas.id_escola)
+  escolaId     String?
+  createdAt    DateTime   @default(now())
+  respostas    Resposta[]
+}
+
+/// Resposta individual de uma submissão a uma pergunta
+model Resposta {
+  id          String      @id @default(uuid())
+  submissaoId String
+  submissao   Submissao   @relation(fields: [submissaoId], references: [id])
+  perguntaId  String
+  pergunta    Pergunta    @relation(fields: [perguntaId], references: [id])
+  opcaoId     String
+  opcao       OpcaoEscala @relation(fields: [opcaoId], references: [id])
+}
