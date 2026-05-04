@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Escola {
+  id         String      @id @default(uuid())
+  nome       String
+  municipio  String?
+  uf         String?
+  ativo      Boolean     @default(true)
+  turmas     Turma[]
+  submissoes Submissao[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Turma {
+  id          String           @id @default(uuid())
+  codigo      String?
+  nome        String
+  anoLetivo   Int
+  turno       String
+  ativo       Boolean          @default(true)
+  escola      Escola           @relation(fields: [escolaId], references: [id])
+  escolaId    String
+  alunos      Aluno[]
+  professores ProfessorTurma[]
+  submissoes  Submissao[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Professor {
+  id         String               @id @default(uuid())
+  matricula  String?
+  nome       String
+  login      String               @unique
+  email      String?
+  ativo      Boolean              @default(true)
+  turmas     ProfessorTurma[]
+  submissoes SubmissaoProfessor[]
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+}
+
+model ProfessorTurma {
+  id          String    @id @default(uuid())
+  professor   Professor @relation(fields: [professorId], references: [id])
+  professorId String
+  turma       Turma     @relation(fields: [turmaId], references: [id])
+  turmaId     String
+
+  @@unique([professorId, turmaId])
+}
+
+model Aluno {
+  id             String      @id @default(uuid())
+  matricula      String?
+  nome           String
+  dataNascimento DateTime?
+  sexo           String?
+  ativo          Boolean     @default(true)
+  turma          Turma       @relation(fields: [turmaId], references: [id])
+  turmaId        String
+  submissoes     Submissao[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Formulario {
+  id          String            @id @default(uuid())
+  nome        String
+  versao      String
+  ativo       Boolean           @default(true)
+  publicadoEm DateTime?
+  secoes      SecaoFormulario[]
+  submissoes  Submissao[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model SecaoFormulario {
+  id           String     @id @default(uuid())
+  formulario   Formulario @relation(fields: [formularioId], references: [id])
+  formularioId String
+  titulo       String
+  ordem        Int
+  perguntas    Pergunta[]
+}
+
+model EscalaResposta {
+  id           String        @id @default(uuid())
+  codigo       String        @unique
+  nomeExibicao String
+  descricao    String?
+  ativa        Boolean       @default(true)
+  opcoes       OpcaoEscala[]
+  perguntas    Pergunta[]    @relation("PerguntaEscala")
+}
+
+model OpcaoEscala {
+  id               String         @id @default(uuid())
+  escala           EscalaResposta @relation(fields: [escalaId], references: [id])
+  escalaId         String
+  chave            String
+  ordem            Int
+  corHex           String?
+  rotuloUI         String
+  descricaoLegenda String
+  ativa            Boolean        @default(true)
+  respostas        Resposta[]
+
+  @@unique([escalaId, chave])
+}
+
+model Pergunta {
+  id          String          @id @default(uuid())
+  secaoId     String
+  codigo      String
+  enunciado   String
+  tipo        String          @default("UNICA_ESCOLHA")
+  obrigatoria Boolean         @default(true)
+  ordem       Int
+  ajuda       String?
+  escalaId    String?
+  secao       SecaoFormulario @relation(fields: [secaoId], references: [id])
+  escala      EscalaResposta? @relation("PerguntaEscala", fields: [escalaId], references: [id])
+  respostas   Resposta[]
+}
+
+model Submissao {
+  id           String               @id @default(uuid())
+  formulario   Formulario           @relation(fields: [formularioId], references: [id])
+  formularioId String
+  escola       Escola               @relation(fields: [escolaId], references: [id])
+  escolaId     String
+  turma        Turma                @relation(fields: [turmaId], references: [id])
+  turmaId      String
+  aluno        Aluno                @relation(fields: [alunoId], references: [id])
+  alunoId      String
+  status       String               @default("RASCUNHO")
+  observacoes  String?
+  criadaEm     DateTime             @default(now())
+  enviadaEm    DateTime?
+  updatedAt    DateTime             @updatedAt
+  professores  SubmissaoProfessor[]
+  respostas    Resposta[]
+}
+
+model SubmissaoProfessor {
+  id          String    @id @default(uuid())
+  submissao   Submissao @relation(fields: [submissaoId], references: [id])
+  submissaoId String
+  professor   Professor @relation(fields: [professorId], references: [id])
+  professorId String
+  papel       String    @default("RESPONSAVEL")
+  assinouEm   DateTime?
+
+  @@unique([submissaoId, professorId])
+}
+
+model Resposta {
+  id            String      @id @default(uuid())
+  submissao     Submissao   @relation(fields: [submissaoId], references: [id])
+  submissaoId   String
+  pergunta      Pergunta    @relation(fields: [perguntaId], references: [id])
+  perguntaId    String
+  opcaoEscala   OpcaoEscala @relation(fields: [opcaoEscalaId], references: [id])
+  opcaoEscalaId String
+  criadaEm      DateTime    @default(now())
+  atualizadaEm  DateTime    @updatedAt
+
+  @@unique([submissaoId, perguntaId])
+}
