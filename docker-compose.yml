@@ -1,0 +1,53 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: piloto_ei_backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: file:/app/prisma/data/prod.db
+      PILOTO_PG_HOST: ${PILOTO_PG_HOST:-172.17.2.40}
+      PILOTO_PG_PORT: ${PILOTO_PG_PORT:-5432}
+      PILOTO_PG_DATABASE: ${PILOTO_PG_DATABASE:-projPiloto}
+      PILOTO_PG_USER: ${PILOTO_PG_USER:-userprojetopiloto}
+      PILOTO_PG_PASSWORD: ${PILOTO_PG_PASSWORD}
+      PILOTO_PG_SSL: ${PILOTO_PG_SSL:-false}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    volumes:
+      - sqlite_data:/app/prisma/data
+    networks:
+      - piloto_net
+
+  frontend:
+    image: node:20-alpine
+    container_name: piloto_ei_frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    environment:
+      VITE_API_URL: http://backend:3001
+    networks:
+      - piloto_net
+    depends_on:
+      - backend
+
+volumes:
+  sqlite_data:
+
+networks:
+  piloto_net:
+    driver: bridge
