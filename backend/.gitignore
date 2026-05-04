@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Build
+dist/
+dist-seed/
+
+# Banco de dados local
+prisma/*.db
+prisma/*.db-journal
+
+# Variáveis de ambiente (nunca commitar o .env real)
+.env
+
+# Logs
+*.log
+
+# OS
+.DS_Store
