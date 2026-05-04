@@ -4,12 +4,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const sslValue = process.env.PILOTO_PG_SSL;
-const sslConfig =
-  sslValue === 'true'
-    ? { rejectUnauthorized: false }
-    : sslValue === 'strict'
-    ? true
-    : false;
+
+function buildSslConfig(): Pool['options'] extends { ssl?: infer T } ? T : never {
+  if (sslValue === 'strict') return true as never;
+  if (sslValue === 'true') return { rejectUnauthorized: false } as never;
+  return false as never;
+}
+
+const sslConfig = buildSslConfig();
 
 /**
  * Pool de conexões com o PostgreSQL projPiloto.
@@ -23,7 +25,7 @@ export const pgPool = new Pool({
   database: process.env.PILOTO_PG_DATABASE || 'projPiloto',
   user: process.env.PILOTO_PG_USER || 'postgres',
   password: process.env.PILOTO_PG_PASSWORD || '',
-  ssl: sslConfig as boolean | object | undefined,
+  ssl: sslConfig,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,

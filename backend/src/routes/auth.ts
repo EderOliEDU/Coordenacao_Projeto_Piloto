@@ -199,6 +199,12 @@ router.post(
       return;
     }
 
+    // Exigir ao menos uma letra e um número
+    if (!/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
+      res.status(400).json({ error: 'A nova senha deve conter pelo menos uma letra e um número.' });
+      return;
+    }
+
     const user = req.user as JwtPayload;
 
     // Admin não pode trocar senha via este endpoint (gerenciado pelo .env)
