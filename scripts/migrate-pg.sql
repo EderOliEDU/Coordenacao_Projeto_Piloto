@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS public.alunos (
   nome      text    NOT NULL,
   cpf       text,
   situacao  text,
-  id_turma  integer REFERENCES public.turmas (id_turma) ON DELETE SET NULL,
-  CONSTRAINT alunos_cpf_key UNIQUE (cpf)
+  id_turma  integer REFERENCES public.turmas (id_turma) ON DELETE SET NULL
 );
+
+-- Índice único parcial em alunos.cpf (ignora linhas com CPF NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS alunos_cpf_unique
+  ON public.alunos (cpf)
+  WHERE cpf IS NOT NULL;
