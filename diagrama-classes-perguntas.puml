@@ -1,0 +1,116 @@
+@startuml
+title Plano Piloto EI - Perguntas/Respostas (versionado + escolhas por cor/fluxo)
+
+skinparam classAttributeIconSize 0
+
+' =========
+' Formulário versionado
+' =========
+class Formulario {
+  +id: UUID
+  +nome: String
+  +versao: String
+  +ativo: Boolean
+  +publicadoEm: DateTime?
+}
+
+class SecaoFormulario {
+  +id: UUID
+  +formularioId: UUID
+  +titulo: String
+  +ordem: Int
+}
+
+enum TipoPergunta {
+  MULTIPLA_ESCOLHA_UNICA
+}
+
+class Pergunta {
+  +id: UUID
+  +secaoId: UUID
+  +codigo: String
+  +enunciado: String
+  +ordem: Int
+  +obrigatoria: Boolean
+  +tipo: TipoPergunta
+  +escalaId: UUID
+}
+
+Formulario "1" o-- "1..*" SecaoFormulario
+SecaoFormulario "1" o-- "1..*" Pergunta
+
+' =========
+' Escalas/Legendas (reutilizáveis)
+' =========
+class EscalaResposta {
+  +id: UUID
+  +codigo: String          ' ESC_COR_LING | ESC_FLUXO
+  +nomeExibicao: String
+  +descricao: String?
+  +ativa: Boolean
+}
+
+class OpcaoEscala {
+  +id: UUID
+  +escalaId: UUID
+  +chave: String           ' PEA_ND, PEA_NDA, ... | SF, SFP, NSF
+  +ordem: Int
+  +corHex: String?         ' quando aplicável
+  +rotuloUI: String        ' na escala de cores: vazio
+  +descricaoLegenda: String
+  +ativa: Boolean
+}
+
+EscalaResposta "1" o-- "2..*" OpcaoEscala
+Pergunta "0..*" --> "1" EscalaResposta : usa >
+
+note right of EscalaResposta
+  ESC_COR_LING (UI: somente cor; sem texto)
+  - PEA-ND  : #F39C12
+  - PEA-NDA : #E67E22
+  - PEA-TD  : #F1C40F
+  - PEA-PD  : #3498DB
+  - PEA-D   : #2ECC71
+
+  ESC_FLUXO (UI pode ser botões sem texto também,
+  mas aqui pode ter cor opcional se quiser no futuro)
+  - SF  : segue o fluxo
+  - SFP : segue o fluxo parcialmente
+  - NSF : não segue o fluxo
+end note
+
+' =========
+' Submissão e respostas
+' =========
+class Submissao {
+  +id: UUID
+  +formularioId: UUID
+  +alunoId: UUID
+  +turmaId: UUID
+  +escolaId: UUID
+  +status: StatusSubmissao
+  +criadaEm: DateTime
+  +enviadaEm: DateTime?
+}
+
+enum StatusSubmissao {
+  RASCUNHO
+  ENVIADA
+  VALIDADA
+  CANCELADA
+}
+
+class Resposta {
+  +id: UUID
+  +submissaoId: UUID
+  +perguntaId: UUID
+  +opcaoEscalaId: UUID
+  +criadaEm: DateTime
+  +atualizadaEm: DateTime
+}
+
+Submissao "1" o-- "0..*" Resposta
+Pergunta "1" -- "0..*" Resposta
+OpcaoEscala "1" -- "0..*" Resposta
+
+@enduml
