@@ -1,0 +1,159 @@
+@startuml Diagrama de Classes – Formulário Piloto EI v4
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam linetype ortho
+
+class Escola {
+  +id: UUID
+  +nome: String
+  +municipio: String?
+  +uf: String?
+  +ativo: Boolean
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class Turma {
+  +id: UUID
+  +codigo: String?
+  +nome: String
+  +anoLetivo: Int
+  +turno: String
+  +ativo: Boolean
+  +escolaId: UUID
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class Professor {
+  +id: UUID
+  +matricula: String?
+  +nome: String
+  +login: String <<unique>>
+  +email: String?
+  +ativo: Boolean
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class ProfessorTurma {
+  +id: UUID
+  +professorId: UUID
+  +turmaId: UUID
+}
+
+class Aluno {
+  +id: UUID
+  +matricula: String?
+  +nome: String
+  +dataNascimento: DateTime?
+  +sexo: String?
+  +ativo: Boolean
+  +turmaId: UUID
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class Formulario {
+  +id: UUID
+  +nome: String
+  +versao: String
+  +ativo: Boolean
+  +publicadoEm: DateTime?
+  +createdAt: DateTime
+  +updatedAt: DateTime
+}
+
+class SecaoFormulario {
+  +id: UUID
+  +formularioId: UUID
+  +titulo: String
+  +ordem: Int
+}
+
+class EscalaResposta {
+  +id: UUID
+  +codigo: String <<unique>>
+  +nomeExibicao: String
+  +descricao: String?
+  +ativa: Boolean
+}
+
+class OpcaoEscala {
+  +id: UUID
+  +escalaId: UUID
+  +chave: String
+  +ordem: Int
+  +corHex: String?
+  +rotuloUI: String
+  +descricaoLegenda: String
+  +ativa: Boolean
+}
+
+class Pergunta {
+  +id: UUID
+  +secaoId: UUID
+  +codigo: String
+  +enunciado: String
+  +tipo: String
+  +obrigatoria: Boolean
+  +ordem: Int
+  +ajuda: String?
+  +escalaId: UUID?
+}
+
+class Submissao {
+  +id: UUID
+  +formularioId: UUID
+  +escolaId: UUID
+  +turmaId: UUID
+  +alunoId: UUID
+  +status: String
+  +observacoes: String?
+  +criadaEm: DateTime
+  +enviadaEm: DateTime?
+  +updatedAt: DateTime
+}
+
+class SubmissaoProfessor {
+  +id: UUID
+  +submissaoId: UUID
+  +professorId: UUID
+  +papel: String
+  +assinouEm: DateTime?
+}
+
+class Resposta {
+  +id: UUID
+  +submissaoId: UUID
+  +perguntaId: UUID
+  +opcaoEscalaId: UUID
+  +criadaEm: DateTime
+  +atualizadaEm: DateTime
+}
+
+' Relations
+Escola "1" --o{ "n" Turma : possui
+Turma "1" --o{ "n" Aluno : matriculados
+Professor "n" --o{ "n" Turma : leciona via ProfessorTurma
+ProfessorTurma }o-- "1" Professor
+ProfessorTurma }o-- "1" Turma
+
+Formulario "1" --o{ "n" SecaoFormulario : contém
+SecaoFormulario "1" --o{ "n" Pergunta : possui
+EscalaResposta "1" --o{ "n" OpcaoEscala : define
+EscalaResposta "1" --o{ "n" Pergunta : "escala"
+Pergunta "1" --o{ "n" Resposta : respondida em
+
+Submissao }o-- "1" Formulario
+Submissao }o-- "1" Escola
+Submissao }o-- "1" Turma
+Submissao }o-- "1" Aluno
+Submissao "1" --o{ "n" Resposta : contém
+Submissao "1" --o{ "n" SubmissaoProfessor : assinada por
+
+SubmissaoProfessor }o-- "1" Professor
+Resposta }o-- "1" OpcaoEscala
+
+@enduml
