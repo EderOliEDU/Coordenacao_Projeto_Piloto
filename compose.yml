@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+
+      # Prisma/SQLite (formulários)
+      DATABASE_URL: "file:/app/prisma/dev.db"
+
+      # Admin (somente rede interna) - definir no .env do servidor
+      ADMIN_USER: "${ADMIN_USER}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+
+      # PostgreSQL projPiloto (auth por CPF) - definir no .env do servidor
+      PILOTO_PG_HOST: "${PILOTO_PG_HOST}"
+      PILOTO_PG_PORT: "${PILOTO_PG_PORT}"
+      PILOTO_PG_DATABASE: "${PILOTO_PG_DATABASE}"
+      PILOTO_PG_DB: "${PILOTO_PG_DB}"
+      PILOTO_PG_USER: "${PILOTO_PG_USER}"
+      PILOTO_PG_PASSWORD: "${PILOTO_PG_PASSWORD}"
+      PILOTO_PG_SSL: "${PILOTO_PG_SSL}"
+
+      JWT_SECRET: "${JWT_SECRET}"
+      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN}"
+    ports:
+      - "3001:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    volumes:
+      - prisma_data:/app/prisma
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_URL: "172.17.2.40:3001"
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  prisma_data: {}
