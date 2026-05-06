@@ -34,7 +34,7 @@ function getPool(): Pool {
   if (!_pool) {
     _pool = new Pool({
       host: process.env.PILOTO_PG_HOST,
-      port: process.env.PILOTO_PG_PORT ? Number(process.env.PILOTO_PG_PORT) : 5432,
+      port: process.env.PILOTO_PG_PORT ? parseInt(process.env.PILOTO_PG_PORT, 10) || 5432 : 5432,
       database: process.env.PILOTO_PG_DB,
       user: process.env.PILOTO_PG_USER,
       password: process.env.PILOTO_PG_PASSWORD,
@@ -81,9 +81,10 @@ export async function authenticateByCpf(cpf: string, password: string): Promise<
   const pwdNorm = onlyDigits(password);
 
   if (senhaHash === '') {
-    // Fallback: compare digits-only password to digits-only data_nascimento
+    // Fallback: compare digits-only password to digits-only data_nascimento.
+    // Both must be exactly 8 digits (DDMMYYYY) and equal.
     const dataNorm = onlyDigits(user.data_nascimento ?? '');
-    if (dataNorm.length !== 8 || pwdNorm.length !== 8 || pwdNorm !== dataNorm) {
+    if (pwdNorm.length !== 8 || dataNorm.length !== 8 || pwdNorm !== dataNorm) {
       console.warn(
         `[cpfAuth] Falha no login por data de nascimento – CPF ${cpfNorm.slice(0, 3)}***${cpfNorm.slice(-2)}`
       );

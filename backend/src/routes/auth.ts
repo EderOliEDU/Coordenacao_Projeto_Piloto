@@ -16,10 +16,13 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 });
 
-/** Returns true when the string contains only digits (possibly with punctuation
- *  that strips down to exactly 11 digits — the CPF length). */
+/** Returns true when the string looks like a Brazilian CPF:
+ *  - exactly 11 digits (bare), or
+ *  - formatted as DDD.DDD.DDD-DD
+ */
 function looksLikeCpf(login: string): boolean {
-  return /^\d[\d.\-\/\s]*\d$/.test(login.trim()) && login.replace(/\D/g, '').length === 11;
+  const bare = login.replace(/\D/g, '');
+  return bare.length === 11 && /^\d{11}$/.test(bare);
 }
 
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {

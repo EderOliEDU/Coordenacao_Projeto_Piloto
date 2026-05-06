@@ -85,7 +85,7 @@ pontuação), o backend consulta a tabela `public.usuarios` do banco Postgres
 
 **Exemplo de login de teste:**
 - Login: `01443081183` (CPF sem pontuação)
-- Senha: `08061986` (data de nascimento no formato DDMMAAAA)
+- Senha: `08061986` (data de nascimento no formato DDMMYYYY)
 
 Quando o login é bem-sucedido via fallback e `must_change_password = true` na
 tabela, o campo `mustChangePassword: true` é incluído na resposta JSON, mas a
