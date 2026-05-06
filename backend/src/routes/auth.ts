@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../services/ldap';
+import { authenticateByCpf } from '../services/cpfAuth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -15,6 +16,12 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 });
 
+/** Returns true when the string contains only digits (possibly with punctuation
+ *  that strips down to exactly 11 digits — the CPF length). */
+function looksLikeCpf(login: string): boolean {
+  return /^\d[\d.\-\/\s]*\d$/.test(login.trim()) && login.replace(/\D/g, '').length === 11;
+}
+
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   const { login, senha, password } = req.body;
   const pwd = senha || password;
@@ -24,17 +31,34 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
   }
 
   try {
-    const ldapUser = await authenticate(login, pwd);
+    let professorLogin: string;
+    let professorNome: string;
+    let professorEmail: string | undefined;
+    let mustChangePassword = false;
 
-    // Upsert professor
-    let professor = await prisma.professor.findUnique({ where: { login: ldapUser.login } });
+    if (looksLikeCpf(login)) {
+      // CPF-based authentication against Postgres public.usuarios
+      const cpfUser = await authenticateByCpf(login, pwd);
+      professorLogin = cpfUser.cpf; // normalised 11-digit CPF
+      professorNome = cpfUser.nome;
+      mustChangePassword = cpfUser.mustChangePassword;
+    } else {
+      // Standard LDAP/AD authentication
+      const ldapUser = await authenticate(login, pwd);
+      professorLogin = ldapUser.login;
+      professorNome = ldapUser.nome;
+      professorEmail = ldapUser.email;
+    }
+
+    // Upsert professor into the local SQLite database
+    let professor = await prisma.professor.findUnique({ where: { login: professorLogin } });
 
     if (!professor) {
       professor = await prisma.professor.create({
         data: {
-          login: ldapUser.login,
-          nome: ldapUser.nome,
-          email: ldapUser.email,
+          login: professorLogin,
+          nome: professorNome,
+          email: professorEmail,
         },
       });
     }
@@ -46,7 +70,16 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       { expiresIn }
     );
 
-    res.json({ token, professor: { id: professor.id, nome: professor.nome, login: professor.login } });
+    const responseBody: Record<string, unknown> = {
+      token,
+      professor: { id: professor.id, nome: professor.nome, login: professor.login },
+    };
+
+    if (mustChangePassword) {
+      responseBody.mustChangePassword = true;
+    }
+
+    res.json(responseBody);
   } catch (err: any) {
     res.status(401).json({ error: err.message || 'Autenticação falhou' });
   }

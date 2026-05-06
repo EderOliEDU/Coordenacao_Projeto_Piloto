@@ -60,6 +60,40 @@ Acesse: http://localhost:5173
 | `LDAP_SEARCH_FILTER` | Filtro de busca (ex: `(sAMAccountName={{username}})`) |
 | `LDAP_MOCK` | `"true"` para modo dev (qualquer senha aceita) |
 | `PORT` | Porta do servidor (padrão: 3001) |
+| `PILOTO_PG_HOST` | Host do Postgres `projPiloto` (autenticação por CPF) |
+| `PILOTO_PG_PORT` | Porta do Postgres (padrão: `5432`) |
+| `PILOTO_PG_DB` | Nome do banco Postgres (ex: `projPiloto`) |
+| `PILOTO_PG_USER` | Usuário do Postgres |
+| `PILOTO_PG_PASSWORD` | Senha do Postgres |
+
+## Autenticação por CPF (ambiente de testes)
+
+O backend suporta dois métodos de login na rota `POST /api/auth/login`:
+
+### 1. Login de rede (LDAP/AD) — padrão
+Informe `login` (ex.: `joao.silva`) e `senha`.
+
+### 2. Login por CPF + data de nascimento (fallback para testes)
+Quando o campo `login` contém exatamente **11 dígitos** (CPF, com ou sem
+pontuação), o backend consulta a tabela `public.usuarios` do banco Postgres
+`projPiloto` e aplica a seguinte lógica:
+
+| Situação de `senha_hash` | Verificação |
+|--------------------------|-------------|
+| NULL ou vazio (trim) | Aceita se a senha fornecida, reduzida a dígitos, for igual a `data_nascimento` reduzida a dígitos e tiver 8 dígitos (DDMMYYYY) |
+| Preenchido | Verifica com **bcryptjs** |
+
+**Exemplo de login de teste:**
+- Login: `01443081183` (CPF sem pontuação)
+- Senha: `08061986` (data de nascimento no formato DDMMAAAA)
+
+Quando o login é bem-sucedido via fallback e `must_change_password = true` na
+tabela, o campo `mustChangePassword: true` é incluído na resposta JSON, mas a
+autenticação **não é bloqueada** (para que os testes funcionem sem etapas
+extras).
+
+> **Atenção:** configure as variáveis `PILOTO_PG_*` no `.env` do backend antes
+> de usar este modo. Veja `.env.example` para referência.
 
 ## Importação de Dados via CSV
 
