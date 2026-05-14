@@ -3,7 +3,7 @@ skinparam ClassBackgroundColor white
 skinparam ClassBorderColor black
 skinparam ClassHeaderBackgroundColor #F0F0F0
 
-package "Tabelas de Referência (Domínio)" {
+package "Domínio de Ensino (Referências)" {
     class "etapas" as ET {
         <color:Crimson>+ id_etapa (PK)</color>
         --
@@ -16,18 +16,20 @@ package "Tabelas de Referência (Domínio)" {
         descricao
         <color:Crimson># id_etapa_1 (FK)</color>
         <color:Crimson># id_etapa_2 (FK)</color>
-        ...
+        <color:Crimson># id_etapa_3 (FK)</color>
+        <color:Crimson># id_etapa_4 (FK)</color>
+        <color:Crimson># id_etapa_5 (FK)</color>
     }
 }
 
-package "Tabelas de Apoio / Tradução" {
+package "Camada de Higienização (De-Para)" {
     class "de_para_turmas" as DPT {
-        turma_original (Texto com ° ou º)
+        turma_original (Texto sujo: 1° ou 1º)
         <color:Crimson># id_etapas (FK)</color>
         <color:DarkGreen># id_multi_etapas (FK)</color>
         turma_corrigida (Letra)
     }
-
+    
     class "designacoes" as DES {
         escola_nome_bruto
         nome_do_professor
@@ -35,7 +37,7 @@ package "Tabelas de Apoio / Tradução" {
     }
 }
 
-package "Estrutura Principal (O Coração do Banco)" {
+package "Core Administrativo" {
     class "escolas" as ESC {
         <color:RoyalBlue>+ id_escola (PK)</color>
         --
@@ -56,16 +58,19 @@ package "Estrutura Principal (O Coração do Banco)" {
         --
         nome
         cpf
+        turma (Texto original)
     }
 
     class "professores" as PR {
         <color:RoyalBlue>+ profissional_cpf (PK)</color>
         --
         profissional_nome
+        profissional_dt_nascimento
+        **senha (MD5: DDMMYYYY)**
     }
 }
 
-package "Tabelas de Relacionamento (Vínculos)" {
+package "Relacionamentos de Enturmação" {
     class "enturmacao_aluno" as EA {
         <color:RoyalBlue># id_aluno (FK)</color>
         <color:RoyalBlue># id_turma (FK)</color>
@@ -77,10 +82,10 @@ package "Tabelas de Relacionamento (Vínculos)" {
     }
 }
 
-' Relacionamentos
-DPT --> ET
-DPT --> MET
-MET --> ET
+' Ligações de Integridade
+DPT --> ET : "Mapeia para"
+DPT --> MET : "Mapeia para"
+MET --> ET : "Agrega"
 T --> ESC
 T --> ET
 T --> MET
