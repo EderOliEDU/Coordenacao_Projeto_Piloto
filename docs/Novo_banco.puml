@@ -1,0 +1,92 @@
+@startuml
+skinparam ClassBackgroundColor white
+skinparam ClassBorderColor black
+skinparam ClassHeaderBackgroundColor #F0F0F0
+
+package "Tabelas de Referência (Domínio)" {
+    class "etapas" as ET {
+        <color:Crimson>+ id_etapa (PK)</color>
+        --
+        descricao
+    }
+
+    class "multietapas" as MET {
+        <color:DarkGreen>+ id_multi_etapa (PK)</color>
+        --
+        descricao
+        <color:Crimson># id_etapa_1 (FK)</color>
+        <color:Crimson># id_etapa_2 (FK)</color>
+        ...
+    }
+}
+
+package "Tabelas de Apoio / Tradução" {
+    class "de_para_turmas" as DPT {
+        turma_original (Texto com ° ou º)
+        <color:Crimson># id_etapas (FK)</color>
+        <color:DarkGreen># id_multi_etapas (FK)</color>
+        turma_corrigida (Letra)
+    }
+
+    class "designacoes" as DES {
+        escola_nome_bruto
+        nome_do_professor
+        turma_original
+    }
+}
+
+package "Estrutura Principal (O Coração do Banco)" {
+    class "escolas" as ESC {
+        <color:RoyalBlue>+ id_escola (PK)</color>
+        --
+        nome_escola
+    }
+
+    class "turmas" as T {
+        <color:RoyalBlue>+ id_turma (PK)</color>
+        --
+        <color:RoyalBlue># id_escola (FK)</color>
+        <color:Crimson># id_etapa (FK)</color>
+        <color:DarkGreen># id_multi_etapa (FK)</color>
+        letra_turma
+    }
+
+    class "alunos" as AL {
+        <color:RoyalBlue>+ id_aluno (PK)</color>
+        --
+        nome
+        cpf
+    }
+
+    class "professores" as PR {
+        <color:RoyalBlue>+ profissional_cpf (PK)</color>
+        --
+        profissional_nome
+    }
+}
+
+package "Tabelas de Relacionamento (Vínculos)" {
+    class "enturmacao_aluno" as EA {
+        <color:RoyalBlue># id_aluno (FK)</color>
+        <color:RoyalBlue># id_turma (FK)</color>
+    }
+
+    class "atribuicao_professor" as AP {
+        <color:RoyalBlue># cpf_professor (FK)</color>
+        <color:RoyalBlue># id_turma (FK)</color>
+    }
+}
+
+' Relacionamentos
+DPT --> ET
+DPT --> MET
+MET --> ET
+T --> ESC
+T --> ET
+T --> MET
+EA --> AL
+EA --> T
+AP --> PR
+AP --> T
+
+@enduml
