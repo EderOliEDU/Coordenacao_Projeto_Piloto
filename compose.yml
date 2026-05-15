@@ -35,8 +35,8 @@ services:
   frontend:
     build:
       context: ./frontend
-    environment:
-      VITE_API_URL: "172.17.2.40:3001"
+    args:
+      VITE_API_URL: "http://172.17.2.40:3001"
     ports:
       - "5173:80"
     depends_on:
