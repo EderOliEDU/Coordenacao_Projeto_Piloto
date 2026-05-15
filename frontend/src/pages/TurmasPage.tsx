@@ -32,7 +32,10 @@ export default function TurmasPage() {
           <h1 style={{ margin: 0, fontSize: 24, color: '#0984e3' }}>Minhas Turmas</h1>
           <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Olá, {professor.nome}</p>
         </div>
-        <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
+          <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
+        </div>
       </div>
 
       {loading && <p>Carregando...</p>}

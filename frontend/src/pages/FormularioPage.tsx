@@ -23,7 +23,7 @@ export default function FormularioPage() {
   const [turma, setTurma] = useState<any>(null)
   const [respostas, setRespostas] = useState<Respostas>({})
   const [submissaoId, setSubmissaoId] = useState<string | null>(null)
-  const [status, setStatus] = useState<'RASCUNHO' | 'ENVIADA' | null>(null)
+  const [status, setStatus] = useState<'RASCUNHO' | 'FINALIZADO' | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [observacoes, setObservacoes] = useState('')
@@ -51,7 +51,7 @@ export default function FormularioPage() {
       if (subs.length > 0) {
         const sub = subs[0]
         setSubmissaoId(sub.id)
-        setStatus(sub.status)
+        setStatus(sub.status === 'ENVIADA' ? 'FINALIZADO' : sub.status)
         // Load full submission with respostas
         api.get(`/submissoes/${sub.id}`).then(r => {
           const rs: Respostas = {}
@@ -84,18 +84,17 @@ export default function FormularioPage() {
         turmaId,
         alunoId,
         observacoes,
+        status: enviar ? 'FINALIZADO' : 'RASCUNHO',
         respostas: Object.entries(respostas).map(([perguntaId, opcaoEscalaId]) => ({ perguntaId, opcaoEscalaId })),
       }
 
-      const res = await api.post('/submissoes', body)
+      const res = await api.post('/submissoes/respostas', body)
       const sid: string = res.data.id
       setSubmissaoId(sid)
-      setStatus('RASCUNHO')
+      setStatus(enviar ? 'FINALIZADO' : 'RASCUNHO')
 
       if (enviar) {
-        await api.put(`/submissoes/${sid}/enviar`)
-        setStatus('ENVIADA')
-        showNotification('success', 'Formulário enviado com sucesso!')
+        showNotification('success', 'Formulário finalizado com sucesso!')
         navigate(`/turmas/${turmaId}/alunos`)
       } else {
         showNotification('success', 'Rascunho salvo com sucesso!')
@@ -110,7 +109,7 @@ export default function FormularioPage() {
   if (loading) return <div style={{ padding: 32 }}>Carregando...</div>
   if (!formulario || !aluno) return <div style={{ padding: 32, color: '#d63031' }}>Formulário ou aluno não encontrado.</div>
 
-  const isEnviada = status === 'ENVIADA'
+  const isEnviada = status === 'FINALIZADO'
   const escalas = allEscalas()
 
   return (
@@ -135,7 +134,7 @@ export default function FormularioPage() {
           <p style={{ margin: '2px 0 0', color: '#636e72', fontSize: 13 }}>Aluno: <strong>{aluno.nome}</strong> {aluno.matricula ? `· Mat. ${aluno.matricula}` : ''}{submissaoId ? ` · #${submissaoId.slice(0, 8)}` : ''}</p>
         </div>
         {isEnviada && (
-          <span style={{ marginLeft: 'auto', background: '#00b894', color: '#fff', borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 700 }}>Enviada</span>
+          <span style={{ marginLeft: 'auto', background: '#00b894', color: '#fff', borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 700 }}>Finalizada</span>
         )}
       </div>
 
@@ -197,7 +196,7 @@ export default function FormularioPage() {
                 disabled={saving}
                 style={{ background: '#0984e3', color: '#fff', padding: '10px 24px', flex: 2 }}
               >
-                {saving ? 'Enviando...' : 'Enviar Formulário'}
+                {saving ? 'Finalizando...' : 'Finalizar Formulário'}
               </button>
             </div>
           )}

@@ -30,7 +30,8 @@ export default function AlunosPage() {
 
   const statusLabel: Record<string, { label: string; color: string }> = {
     RASCUNHO: { label: 'Rascunho', color: '#fdcb6e' },
-    ENVIADA:  { label: 'Enviada',  color: '#00b894' },
+    ENVIADA:  { label: 'Finalizada',  color: '#00b894' },
+    FINALIZADO:  { label: 'Finalizada',  color: '#00b894' },
   }
 
   return (
