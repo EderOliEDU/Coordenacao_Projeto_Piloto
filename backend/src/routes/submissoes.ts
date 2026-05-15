@@ -26,6 +26,8 @@ const salvarRespostaSchema = z.object({
 
 function normalizarStatus(status?: string | null) {
   if (status === STATUS_FINALIZADO || status === 'ENVIADA') return STATUS_FINALIZADO;
+  if (status === STATUS_RASCUNHO || status === null || status === undefined) return STATUS_RASCUNHO;
+  console.warn(`[submissoes] status inesperado "${status}", definindo como RASCUNHO`);
   return STATUS_RASCUNHO;
 }
 
@@ -91,8 +93,11 @@ async function salvarResposta(req: AuthRequest, res: Response, fallbackStatus?: 
         prisma.opcaoEscala.findUnique({ where: { id: r.opcaoEscalaId }, select: { escalaId: true } }),
       ]);
 
-      if (!pergunta || !opcao) {
-        return res.status(400).json({ error: 'Pergunta ou opção inválida' });
+      if (!pergunta) {
+        return res.status(400).json({ error: 'Pergunta não encontrada' });
+      }
+      if (!opcao) {
+        return res.status(400).json({ error: 'Opção de resposta não encontrada' });
       }
       if (pergunta.escalaId && opcao.escalaId !== pergunta.escalaId) {
         return res.status(400).json({ error: 'Opção incompatível com a escala da pergunta' });
@@ -167,7 +172,7 @@ router.get('/perguntas', async (req: AuthRequest, res: Response) => {
 // GET /api/submissoes/opcoes?tipoEscala=
 router.get('/opcoes', async (req: AuthRequest, res: Response) => {
   const { tipoEscala } = req.query as { tipoEscala?: string };
-  if (!tipoEscala) return res.status(400).json({ error: 'tipoEscala é obrigatório' });
+  if (!tipoEscala) return res.status(400).json({ error: 'Query parameter tipoEscala é obrigatório' });
 
   const opcoes = await prisma.opcaoEscala.findMany({
     where: { escala: { codigo: tipoEscala } },
@@ -217,10 +222,6 @@ router.get('/pendencias', async (req: AuthRequest, res: Response) => {
   });
   const turmaIds = turmaId ? [turmaId] : professorTurmas.map((pt) => pt.turmaId);
 
-  if (turmaIds.length === 0) {
-    return res.json({ totalPerguntas: 0, semFinalizacao: [], rascunhos: [], inconsistencias: [] });
-  }
-
   const formulario = formularioId
     ? await prisma.formulario.findUnique({
         where: { id: formularioId },
@@ -232,10 +233,18 @@ router.get('/pendencias', async (req: AuthRequest, res: Response) => {
       });
 
   if (!formulario) {
-    return res.status(404).json({ error: 'Formulário não encontrado' });
+    const message = formularioId
+      ? `Formulário com id ${formularioId} não encontrado`
+      : 'Formulário ativo não encontrado';
+    return res.status(404).json({ error: message });
   }
 
   const totalPerguntas = formulario.secoes.reduce((acc, secao) => acc + secao.perguntas.length, 0);
+  if (turmaIds.length === 0) {
+    // Retornamos o total do formulário ativo para o frontend exibir como referência, mesmo sem turmas atribuídas.
+    return res.json({ formularioId: formulario.id, totalPerguntas, semFinalizacao: [], rascunhos: [], inconsistencias: [] });
+  }
+
   const alunos = await prisma.aluno.findMany({
     where: { turmaId: { in: turmaIds }, ativo: true },
     include: { turma: true },
@@ -257,6 +266,7 @@ router.get('/pendencias', async (req: AuthRequest, res: Response) => {
   });
 
   const latestByAluno = new Map<string, (typeof submissoes)[number]>();
+  // submissoes vem em ordem decrescente de criação; o primeiro registro por aluno é o mais recente.
   for (const sub of submissoes) {
     if (!latestByAluno.has(sub.alunoId)) {
       latestByAluno.set(sub.alunoId, sub);

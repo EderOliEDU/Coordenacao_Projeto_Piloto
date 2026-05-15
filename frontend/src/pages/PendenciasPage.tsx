@@ -9,7 +9,6 @@ interface Pendencia {
   turmaId: string
   turmaNome: string
   submissaoId: string | null
-  status: 'RASCUNHO' | 'FINALIZADO'
   totalRespondidas: number
   totalPerguntas: number
 }
@@ -31,6 +30,11 @@ export default function PendenciasPage() {
   const [loading, setLoading] = useState(true)
   const [semFinalizacao, setSemFinalizacao] = useState<Pendencia[]>([])
   const [rascunhos, setRascunhos] = useState<Rascunho[]>([])
+
+  function formatarData(valor: string) {
+    const data = new Date(valor)
+    return isNaN(data.getTime()) ? 'Data indisponível' : data.toLocaleString('pt-BR')
+  }
 
   useEffect(() => {
     api.get('/turmas').then((res) => setTurmas(res.data))
@@ -97,7 +101,7 @@ export default function PendenciasPage() {
                   <div>
                     <div style={{ fontWeight: 600 }}>{item.alunoNome}</div>
                     <div style={{ color: '#636e72', fontSize: 13 }}>
-                      {item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas · atualizado em {new Date(item.atualizadaEm).toLocaleString('pt-BR')}
+                      {item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas · atualizado em {formatarData(item.atualizadaEm)}
                     </div>
                   </div>
                   <button onClick={() => navigate(`/turmas/${item.turmaId}/alunos/${item.alunoId}/formulario`)} style={{ background: '#fdcb6e', color: '#2d3436' }}>
