@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'
 import TurmasPage from './pages/TurmasPage'
 import AlunosPage from './pages/AlunosPage'
 import FormularioPage from './pages/FormularioPage'
+import PendenciasPage from './pages/PendenciasPage'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('token')
@@ -16,6 +17,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/turmas" element={<RequireAuth><TurmasPage /></RequireAuth>} />
+        <Route path="/pendencias" element={<RequireAuth><PendenciasPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/alunos" element={<RequireAuth><AlunosPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/alunos/:alunoId/formulario" element={<RequireAuth><FormularioPage /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/turmas" replace />} />
