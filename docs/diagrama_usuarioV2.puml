@@ -1,0 +1,93 @@
+@startuml
+skinparam ClassBackgroundColor white
+skinparam ClassBorderColor #1a365d
+skinparam ClassHeaderBackgroundColor #edf2f7
+skinparam Shadowing false
+
+package "Núcleo Administrativo" {
+    class "escolas" as ESC {
+        + id_escola (PK)
+        --
+        nome_escola
+    }
+
+    class "turmas" as T {
+        + id_turma (PK)
+        --
+        # id_escola (FK)
+        # id_etapa (FK)
+        # id_multi_etapa (FK)
+        letra_turma
+    }
+
+    class "alunos" as AL {
+        + id_aluno (PK)
+        --
+        nome
+        cpf
+    }
+
+    class "professores" as PR {
+        + profissional_cpf (PK)
+        --
+        profissional_nome
+        profissional_dt_nascimento
+        senha (MD5)
+    }
+}
+
+package "Configuração de Avaliação" {
+    class "avaliacao_grupos" as GRU {
+        + id_grupo (PK)
+        --
+        nome_grupo (Linguagem, Matemática...)
+    }
+
+    class "avaliacao_opcoes" as OPC {
+        + id_opcao (PK)
+        --
+        tipo_escala (PEA, FLUXO, SN)
+        sigla (ND, SF, S...)
+        descricao
+        simbolo (➡️, ↘️, 🔄)
+        cor_hex
+    }
+
+    class "avaliacao_perguntas" as PER {
+        + id_pergunta (PK)
+        --
+        # id_grupo (FK)
+        texto_pergunta
+        tipo_escala
+    }
+}
+
+package "Registros de Avaliação" {
+    class "avaliacao_respostas" as RES {
+        + id_resposta (PK)
+        --
+        # id_aluno (FK)
+        # cpf_professor (FK)
+        # id_pergunta (FK)
+        # id_opcao (FK)
+        data_avaliacao
+        status (RASCUNHO/FINALIZADO)
+        observacao
+    }
+}
+
+' Relacionamentos Core
+T --> ESC
+AL -- EA
+EA -- T : "enturmacao_aluno"
+PR -- AP
+AP -- T : "atribuicao_professor"
+
+' Relacionamentos Avaliação
+PER --> GRU : "pertence a"
+RES --> AL : "avalia"
+RES --> PR : "aplicada por"
+RES --> PER : "responde a"
+RES --> OPC : "valor escolhido"
+
+@enduml
