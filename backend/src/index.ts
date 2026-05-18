@@ -25,7 +25,18 @@ const apiLimiter = rateLimit({
   message: { error: 'Muitas requisições. Tente novamente em breve.' },
 });
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+//app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true)
+      const ok = origin === 'http://localhost:5173' || /:\s*5173$/.test(origin)
+      return cb(null, ok)
+    },
+    credentials: true,
+  })
+)
+
 app.use(express.json());
 app.use(cookieParser());
 app.use('/api', apiLimiter);
