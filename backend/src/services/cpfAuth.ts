@@ -1,20 +1,6 @@
-/**
- * Fallback authentication via CPF + data_nascimento against the Postgres
- * `public.usuarios` table (projPiloto database).
- *
- * Logic (Option A):
- *  - Normalise the provided CPF and password to digits only.
- *  - Look up the user by CPF in Postgres.
- *  - If `senha_hash` is NULL/empty (trim), accept the login when the
- *    normalised password equals the normalised `data_nascimento` and the
- *    result is exactly 8 digits (DDMMYYYY).
- *  - If `senha_hash` is set, verify with bcryptjs.
- *  - `must_change_password = true` is reported in the return value but does
- *    NOT block authentication so that test logins work without extra steps.
- */
-
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface CpfUser {
   cpf: string;
@@ -28,6 +14,14 @@ function onlyDigits(s: string): string {
   return (s ?? '').replace(/\D/g, '');
 }
 
+function md5Hex(s: string): string {
+  return crypto.createHash('md5').update(s, 'utf8').digest('hex');
+}
+
+function looksLikeMd5(hex: string): boolean {
+  return /^[a-f0-9]{32}$/i.test((hex ?? '').trim());
+}
+
 let _pool: Pool | null = null;
 
 function getPool(): Pool {
@@ -38,35 +32,29 @@ function getPool(): Pool {
       database: process.env.PILOTO_PG_DB,
       user: process.env.PILOTO_PG_USER,
       password: process.env.PILOTO_PG_PASSWORD,
+      ssl: (process.env.PILOTO_PG_SSL ?? '').toLowerCase() === 'true' ? { rejectUnauthorized: false } : undefined,
     });
   }
   return _pool;
 }
 
-/**
- * Authenticate a user by CPF (11 digits) and password (DDMMYYYY or any
- * format that reduces to 8 digits once non-digit chars are stripped).
- *
- * @throws Error with a human-readable message on failure.
- */
 export async function authenticateByCpf(cpf: string, password: string): Promise<CpfUser> {
   const cpfNorm = onlyDigits(cpf).padStart(11, '0');
-  if (cpfNorm.length !== 11) {
-    throw new Error('CPF inválido');
-  }
+  if (cpfNorm.length !== 11) throw new Error('CPF inválido');
 
   const pool = getPool();
 
   const result = await pool.query<{
     cpf: string;
     nome: string;
-    data_nascimento: string;
-    senha_hash: string | null;
-    must_change_password: boolean;
+    senha: string | null;
   }>(
-    `SELECT cpf, nome, data_nascimento, senha_hash, must_change_password
-     FROM public.usuarios
-     WHERE regexp_replace(cpf, '\\D', '', 'g') = $1
+    `SELECT
+        regexp_replace(profissional_cpf, '\\D', '', 'g') as cpf,
+        COALESCE(NULLIF(trim(profissional_nome_social), ''), NULLIF(trim(profissional_nome), ''), '') as nome,
+        senha
+     FROM public.professores
+     WHERE regexp_replace(profissional_cpf, '\\D', '', 'g') = $1
      LIMIT 1`,
     [cpfNorm]
   );
@@ -77,33 +65,29 @@ export async function authenticateByCpf(cpf: string, password: string): Promise<
   }
 
   const user = result.rows[0];
-  const senhaHash = (user.senha_hash ?? '').trim();
-  const pwdNorm = onlyDigits(password);
+  const stored = (user.senha ?? '').trim();
 
-  if (senhaHash === '') {
-    // Fallback: compare digits-only password to digits-only data_nascimento.
-    // Both must be exactly 8 digits (DDMMYYYY) and equal.
-    const dataNorm = onlyDigits(user.data_nascimento ?? '');
-    if (pwdNorm.length !== 8 || dataNorm.length !== 8 || pwdNorm !== dataNorm) {
-      console.warn(
-        `[cpfAuth] Falha no login por data de nascimento – CPF ${cpfNorm.slice(0, 3)}***${cpfNorm.slice(-2)}`
-      );
-      throw new Error('Senha inválida');
-    }
+  if (!stored) {
+    throw new Error('Senha inválida');
+  }
+
+  // Compat:
+  // - MD5 hex (legacy): compare md5(password)
+  // - bcrypt ($2...): bcrypt compare
+  // - otherwise: plain compare (last resort)
+  if (looksLikeMd5(stored)) {
+    const ok = md5Hex(password).toLowerCase() === stored.toLowerCase();
+    if (!ok) throw new Error('Senha inválida');
+  } else if (stored.startsWith('$2')) {
+    const ok = await bcrypt.compare(password, stored);
+    if (!ok) throw new Error('Senha inválida');
   } else {
-    // Normal path: bcrypt verify
-    const ok = await bcrypt.compare(password, senhaHash);
-    if (!ok) {
-      console.warn(
-        `[cpfAuth] Falha no login (bcrypt) – CPF ${cpfNorm.slice(0, 3)}***${cpfNorm.slice(-2)}`
-      );
-      throw new Error('Senha inválida');
-    }
+    if (password !== stored) throw new Error('Senha inválida');
   }
 
   return {
     cpf: cpfNorm,
     nome: (user.nome ?? '').trim(),
-    mustChangePassword: user.must_change_password ?? true,
+    mustChangePassword: false,
   };
 }
