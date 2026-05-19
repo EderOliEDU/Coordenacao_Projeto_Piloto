@@ -1,57 +1,114 @@
-import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { Router, Response } from 'express'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { getPgPool } from '../services/pgPool'
 
-const router = Router();
-const prisma = new PrismaClient();
+const router = Router()
+router.use(authMiddleware)
 
-router.use(authMiddleware);
-
-// GET /api/turmas - list turmas for logged-in professor
+/**
+ * Retorno compatível com o frontend:
+ * {
+ *   id, nome, anoLetivo, turno,
+ *   escola: { id, nome },
+ *   _count: { alunos }
+ * }
+ */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const professorTurmas = await prisma.professorTurma.findMany({
-      where: { professorId: req.professor!.id },
-      include: {
-        turma: {
-          include: {
-            escola: true,
-            _count: { select: { alunos: { where: { ativo: true } } } },
-          },
-        },
-      },
-    });
+    const cpf = (req.professor?.login ?? '').replace(/\D/g, '')
+    if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
 
-    const turmas = professorTurmas.map((pt) => ({
-      ...pt.turma,
-      _count: pt.turma._count,
-    }));
+    const pool = getPgPool()
 
-    res.json(turmas);
+    const { rows } = await pool.query<{
+      id: string
+      nome: string
+      turno: string | null
+      escola_id: string
+      escola_nome: string
+      alunos_count: string
+    }>(
+      `
+      SELECT
+        t.id_turma::text                                   AS id,
+        ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS nome,
+        t.turno::text                                      AS turno,
+        e.id_escola::text                                  AS escola_id,
+        e.nome_escola::text                                AS escola_nome,
+        COUNT(DISTINCT ea.id_aluno)::text                  AS alunos_count
+      FROM public.atribuicao_professor ap
+      JOIN public.turmas t ON t.id_turma = ap.id_turma
+      LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
+      LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
+      WHERE ap.cpf_professor = $1
+      GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola
+      ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
+      `,
+      [cpf]
+    )
+
+    const turmas = rows.map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      // seu schema não tem anoLetivo; devolvemos o ano atual para não quebrar o frontend
+      anoLetivo: new Date().getFullYear(),
+      turno: (r.turno || 'MANHA'),
+      escola: { id: r.escola_id || '', nome: r.escola_nome || '' },
+      _count: { alunos: Number(r.alunos_count || 0) },
+    }))
+
+    res.json(turmas)
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar turmas' });
+    console.error(err)
+    res.status(500).json({ error: 'Erro ao buscar turmas' })
   }
-});
+})
 
-// GET /api/turmas/:id/alunos
 router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
+  try {
+    const turmaId = req.params.id
+    const cpf = (req.professor?.login ?? '').replace(/\D/g, '')
+    if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
 
-  // Check professor is assigned to this turma
-  const assignment = await prisma.professorTurma.findFirst({
-    where: { professorId: req.professor!.id, turmaId: id },
-  });
+    const pool = getPgPool()
 
-  if (!assignment) {
-    return res.status(403).json({ error: 'Acesso negado a esta turma' });
+    // checa se o professor tem essa turma atribuída
+    const check = await pool.query(
+      `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma::text = $2 LIMIT 1`,
+      [cpf, turmaId]
+    )
+    if (check.rowCount === 0) {
+      return res.status(403).json({ error: 'Acesso negado a esta turma' })
+    }
+
+    const { rows } = await pool.query<{
+      id: string
+      nome: string | null
+      cpf: string | null
+      inep: string | null
+      situacao: string | null
+    }>(
+      `
+      SELECT
+        a.id_aluno::text AS id,
+        a.nome::text     AS nome,
+        a.cpf::text      AS cpf,
+        a.inep::text     AS inep,
+        a.situacao::text AS situacao
+      FROM public.enturmacao_aluno ea
+      JOIN public.alunos a ON a.id_aluno = ea.id_aluno
+      WHERE ea.id_turma::text = $1
+      ORDER BY a.nome;
+      `,
+      [turmaId]
+    )
+
+    // frontend espera pelo menos {id, nome}. Campos extras não atrapalham.
+    res.json(rows)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Erro ao buscar alunos' })
   }
+})
 
-  const alunos = await prisma.aluno.findMany({
-    where: { turmaId: id, ativo: true },
-    orderBy: { nome: 'asc' },
-  });
-
-  res.json(alunos);
-});
-
-export default router;
+export default router

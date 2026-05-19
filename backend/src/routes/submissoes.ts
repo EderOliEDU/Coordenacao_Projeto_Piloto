@@ -1,19 +1,17 @@
-import { Router, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { z } from 'zod';
+import { Router, Response } from 'express'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { z } from 'zod'
+import { getPgPool } from '../services/pgPool'
 
-const router = Router();
-const prisma = new PrismaClient();
+const router = Router()
+router.use(authMiddleware)
 
-router.use(authMiddleware);
-
-const STATUS_RASCUNHO = 'RASCUNHO';
-const STATUS_FINALIZADO = 'FINALIZADO';
+const STATUS_RASCUNHO = 'RASCUNHO'
+const STATUS_FINALIZADO = 'FINALIZADO'
 
 const salvarRespostaSchema = z.object({
   formularioId: z.string().min(1),
-  escolaId: z.string().min(1),
+  escolaId: z.string().min(1).optional(), // vindo do frontend, não usamos no PG agora
   turmaId: z.string().min(1),
   alunoId: z.string().min(1),
   observacoes: z.string().optional(),
@@ -22,368 +20,162 @@ const salvarRespostaSchema = z.object({
     perguntaId: z.string().min(1),
     opcaoEscalaId: z.string().min(1),
   })).optional(),
-});
+})
 
-function normalizarStatus(status?: string | null) {
-  if (status === STATUS_FINALIZADO || status === 'ENVIADA') return STATUS_FINALIZADO;
-  if (status === STATUS_RASCUNHO || status === null || status === undefined) return STATUS_RASCUNHO;
-  console.warn(`[submissoes] status inesperado "${status}", definindo como RASCUNHO`);
-  return STATUS_RASCUNHO;
+function normalizarCpf(value: string) {
+  return (value || '').replace(/\D/g, '')
 }
 
-function mapSubmissaoStatus<T extends { status?: string | null }>(submissao: T): T & { status: string } {
-  return { ...submissao, status: normalizarStatus(submissao.status) };
-}
-
-async function salvarResposta(req: AuthRequest, res: Response, fallbackStatus?: string) {
-  const incomingBody = fallbackStatus ? { ...req.body, status: fallbackStatus } : req.body;
-  const parsed = salvarRespostaSchema.safeParse(incomingBody);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Payload inválido', detalhes: parsed.error.flatten() });
-  }
-
-  const { formularioId, escolaId, turmaId, alunoId, respostas, observacoes, status } = parsed.data;
-  const targetStatus = status || STATUS_RASCUNHO;
-
-  const assignment = await prisma.professorTurma.findFirst({
-    where: { professorId: req.professor!.id, turmaId },
-  });
-  if (!assignment) return res.status(403).json({ error: 'Acesso negado a esta turma' });
-
-  let submissao = await prisma.submissao.findFirst({
-    where: {
-      turmaId,
-      alunoId,
-      formularioId,
-      professores: { some: { professorId: req.professor!.id } },
-    },
-    orderBy: { criadaEm: 'desc' },
-  });
-
-  if (submissao) {
-    submissao = await prisma.submissao.update({
-      where: { id: submissao.id },
-      data: {
-        observacoes,
-        status: targetStatus,
-        enviadaEm: targetStatus === STATUS_FINALIZADO ? new Date() : null,
-      },
-    });
-  } else {
-    submissao = await prisma.submissao.create({
-      data: {
-        formularioId,
-        escolaId,
-        turmaId,
-        alunoId,
-        status: targetStatus,
-        enviadaEm: targetStatus === STATUS_FINALIZADO ? new Date() : null,
-        observacoes,
-        professores: {
-          create: { professorId: req.professor!.id },
-        },
-      },
-    });
-  }
-
-  if (respostas && Array.isArray(respostas)) {
-    for (const r of respostas) {
-      const [pergunta, opcao] = await Promise.all([
-        prisma.pergunta.findUnique({ where: { id: r.perguntaId }, select: { escalaId: true } }),
-        prisma.opcaoEscala.findUnique({ where: { id: r.opcaoEscalaId }, select: { escalaId: true } }),
-      ]);
-
-      if (!pergunta) {
-        return res.status(400).json({ error: 'Pergunta não encontrada' });
-      }
-      if (!opcao) {
-        return res.status(400).json({ error: 'Opção de resposta não encontrada' });
-      }
-      if (pergunta.escalaId && opcao.escalaId !== pergunta.escalaId) {
-        return res.status(400).json({ error: 'Opção incompatível com a escala da pergunta' });
-      }
-
-      await prisma.resposta.upsert({
-        where: { submissaoId_perguntaId: { submissaoId: submissao.id, perguntaId: r.perguntaId } },
-        create: { submissaoId: submissao.id, perguntaId: r.perguntaId, opcaoEscalaId: r.opcaoEscalaId },
-        update: { opcaoEscalaId: r.opcaoEscalaId },
-      });
-    }
-  }
-
-  const withRespostas = await prisma.submissao.findUnique({
-    where: { id: submissao.id },
-    include: { respostas: true },
-  });
-  return res.json(mapSubmissaoStatus(withRespostas!));
+async function assertTurmaAssignment(cpf: string, turmaId: number) {
+  const pool = getPgPool()
+  const r = await pool.query(
+    `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma = $2 LIMIT 1`,
+    [cpf, turmaId]
+  )
+  return r.rowCount > 0
 }
 
 // GET /api/submissoes?turmaId=&alunoId=
 router.get('/', async (req: AuthRequest, res: Response) => {
-  const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string };
+  try {
+    const cpf = normalizarCpf(req.professor?.login || '')
+    const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
 
-  const where: any = {
-    professores: { some: { professorId: req.professor!.id } },
-  };
-  if (turmaId) where.turmaId = turmaId;
-  if (alunoId) where.alunoId = alunoId;
+    const where: string[] = [`cpf_professor = $1`]
+    const params: any[] = [cpf]
+    let idx = 2
 
-  const submissoes = await prisma.submissao.findMany({
-    where,
-    include: {
-      aluno: true,
-      turma: { include: { escola: true } },
-      formulario: true,
-      _count: { select: { respostas: true } },
-    },
-    orderBy: { criadaEm: 'desc' },
-  });
+    if (turmaId) { where.push(`id_turma = $${idx++}`); params.push(Number(turmaId)) }
+    if (alunoId) { where.push(`id_aluno = $${idx++}`); params.push(Number(alunoId)) }
 
-  res.json(submissoes.map(mapSubmissaoStatus));
-});
+    const pool = getPgPool()
+    const { rows } = await pool.query(
+      `
+      SELECT id::text AS id, status
+      FROM public.submissoes_pg
+      WHERE ${where.join(' AND ')}
+      ORDER BY atualizada_em DESC
+      `,
+      params
+    )
 
-// GET /api/submissoes/perguntas?grupoId=&tipoEscala=
-router.get('/perguntas', async (req: AuthRequest, res: Response) => {
-  const { grupoId, tipoEscala } = req.query as { grupoId?: string; tipoEscala?: string };
-
-  const where: any = {};
-  if (grupoId) where.secaoId = grupoId;
-  if (tipoEscala) where.escala = { codigo: tipoEscala };
-
-  const perguntas = await prisma.pergunta.findMany({
-    where,
-    include: {
-      secao: true,
-      escala: true,
-    },
-    orderBy: [{ secao: { ordem: 'asc' } }, { ordem: 'asc' }],
-  });
-
-  res.json(perguntas.map((p) => ({
-    id: p.id,
-    id_grupo: p.secaoId,
-    nome_grupo: p.secao.titulo,
-    texto_pergunta: p.enunciado,
-    tipo_escala: p.escala?.codigo || null,
-    obrigatoria: p.obrigatoria,
-  })));
-});
-
-// GET /api/submissoes/opcoes?tipoEscala=
-router.get('/opcoes', async (req: AuthRequest, res: Response) => {
-  const { tipoEscala } = req.query as { tipoEscala?: string };
-  if (!tipoEscala) return res.status(400).json({ error: 'Query parameter tipoEscala é obrigatório' });
-
-  const opcoes = await prisma.opcaoEscala.findMany({
-    where: { escala: { codigo: tipoEscala } },
-    include: { escala: true },
-    orderBy: { ordem: 'asc' },
-  });
-
-  res.json(opcoes.map((o) => ({
-    id_opcao: o.id,
-    tipo_escala: o.escala.codigo,
-    sigla: o.chave,
-    descricao: o.descricaoLegenda,
-    simbolo: o.rotuloUI,
-    cor_hex: o.corHex,
-  })));
-});
-
-// GET /api/submissoes/respostas/aluno/:alunoId?turmaId=&formularioId=
-router.get('/respostas/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
-  const { turmaId, formularioId } = req.query as { turmaId?: string; formularioId?: string };
-  const where: any = {
-    alunoId: req.params.alunoId,
-    professores: { some: { professorId: req.professor!.id } },
-  };
-  if (turmaId) where.turmaId = turmaId;
-  if (formularioId) where.formularioId = formularioId;
-
-  const submissao = await prisma.submissao.findFirst({
-    where,
-    include: {
-      respostas: { include: { opcaoEscala: true, pergunta: true } },
-    },
-    orderBy: { criadaEm: 'desc' },
-  });
-
-  if (!submissao) return res.json(null);
-  return res.json(mapSubmissaoStatus(submissao));
-});
-
-// GET /api/submissoes/pendencias?turmaId=&formularioId=
-router.get('/pendencias', async (req: AuthRequest, res: Response) => {
-  const { turmaId, formularioId } = req.query as { turmaId?: string; formularioId?: string };
-
-  const professorTurmas = await prisma.professorTurma.findMany({
-    where: { professorId: req.professor!.id },
-    select: { turmaId: true },
-  });
-  const turmaIds = turmaId ? [turmaId] : professorTurmas.map((pt) => pt.turmaId);
-
-  const formulario = formularioId
-    ? await prisma.formulario.findUnique({
-        where: { id: formularioId },
-        include: { secoes: { include: { perguntas: true } } },
-      })
-    : await prisma.formulario.findFirst({
-        where: { ativo: true },
-        include: { secoes: { include: { perguntas: true } } },
-      });
-
-  if (!formulario) {
-    const message = formularioId
-      ? `Formulário com id ${formularioId} não encontrado`
-      : 'Formulário ativo não encontrado';
-    return res.status(404).json({ error: message });
+    return res.json(rows.map(r => ({ id: r.id, status: r.status })))
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Erro ao buscar submissões' })
   }
-
-  const totalPerguntas = formulario.secoes.reduce((acc, secao) => acc + secao.perguntas.length, 0);
-  if (turmaIds.length === 0) {
-    // Retornamos o total do formulário ativo para o frontend exibir como referência, mesmo sem turmas atribuídas.
-    return res.json({ formularioId: formulario.id, totalPerguntas, semFinalizacao: [], rascunhos: [], inconsistencias: [] });
-  }
-
-  const alunos = await prisma.aluno.findMany({
-    where: { turmaId: { in: turmaIds }, ativo: true },
-    include: { turma: true },
-    orderBy: { nome: 'asc' },
-  });
-
-  const submissoes = await prisma.submissao.findMany({
-    where: {
-      turmaId: { in: turmaIds },
-      formularioId: formulario.id,
-      professores: { some: { professorId: req.professor!.id } },
-    },
-    include: {
-      aluno: true,
-      turma: true,
-      respostas: { include: { pergunta: true, opcaoEscala: true } },
-    },
-    orderBy: { criadaEm: 'desc' },
-  });
-
-  const latestByAluno = new Map<string, (typeof submissoes)[number]>();
-  // submissoes vem em ordem decrescente de criação; o primeiro registro por aluno é o mais recente.
-  for (const sub of submissoes) {
-    if (!latestByAluno.has(sub.alunoId)) {
-      latestByAluno.set(sub.alunoId, sub);
-    }
-  }
-
-  const semFinalizacao = alunos
-    .map((aluno) => {
-      const sub = latestByAluno.get(aluno.id);
-      const status = normalizarStatus(sub?.status);
-      const totalRespondidas = sub?.respostas?.length || 0;
-      const finalizadoCompleto = status === STATUS_FINALIZADO && totalRespondidas >= totalPerguntas;
-      if (finalizadoCompleto) return null;
-
-      return {
-        alunoId: aluno.id,
-        alunoNome: aluno.nome,
-        turmaId: aluno.turmaId,
-        turmaNome: aluno.turma.nome,
-        submissaoId: sub?.id || null,
-        status,
-        totalRespondidas,
-        totalPerguntas,
-      };
-    })
-    .filter(Boolean);
-
-  const rascunhos = submissoes
-    .filter((sub) => normalizarStatus(sub.status) === STATUS_RASCUNHO)
-    .map((sub) => ({
-      submissaoId: sub.id,
-      alunoId: sub.alunoId,
-      alunoNome: sub.aluno.nome,
-      turmaId: sub.turmaId,
-      turmaNome: sub.turma.nome,
-      totalRespondidas: sub.respostas.length,
-      totalPerguntas,
-      atualizadaEm: sub.updatedAt,
-    }));
-
-  const inconsistencias = submissoes.flatMap((sub) =>
-    sub.respostas
-      .filter((resp) => resp.pergunta.escalaId && resp.opcaoEscala.escalaId !== resp.pergunta.escalaId)
-      .map((resp) => ({
-        submissaoId: sub.id,
-        alunoId: sub.alunoId,
-        alunoNome: sub.aluno.nome,
-        turmaId: sub.turmaId,
-        turmaNome: sub.turma.nome,
-        perguntaId: resp.perguntaId,
-        opcaoEscalaId: resp.opcaoEscalaId,
-      }))
-  );
-
-  return res.json({
-    formularioId: formulario.id,
-    totalPerguntas,
-    semFinalizacao,
-    rascunhos,
-    inconsistencias,
-  });
-});
+})
 
 // GET /api/submissoes/:id
 router.get('/:id', async (req: AuthRequest, res: Response) => {
-  const submissao = await prisma.submissao.findFirst({
-    where: { id: req.params.id, professores: { some: { professorId: req.professor!.id } } },
-    include: {
-      aluno: true,
-      turma: { include: { escola: true } },
-      formulario: {
-        include: {
-          secoes: {
-            orderBy: { ordem: 'asc' },
-            include: {
-              perguntas: {
-                orderBy: { ordem: 'asc' },
-                include: { escala: { include: { opcoes: { orderBy: { ordem: 'asc' } } } } },
-              },
-            },
-          },
-        },
-      },
-      respostas: { include: { opcaoEscala: true, pergunta: true } },
-    },
-  });
+  try {
+    const cpf = normalizarCpf(req.professor?.login || '')
+    const subId = Number(req.params.id)
+    const pool = getPgPool()
 
-  if (!submissao) return res.status(404).json({ error: 'Submissão não encontrada' });
-  res.json(mapSubmissaoStatus(submissao));
-});
+    const subRes = await pool.query(
+      `SELECT id, cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes
+       FROM public.submissoes_pg
+       WHERE id = $1 AND cpf_professor = $2
+       LIMIT 1`,
+      [subId, cpf]
+    )
+    if (subRes.rowCount === 0) return res.status(404).json({ error: 'Submissão não encontrada' })
+
+    const sub = subRes.rows[0]
+
+    // respostas por professor+aluno (escopo simples)
+    const respRes = await pool.query(
+      `
+      SELECT id_pergunta::text AS "perguntaId", id_opcao::text AS "opcaoEscalaId"
+      FROM public.avaliacao_respostas
+      WHERE cpf_professor = $1 AND id_aluno = $2
+      ORDER BY id_pergunta
+      `,
+      [cpf, Number(sub.id_aluno)]
+    )
+
+    return res.json({
+      id: String(sub.id),
+      status: sub.status,
+      observacoes: sub.observacoes || '',
+      respostas: respRes.rows,
+    })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Erro ao buscar submissão' })
+  }
+})
 
 // POST /api/submissoes/respostas
 router.post('/respostas', async (req: AuthRequest, res: Response) => {
-  return salvarResposta(req, res);
-});
-
-// POST /api/submissoes (compat)
-router.post('/', async (req: AuthRequest, res: Response) => {
-  return salvarResposta(req, res, STATUS_RASCUNHO);
-});
-
-// PUT /api/submissoes/:id/enviar
-router.put('/:id/enviar', async (req: AuthRequest, res: Response) => {
-  const submissao = await prisma.submissao.findFirst({
-    where: { id: req.params.id, professores: { some: { professorId: req.professor!.id } } },
-  });
-  if (!submissao) return res.status(404).json({ error: 'Submissão não encontrada' });
-  if (normalizarStatus(submissao.status) === STATUS_FINALIZADO) {
-    return res.status(400).json({ error: 'Já finalizada' });
+  const parsed = salvarRespostaSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Payload inválido', detalhes: parsed.error.flatten() })
   }
 
-  const updated = await prisma.submissao.update({
-    where: { id: req.params.id },
-    data: { status: STATUS_FINALIZADO, enviadaEm: new Date() },
-  });
+  try {
+    const cpf = normalizarCpf(req.professor?.login || '')
+    const { formularioId, turmaId, alunoId, respostas, observacoes, status } = parsed.data
+    const turmaIdNum = Number(turmaId)
+    const alunoIdNum = Number(alunoId)
+    const targetStatus = status || STATUS_RASCUNHO
 
-  res.json(mapSubmissaoStatus(updated));
-});
+    const ok = await assertTurmaAssignment(cpf, turmaIdNum)
+    if (!ok) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
-export default router;
+    const pool = getPgPool()
+
+    // upsert submissao metadata
+    const upsert = await pool.query(
+      `
+      INSERT INTO public.submissoes_pg (cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (cpf_professor, id_turma, id_aluno, formulario_id)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        observacoes = EXCLUDED.observacoes,
+        atualizada_em = CURRENT_TIMESTAMP
+      RETURNING id::text AS id
+      `,
+      [cpf, turmaIdNum, alunoIdNum, formularioId, targetStatus, observacoes || null]
+    )
+
+    const subId = upsert.rows[0].id as string
+
+    if (respostas && Array.isArray(respostas)) {
+      // mantém 1 resposta por pergunta por professor+aluno (escopo simples)
+      await pool.query('BEGIN')
+      try {
+        for (const r of respostas) {
+          const perguntaId = Number(r.perguntaId)
+          const opcaoId = Number(r.opcaoEscalaId)
+
+          // apaga resposta anterior dessa pergunta
+          await pool.query(
+            `DELETE FROM public.avaliacao_respostas
+             WHERE cpf_professor = $1 AND id_aluno = $2 AND id_pergunta = $3`,
+            [cpf, alunoIdNum, perguntaId]
+          )
+
+          await pool.query(
+            `INSERT INTO public.avaliacao_respostas (id_aluno, cpf_professor, id_pergunta, id_opcao, status, observacao)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [alunoIdNum, cpf, perguntaId, opcaoId, targetStatus, observacoes || null]
+          )
+        }
+        await pool.query('COMMIT')
+      } catch (e) {
+        await pool.query('ROLLBACK')
+        throw e
+      }
+    }
+
+    return res.json({ id: subId, status: targetStatus })
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Erro ao salvar' })
+  }
+})
+
+export default router
