@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../services/ldap';
 import { authenticateByCpf } from '../services/cpfAuth';
+import { getPgPool } from '../services/pgPool';
 
 const router = Router();
-const prisma = new PrismaClient();
+const pool = getPgPool();
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -16,10 +16,6 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
 });
 
-/** Returns true when the string looks like a Brazilian CPF:
- *  - exactly 11 digits (bare), or
- *  - formatted as DDD.DDD.DDD-DD
- */
 function looksLikeCpf(login: string): boolean {
   const bare = login.replace(/\D/g, '');
   return bare.length === 11 && /^\d{11}$/.test(bare);
@@ -50,32 +46,43 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       const ldapUser = await authenticate(login, pwd);
       professorLogin = ldapUser.login;
       professorNome = ldapUser.nome;
-      professorEmail = ldapUser.email;
+      //professorEmail = ldapUser.email;
     }
 
-    // Upsert professor into the local SQLite database
-    let professor = await prisma.professor.findUnique({ where: { login: professorLogin } });
-
-    if (!professor) {
-      professor = await prisma.professor.create({
-        data: {
-          login: professorLogin,
-          nome: professorNome,
-          email: professorEmail,
-        },
-      });
+    // Upsert professor na tabela professores (Postgres)
+    const client = await pool.connect();
+    let professor;
+    try {
+      const upsertQuery = `
+        INSERT INTO professores (profissional_cpf, profissional_nome, profissional_e_mail)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (profissional_cpf)
+        DO UPDATE SET profissional_nome = EXCLUDED.profissional_nome, profissional_e_mail = EXCLUDED.profissional_e_mail
+        RETURNING profissional_cpf, profissional_nome
+      `;
+      const result = await client.query(upsertQuery, [professorLogin, professorNome, professorEmail]);
+      professor = result.rows[0];
+    } finally {
+      client.release();
     }
 
     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
     const token = jwt.sign(
-      { id: professor.id, login: professor.login, nome: professor.nome },
+      {
+        cpf: professor.profissional_cpf,
+        nome: professor.profissional_nome,
+        login: professor.profissional_cpf,
+      },
       process.env.JWT_SECRET!,
       { expiresIn }
     );
 
     const responseBody: Record<string, unknown> = {
       token,
-      professor: { id: professor.id, nome: professor.nome, login: professor.login },
+      professor: {
+        cpf: professor.profissional_cpf,
+        nome: professor.profissional_nome
+      },
     };
 
     if (mustChangePassword) {
@@ -84,6 +91,8 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
 
     res.json(responseBody);
   } catch (err: any) {
+    // log detalhado no servidor para depuração
+    console.error('Falha no login:', err);
     res.status(401).json({ error: err.message || 'Autenticação falhou' });
   }
 });

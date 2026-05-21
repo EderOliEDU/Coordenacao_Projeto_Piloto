@@ -1,47 +1,56 @@
 services:
-  backend:
-    build:
-      context: ./backend
+  db-dev:
+    image: postgres:16
+    profiles: ["dev"]
     environment:
-      NODE_ENV: production
-      PORT: 3001
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dbsemecel_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_dev:/var/lib/postgresql/data
 
-      # Prisma/SQLite (formulários)
-      DATABASE_URL: "file:/app/prisma/dev.db"
+  backend-dev:
+    profiles: ["dev"]
+    build: ./backend
+    env_file:
+      - ./backend/.env_dev
+    depends_on:
+      - db-dev
+    ports:
+      - "3002:3001"
 
-      # Admin (somente rede interna) - definir no .env do servidor
-      ADMIN_USER: "${ADMIN_USER}"
-      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+  frontend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: "http://172.17.2.40:3002"
+        NGINX_CONF: "nginx.dev.conf"
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend-dev
 
-      # PostgreSQL projPiloto (auth por CPF) - definir no .env do servidor
-      PILOTO_PG_HOST: "${PILOTO_PG_HOST}"
-      PILOTO_PG_PORT: "${PILOTO_PG_PORT}"
-      PILOTO_PG_DATABASE: "${PILOTO_PG_DATABASE}"
-      PILOTO_PG_DB: "${PILOTO_PG_DB}"
-      PILOTO_PG_USER: "${PILOTO_PG_USER}"
-      PILOTO_PG_PASSWORD: "${PILOTO_PG_PASSWORD}"
-      PILOTO_PG_SSL: "${PILOTO_PG_SSL}"
-
-      JWT_SECRET: "${JWT_SECRET}"
-      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN}"
+  backend-prod:
+    profiles: ["prod"]
+    build: ./backend
+    env_file:
+      - ./backend/.env_prod
     ports:
       - "3001:3001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-    volumes:
-      - prisma_data:/app/prisma
 
-  frontend:
+  frontend-prod:
+    profiles: ["prod"]
     build:
       context: ./frontend
       args:
         VITE_API_URL: "http://172.17.2.40:3001"
+        NGINX_CONF: "nginx.prod.conf"
     ports:
       - "5173:80"
     depends_on:
-      - backend
-    restart: unless-stopped
+      - backend-prod
 
 volumes:
-  prisma_data: {}
+  pg_dev:

@@ -14,9 +14,9 @@ import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
-// Global rate limiter: 300 requests per 15 minutes per IP
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -25,17 +25,12 @@ const apiLimiter = rateLimit({
   message: { error: 'Muitas requisições. Tente novamente em breve.' },
 });
 
-//app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(
   cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true)
-      const ok = origin === 'http://localhost:5173' || /:\s*5173$/.test(origin)
-      return cb(null, ok)
-    },
+    origin: ['http://172.17.2.40:5173', 'http://localhost:5173'],
     credentials: true,
   })
-)
+);
 
 app.use(express.json());
 app.use(cookieParser());

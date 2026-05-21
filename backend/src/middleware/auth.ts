@@ -14,7 +14,13 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    req.professor = payload;
+    req.professor = {
+      // tenta pegar o login, se não pega o cpf
+      login: payload.login || payload.cpf,
+      nome:  payload.nome,
+      cpf:   payload.cpf,
+      // inclua outros campos se necessário
+    } as any;
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido' });
