@@ -51,7 +51,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const pool = getPgPool()
     const { rows } = await pool.query(
       `
-      SELECT id::text AS id, status
+      SELECT id::text AS id, id_aluno::text AS "alunoId", status
       FROM public.submissoes_pg
       WHERE ${where.join(' AND ')}
       ORDER BY atualizada_em DESC
@@ -59,7 +59,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       params
     )
 
-    return res.json(rows.map(r => ({ id: r.id, status: r.status })))
+    return res.json(rows.map(r => ({ id: r.id, alunoId: r.alunoId, status: r.status })))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Erro ao buscar submissões' })

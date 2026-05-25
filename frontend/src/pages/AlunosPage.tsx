@@ -10,16 +10,42 @@ export default function AlunosPage() {
   const [alunos, setAlunos] = useState<Aluno[]>([])
   const [submissoes, setSubmissoes] = useState<Submissao[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
-    Promise.all([
-      api.get(`/turmas/${turmaId}/alunos`),
-      api.get(`/submissoes?turmaId=${turmaId}`),
-    ]).then(([alunosRes, subRes]) => {
-      setAlunos(alunosRes.data)
-      setSubmissoes(subRes.data)
-    }).finally(() => setLoading(false))
+    let active = true
+
+    async function carregarAlunos() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const alunosRes = await api.get(`/turmas/${turmaId}/alunos`)
+        if (!active) return
+        setAlunos(Array.isArray(alunosRes.data) ? alunosRes.data : [])
+
+        try {
+          const subRes = await api.get(`/submissoes?turmaId=${turmaId}`)
+          if (active) setSubmissoes(Array.isArray(subRes.data) ? subRes.data : [])
+        } catch {
+          if (active) setSubmissoes([])
+        }
+      } catch (err: any) {
+        if (active) {
+          setAlunos([])
+          setSubmissoes([])
+          setError(err.response?.data?.error || 'Erro ao carregar alunos da turma.')
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    carregarAlunos()
+    return () => {
+      active = false
+    }
   }, [turmaId])
 
   function getStatus(alunoId: string) {
@@ -42,6 +68,8 @@ export default function AlunosPage() {
       </div>
 
       {loading && <p>Carregando...</p>}
+      {!loading && error && <p style={{ color: '#d63031' }}>{error}</p>}
+      {!loading && !error && alunos.length === 0 && <p style={{ color: '#636e72' }}>Nenhum aluno encontrado nesta turma.</p>}
 
       <div style={{ display: 'grid', gap: 8 }}>
         {alunos.map(aluno => {

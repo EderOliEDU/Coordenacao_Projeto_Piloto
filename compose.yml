@@ -1,42 +1,38 @@
 services:
-  db-dev:
-    image: postgres:16
-    profiles: ["dev"]
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: dbsemecel_dev
-    ports:
-      - "5433:5432"
-    volumes:
-      - pg_dev:/var/lib/postgresql/data
+
+# :::::::::  Servidor de Deselvovimento  :::::::::
 
   backend-dev:
     profiles: ["dev"]
     build: ./backend
     env_file:
       - ./backend/.env_dev
-    depends_on:
-      - db-dev
+    environment:
+      - NODE_ENV=development
     ports:
-      - "3002:3001"
+      - "3001:3001"
 
   frontend-dev:
     profiles: ["dev"]
     build:
       context: ./frontend
       args:
-        VITE_API_URL: "http://172.17.2.40:3002"
+        VITE_API_URL: "http://172.17.2.42:3001"
         NGINX_CONF: "nginx.dev.conf"
     ports:
-      - "5174:80"
+      - "5173:80"
     depends_on:
       - backend-dev
+
+# :::::::::  Servidor de Produção   :::::::::
 
   backend-prod:
     profiles: ["prod"]
     build: ./backend
     env_file:
       - ./backend/.env_prod
+    environment:
+      - NODE_ENV=production
     ports:
       - "3001:3001"
 
