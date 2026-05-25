@@ -23,7 +23,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
       arr.push({
         id: String(o.id_opcao),
         chave: o.sigla ?? '',
-        rotuloUI: o.simbolo ?? o.sigla ?? '',
+        rotuloUI: o.sigla ?? '',
         corHex: o.cor_hex ?? null,
         descricaoLegenda: o.descricao ?? '',
         ordem: Number(o.id_opcao),
@@ -64,7 +64,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
 
     const formulario = {
       id: 'PG_V1',
-      nome: 'Formulário Piloto EI',
+      nome: 'Enfoque de observação',
       versao: '1.0.0',
       secoes,
     }

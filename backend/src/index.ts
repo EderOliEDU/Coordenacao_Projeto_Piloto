@@ -14,6 +14,7 @@ import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
 
 const app = express();
+app.use('/turmas', turmasRoutes);
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
@@ -27,7 +28,7 @@ const apiLimiter = rateLimit({
 
 app.use(
   cors({
-    origin: ['http://172.17.2.40:5173', 'http://localhost:5173'],
+    origin: ['http://172.17.2.42:5173', 'http://localhost:5173'],
     credentials: true,
   })
 );

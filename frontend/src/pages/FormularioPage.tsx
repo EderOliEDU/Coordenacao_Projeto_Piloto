@@ -156,6 +156,7 @@ export default function FormularioPage() {
                       value={respostas[pergunta.id] || null}
                       onChange={(opcaoId) => setRespostas(prev => ({ ...prev, [pergunta.id]: opcaoId }))}
                       disabled={isEnviada}
+                      textOnly={['P1', 'P2', 'P3'].includes(pergunta.codigo)}
                     />
                   ) : (
                     <span style={{ color: '#b2bec3', fontSize: 12 }}>Sem escala definida</span>
