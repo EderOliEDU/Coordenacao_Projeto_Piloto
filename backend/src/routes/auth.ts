@@ -4,6 +4,8 @@ import rateLimit from 'express-rate-limit';
 import { authenticate } from '../services/ldap';
 import { authenticateByCpf } from '../services/cpfAuth';
 import { getPgPool } from '../services/pgPool';
+import { getUserPermissions } from '../services/permissions';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const pool = getPgPool();
@@ -67,11 +69,13 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     }
 
     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
+    const permissoes = getUserPermissions(professor.profissional_cpf);
     const token = jwt.sign(
       {
         cpf: professor.profissional_cpf,
         nome: professor.profissional_nome,
         login: professor.profissional_cpf,
+        permissoes,
       },
       process.env.JWT_SECRET!,
       { expiresIn }
@@ -81,7 +85,8 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       token,
       professor: {
         cpf: professor.profissional_cpf,
-        nome: professor.profissional_nome
+        nome: professor.profissional_nome,
+        permissoes,
       },
     };
 
@@ -95,6 +100,18 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     console.error('Falha no login:', err);
     res.status(401).json({ error: err.message || 'Autenticação falhou' });
   }
+});
+
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const cpf = req.professor?.cpf || req.professor?.login || '';
+  const permissoes = getUserPermissions(cpf);
+  res.json({
+    professor: {
+      cpf,
+      nome: req.professor?.nome || '',
+      permissoes,
+    },
+  });
 });
 
 export default router;

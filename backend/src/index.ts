@@ -12,6 +12,7 @@ import turmasRoutes from './routes/turmas';
 import formulariosRoutes from './routes/formularios';
 import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
+import resultadosRoutes from './routes/resultados';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -40,6 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/turmas', turmasRoutes);
 app.use('/api/formularios', formulariosRoutes);
 app.use('/api/submissoes', submisoesRoutes);
+app.use('/api/resultados', resultadosRoutes);
 app.use('/api/admin', importacaoRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

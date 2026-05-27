@@ -13,9 +13,19 @@ export default function TurmasPage() {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const professor = JSON.parse(localStorage.getItem('professor') || '{}')
+  const [canViewResultados, setCanViewResultados] = useState(Boolean(professor.permissoes?.resultados))
 
   useEffect(() => {
     api.get('/turmas').then(r => setTurmas(r.data)).finally(() => setLoading(false))
+    api.get('/auth/me').then((res) => {
+      const refreshedProfessor = res.data?.professor
+      if (refreshedProfessor) {
+        localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
+        setCanViewResultados(Boolean(refreshedProfessor.permissoes?.resultados))
+      }
+    }).catch(() => {
+      setCanViewResultados(Boolean(professor.permissoes?.resultados))
+    })
   }, [])
 
   function logout() {
@@ -34,6 +44,7 @@ export default function TurmasPage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
+          {canViewResultados && <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>}
           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
         </div>
       </div>
