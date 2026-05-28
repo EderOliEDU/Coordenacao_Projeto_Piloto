@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+﻿import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -6,15 +6,23 @@ export default function LoginPage() {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
+    setMessage('')
     setLoading(true)
+
     try {
       const { data } = await api.post('/auth/login', { login, password })
+      if (data.ok && data.message && !data.token) {
+        setMessage(data.message)
+        return
+      }
+
       localStorage.setItem('token', data.token)
       localStorage.setItem('professor', JSON.stringify(data.professor))
       navigate('/turmas')
@@ -26,25 +34,40 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: 12, padding: 40, width: 380, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-        <h1 style={{ margin: '0 0 8px', fontSize: 22, color: '#0984e3' }}>Projeto Instrução Fônica</h1>
-        <p style={{ margin: '0 0 28px', color: '#636e72', fontSize: 14 }}>Coordenação – Projeto Piloto Educação Infantil</p>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: '#636e72', display: 'block', marginBottom: 6 }}>Login (CPF somente números)</label>
-            <input value={login} onChange={e => setLogin(e.target.value)} placeholder="seu.login" autoComplete="username" required />
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, color: '#636e72', display: 'block', marginBottom: 6 }}>Senha (Data de nascimento somente números)</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required />
-          </div>
-          {error && <p style={{ color: '#d63031', fontSize: 13, marginBottom: 16 }}>{error}</p>}
-          <button type="submit" disabled={loading} style={{ width: '100%', background: '#0984e3', color: '#fff', padding: '12px 0', fontSize: 15 }}>
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-      </div>
-    </div>
+    <main className="auth-shell">
+      <section className="auth-brand">
+        <img className="brand-mark" src="/semecel_logo_horizontal_fundo_azul.png" alt="Prefeitura de Rondonópolis e SEMECEL" />
+        <h1>Projeto Instrução Fônica</h1>
+        <p>Ambiente de acompanhamento pedagógico da Educação Infantil na rede municipal de Rondonópolis.</p>
+      </section>
+
+      <section className="auth-panel">
+        <div className="auth-card">
+          <p className="eyebrow">Prefeitura Municipal de Rondonópolis</p>
+          <h2>Acesso ao sistema</h2>
+          <p className="hint">Informe o CPF somente com números. No primeiro acesso, deixe a senha em branco para receber o link de cadastro no e-mail corporativo.</p>
+
+          <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label>CPF somente números</label>
+              <input value={login} onChange={e => setLogin(e.target.value)} placeholder="Somente números" autoComplete="username" required />
+            </div>
+
+            <div className="field">
+              <label>Senha</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Deixe em branco no primeiro acesso" autoComplete="current-password" />
+            </div>
+
+            {message && <p className="success-text" style={{ fontSize: 13 }}>{message}</p>}
+            {error && <p className="error-text" style={{ fontSize: 13 }}>{error}</p>}
+
+            <button type="submit" disabled={loading} className="primary-btn" style={{ width: '100%', marginTop: 8 }}>
+              {loading ? 'Processando...' : 'Entrar ou enviar link'}
+            </button>
+          </form>
+        </div>
+      </section>
+      <img className="dev-signature" src="/semecel_ti_tecnologia_ajustada_editavel.svg" alt="Desenvolvimento SEMECEL TI" />
+    </main>
   )
 }

@@ -12,9 +12,9 @@ import turmasRoutes from './routes/turmas';
 import formulariosRoutes from './routes/formularios';
 import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
+import resultadosRoutes from './routes/resultados';
 
 const app = express();
-app.use('/turmas', turmasRoutes);
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
@@ -28,7 +28,7 @@ const apiLimiter = rateLimit({
 
 app.use(
   cors({
-    origin: ['http://172.17.2.42:5173', 'http://localhost:5173'],
+    origin: ['http://172.17.2.40:5173', 'http://localhost:5173'],
     credentials: true,
   })
 );
@@ -41,6 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/turmas', turmasRoutes);
 app.use('/api/formularios', formulariosRoutes);
 app.use('/api/submissoes', submisoesRoutes);
+app.use('/api/resultados', resultadosRoutes);
 app.use('/api/admin', importacaoRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

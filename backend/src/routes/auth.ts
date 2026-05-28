@@ -4,10 +4,11 @@ import rateLimit from 'express-rate-limit';
 import { authenticate } from '../services/ldap';
 import { authenticateByCpf } from '../services/cpfAuth';
 import { getPgPool } from '../services/pgPool';
+import { getUserPermissions } from '../services/permissions';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 const pool = getPgPool();
-const PROJECT_CODE = 'PJINSTFONI';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -20,23 +21,6 @@ const loginLimiter = rateLimit({
 function looksLikeCpf(login: string): boolean {
   const bare = login.replace(/\D/g, '');
   return bare.length === 11 && /^\d{11}$/.test(bare);
-}
-
-async function professorTemEscolaDoProjeto(cpf: string): Promise<boolean> {
-  const result = await pool.query(
-    `
-    SELECT 1
-    FROM public.atribuicao_professor ap
-    JOIN public.turmas t ON t.id_turma = ap.id_turma
-    JOIN public.escolas e ON e.id_escola = t.id_escola
-    WHERE ap.cpf_professor = $1
-      AND e.projeto = $2
-    LIMIT 1
-    `,
-    [cpf, PROJECT_CODE]
-  );
-
-  return result.rowCount > 0;
 }
 
 router.post('/login', loginLimiter, async (req: Request, res: Response) => {
@@ -67,13 +51,6 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       //professorEmail = ldapUser.email;
     }
 
-    const professorCpf = professorLogin.replace(/\D/g, '');
-    if (!professorCpf || !(await professorTemEscolaDoProjeto(professorCpf))) {
-      return res.status(403).json({
-        error: 'Acesso permitido apenas para professores das escolas participantes do projeto.',
-      });
-    }
-
     // Upsert professor na tabela professores (Postgres)
     const client = await pool.connect();
     let professor;
@@ -85,18 +62,20 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
         DO UPDATE SET profissional_nome = EXCLUDED.profissional_nome, profissional_e_mail = EXCLUDED.profissional_e_mail
         RETURNING profissional_cpf, profissional_nome
       `;
-      const result = await client.query(upsertQuery, [professorCpf, professorNome, professorEmail]);
+      const result = await client.query(upsertQuery, [professorLogin, professorNome, professorEmail]);
       professor = result.rows[0];
     } finally {
       client.release();
     }
 
     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
+    const permissoes = getUserPermissions(professor.profissional_cpf);
     const token = jwt.sign(
       {
         cpf: professor.profissional_cpf,
         nome: professor.profissional_nome,
         login: professor.profissional_cpf,
+        permissoes,
       },
       process.env.JWT_SECRET!,
       { expiresIn }
@@ -106,7 +85,8 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
       token,
       professor: {
         cpf: professor.profissional_cpf,
-        nome: professor.profissional_nome
+        nome: professor.profissional_nome,
+        permissoes,
       },
     };
 
@@ -120,6 +100,18 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     console.error('Falha no login:', err);
     res.status(401).json({ error: err.message || 'Autenticação falhou' });
   }
+});
+
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const cpf = req.professor?.cpf || req.professor?.login || '';
+  const permissoes = getUserPermissions(cpf);
+  res.json({
+    professor: {
+      cpf,
+      nome: req.professor?.nome || '',
+      permissoes,
+    },
+  });
 });
 
 export default router;

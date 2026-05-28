@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 
@@ -55,57 +55,59 @@ export default function AlunosPage() {
   }
 
   const statusLabel: Record<string, { label: string; color: string }> = {
-    RASCUNHO: { label: 'Rascunho', color: '#fdcb6e' },
-    ENVIADA:  { label: 'Finalizada',  color: '#00b894' },
-    FINALIZADO:  { label: 'Finalizada',  color: '#00b894' },
+    RASCUNHO: { label: 'Rascunho', color: '#f2c230' },
+    ENVIADA: { label: 'Finalizada', color: '#1f9d55' },
+    FINALIZADO: { label: 'Finalizada', color: '#1f9d55' },
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
-        <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>← Voltar</button>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Alunos da Turma</h1>
-      </div>
-
-      {loading && <p>Carregando...</p>}
-      {!loading && error && <p style={{ color: '#d63031' }}>{error}</p>}
-      {!loading && !error && alunos.length === 0 && <p style={{ color: '#636e72' }}>Nenhum aluno encontrado nesta turma.</p>}
-
-      <div style={{ display: 'grid', gap: 8 }}>
-        {alunos.map(aluno => {
-          const status = getStatus(aluno.id)
-          const st = status ? statusLabel[status] : null
-          return (
-            <div
-              key={aluno.id}
-              onClick={() => navigate(`/turmas/${turmaId}/alunos/${aluno.id}/formulario`)}
-              style={{
-                background: '#fff', borderRadius: 10, padding: '16px 20px', cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600 }}>{aluno.nome}</div>
-                {aluno.matricula && <div style={{ color: '#b2bec3', fontSize: 12 }}>Mat. {aluno.matricula}</div>}
-              </div>
-
-              {st && (
-                <span style={{
-                  background: st.color,
-                  color: '#fff',
-                  borderRadius: 20,
-                  padding: '3px 12px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}>
-                  {st.label}
-                </span>
-              )}
+    <div className="app-shell">
+      <header className="app-topbar">
+        <div className="topbar-inner">
+          <div className="topbar-brand">
+            <img className="mini-mark" src="/semecel_logo_horizontal_editavel.svg" alt="Prefeitura de Rondonópolis e SEMECEL" />
+            <div>
+              <strong>Projeto Instrução Fônica</strong>
+              <span>Prefeitura Municipal de Rondonópolis</span>
             </div>
-          )
-        })}
-      </div>
+          </div>
+          <button onClick={() => navigate('/turmas')} className="secondary-btn">Voltar</button>
+        </div>
+      </header>
+
+      <main className="page">
+        <div className="page-header">
+          <div className="page-title">
+            <h1>Alunos da turma</h1>
+            <p>Selecione um estudante para preencher ou revisar o formulário de observação.</p>
+          </div>
+        </div>
+
+        {loading && <p className="loading-text">Carregando...</p>}
+        {!loading && error && <p className="error-text">{error}</p>}
+        {!loading && !error && alunos.length === 0 && <p className="empty-state">Nenhum aluno encontrado nesta turma.</p>}
+
+        <div className="card-list">
+          {alunos.map(aluno => {
+            const status = getStatus(aluno.id)
+            const st = status ? statusLabel[status] : null
+            return (
+              <div
+                key={aluno.id}
+                onClick={() => navigate(`/turmas/${turmaId}/alunos/${aluno.id}/formulario`)}
+                className="data-card clickable-card split-card"
+              >
+                <div>
+                  <div className="card-title">{aluno.nome}</div>
+                  {aluno.matricula && <div className="card-meta">Mat. {aluno.matricula}</div>}
+                </div>
+
+                {st && <span className="badge" style={{ background: st.color }}>{st.label}</span>}
+              </div>
+            )
+          })}
+        </div>
+      </main>
     </div>
   )
 }

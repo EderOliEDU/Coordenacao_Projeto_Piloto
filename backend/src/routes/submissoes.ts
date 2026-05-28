@@ -8,7 +8,6 @@ router.use(authMiddleware)
 
 const STATUS_RASCUNHO = 'RASCUNHO'
 const STATUS_FINALIZADO = 'FINALIZADO'
-const PROJECT_CODE = 'PJINSTFONI'
 
 const salvarRespostaSchema = z.object({
   formularioId: z.string().min(1),
@@ -35,12 +34,14 @@ async function assertTurmaAssignment(cpf: string, turmaId: number) {
     FROM public.atribuicao_professor ap
     JOIN public.turmas t ON t.id_turma = ap.id_turma
     JOIN public.escolas e ON e.id_escola = t.id_escola
+    JOIN public.etapas et ON et.id_etapa = t.id_etapa
     WHERE ap.cpf_professor = $1
       AND ap.id_turma = $2
-      AND e.projeto = $3
+      AND e.projeto = 'PJINSTFONI'
+      AND et.projeto = 'PJINSTFONI'
     LIMIT 1
     `,
-    [cpf, turmaId, PROJECT_CODE]
+    [cpf, turmaId]
   )
   return r.rowCount > 0
 }
@@ -51,18 +52,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const cpf = normalizarCpf(req.professor?.login || '')
     const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
 
-    let idx = 2
     const where: string[] = [
       `s.cpf_professor = $1`,
-      `EXISTS (
-        SELECT 1
-        FROM public.turmas t
-        JOIN public.escolas e ON e.id_escola = t.id_escola
-        WHERE t.id_turma = s.id_turma
-          AND e.projeto = $${idx++}
-      )`,
+      `e.projeto = 'PJINSTFONI'`,
+      `et.projeto = 'PJINSTFONI'`,
     ]
-    const params: any[] = [cpf, PROJECT_CODE]
+    const params: any[] = [cpf]
+    let idx = 2
 
     if (turmaId) { where.push(`s.id_turma = $${idx++}`); params.push(Number(turmaId)) }
     if (alunoId) { where.push(`s.id_aluno = $${idx++}`); params.push(Number(alunoId)) }
@@ -70,8 +66,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const pool = getPgPool()
     const { rows } = await pool.query(
       `
-      SELECT id::text AS id, id_aluno::text AS "alunoId", status
+      SELECT s.id::text AS id, s.id_aluno::text AS "alunoId", s.status
       FROM public.submissoes_pg s
+      JOIN public.turmas t ON t.id_turma = s.id_turma
+      JOIN public.escolas e ON e.id_escola = t.id_escola
+      JOIN public.etapas et ON et.id_etapa = t.id_etapa
       WHERE ${where.join(' AND ')}
       ORDER BY s.atualizada_em DESC
       `,
@@ -97,11 +96,13 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
        FROM public.submissoes_pg s
        JOIN public.turmas t ON t.id_turma = s.id_turma
        JOIN public.escolas e ON e.id_escola = t.id_escola
+       JOIN public.etapas et ON et.id_etapa = t.id_etapa
        WHERE s.id = $1
          AND s.cpf_professor = $2
-         AND e.projeto = $3
+         AND e.projeto = 'PJINSTFONI'
+         AND et.projeto = 'PJINSTFONI'
        LIMIT 1`,
-      [subId, cpf, PROJECT_CODE]
+      [subId, cpf]
     )
     if (subRes.rowCount === 0) return res.status(404).json({ error: 'Submissão não encontrada' })
 
