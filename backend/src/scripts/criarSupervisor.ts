@@ -3,17 +3,7 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { getPgPool } from '../services/pgPool'
 
-const ESCOLAS_PARTICIPANTES = [
-  'EMEI Mateus Vinicius Braz',
-  'EMEI Rubens Alves de Souza',
-  'EMEI Elaine Aparecida de Oliveira Lopes',
-  'EMEI Cora Coralina',
-  'CMEI Antônio Vanier',
-  'CMEI Widisney Aparecido Pereira Rodrigues',
-  'CMEI Celina Fialho Bezerra',
-  'EMCEB Rural Fazenda Carimã',
-  'CMEI LEONESE DE PINHO CARVALHO'
-]
+const PROJETO_INSTRUCAO_FONICA = 'PJINSTFONI'
 
 function normalizarCpf(value: string) {
   return (value || '').replace(/\D/g, '')
@@ -36,7 +26,7 @@ Uso:
 Exemplo:
   ts-node src/scripts/criarSupervisor.ts --env .env_dev --cpf 12345678900 --nome "Supervisor Projeto Piloto" --senha "Senha@123"
 
-Por padrao, o acesso e criado para as 8 escolas participantes do projeto.
+Por padrao, o acesso e criado para escolas com projeto = PJINSTFONI.
 Use --todas-escolas para vincular o supervisor a todas as turmas cadastradas no banco.
 `)
 }
@@ -100,19 +90,22 @@ async function main() {
         SELECT t.id_turma, e.nome_escola
         FROM public.turmas t
         JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
         ORDER BY e.nome_escola, t.id_turma
         `
       : `
         SELECT t.id_turma, e.nome_escola
         FROM public.turmas t
         JOIN public.escolas e ON e.id_escola = t.id_escola
-        WHERE e.nome_escola = ANY($1::text[])
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+        WHERE e.projeto = $1
+          AND et.projeto = $1
         ORDER BY e.nome_escola, t.id_turma
         `
 
     const turmasRes = await client.query(
       turmasQuery,
-      todasEscolas ? [] : [ESCOLAS_PARTICIPANTES]
+      todasEscolas ? [] : [PROJETO_INSTRUCAO_FONICA]
     )
 
     if (turmasRes.rowCount === 0) {

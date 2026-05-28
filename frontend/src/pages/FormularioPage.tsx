@@ -111,6 +111,11 @@ export default function FormularioPage() {
 
   const isEnviada = status === 'FINALIZADO'
   const escalas = allEscalas()
+  const perguntasObrigatorias = formulario.secoes.flatMap(secao => secao.perguntas).filter(pergunta => pergunta.escala)
+  const totalObrigatorias = perguntasObrigatorias.length
+  const totalRespondidas = perguntasObrigatorias.filter(pergunta => Boolean(respostas[pergunta.id])).length
+  const formularioCompleto = totalObrigatorias > 0 && totalRespondidas === totalObrigatorias
+  const faltantes = Math.max(totalObrigatorias - totalRespondidas, 0)
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
@@ -137,6 +142,14 @@ export default function FormularioPage() {
           <span style={{ marginLeft: 'auto', background: '#00b894', color: '#fff', borderRadius: 20, padding: '4px 14px', fontSize: 13, fontWeight: 700 }}>Finalizada</span>
         )}
       </div>
+
+      {!isEnviada && (
+        <div style={{ background: formularioCompleto ? '#e8f8f3' : '#fff8e1', border: `1px solid ${formularioCompleto ? '#b7eadb' : '#ffe3a3'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#2d3436', fontSize: 14 }}>
+          {formularioCompleto
+            ? 'Todas as perguntas obrigatórias foram respondidas. O formulário já pode ser finalizado.'
+            : `${totalRespondidas}/${totalObrigatorias} perguntas obrigatórias respondidas. Faltam ${faltantes}; enquanto isso, salve como rascunho.`}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 24, alignItems: 'start' }}>
         {/* Form */}
@@ -193,8 +206,9 @@ export default function FormularioPage() {
               </button>
               <button
                 onClick={() => salvar(true)}
-                disabled={saving}
-                style={{ background: '#0984e3', color: '#fff', padding: '10px 24px', flex: 2 }}
+                disabled={saving || !formularioCompleto}
+                title={!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined}
+                style={{ background: formularioCompleto ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto ? 'pointer' : 'not-allowed' }}
               >
                 {saving ? 'Finalizando...' : 'Finalizar Formulário'}
               </button>

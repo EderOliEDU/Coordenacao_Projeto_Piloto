@@ -33,7 +33,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const pool = getPgPool()
 
-    const scopeWhere: string[] = ['ap.cpf_professor = $1']
+    const scopeWhere: string[] = [
+      'ap.cpf_professor = $1',
+      `e.projeto = 'PJINSTFONI'`,
+      `et.projeto = 'PJINSTFONI'`,
+    ]
     const scopeParams: any[] = [cpf]
     let idx = 2
 
@@ -60,13 +64,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           e.id_escola::text AS "escolaId",
           e.nome_escola::text AS "escolaNome",
           t.id_turma::text AS "turmaId",
-          ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS "turmaNome",
+          ('Turma ' || COALESCE(NULLIF(et.descricao, ''), 'Etapa não informada') || ' ' || COALESCE(NULLIF(t.letra_turma, ''), t.id_turma::text))::text AS "turmaNome",
+          t.letra_turma::text AS "turmaLetra",
+          et.descricao::text AS "etapaDescricao",
           t.turno::text AS "turno"
         FROM public.atribuicao_professor ap
         JOIN public.turmas t ON t.id_turma = ap.id_turma
-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
         WHERE ${scopeWhere.join(' AND ')}
-        ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma
+        ORDER BY e.nome_escola NULLS LAST, et.descricao::text NULLS LAST, t.letra_turma::text NULLS LAST, t.id_turma::text
         `,
         scopeParams
       ),
@@ -82,7 +89,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           COUNT(ar.id_pergunta)::int AS "respostas"
         FROM public.atribuicao_professor ap
         JOIN public.turmas t ON t.id_turma = ap.id_turma
-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
         LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
         LEFT JOIN public.submissoes_pg s
           ON s.cpf_professor = ap.cpf_professor
@@ -111,7 +119,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           COUNT(*)::int AS "total"
         FROM public.atribuicao_professor ap
         JOIN public.turmas t ON t.id_turma = ap.id_turma
-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
         JOIN public.submissoes_pg s
           ON s.cpf_professor = ap.cpf_professor
          AND s.id_turma = t.id_turma
@@ -219,6 +228,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           nome: row.turmaNome,
           escolaId: row.escolaId,
           escolaNome: row.escolaNome,
+          etapaDescricao: row.etapaDescricao,
           turno: row.turno,
         })),
         status: statusNormalizado,

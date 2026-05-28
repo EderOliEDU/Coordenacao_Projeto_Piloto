@@ -29,7 +29,18 @@ function normalizarCpf(value: string) {
 async function assertTurmaAssignment(cpf: string, turmaId: number) {
   const pool = getPgPool()
   const r = await pool.query(
-    `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma = $2 LIMIT 1`,
+    `
+    SELECT 1
+    FROM public.atribuicao_professor ap
+    JOIN public.turmas t ON t.id_turma = ap.id_turma
+    JOIN public.escolas e ON e.id_escola = t.id_escola
+    JOIN public.etapas et ON et.id_etapa = t.id_etapa
+    WHERE ap.cpf_professor = $1
+      AND ap.id_turma = $2
+      AND e.projeto = 'PJINSTFONI'
+      AND et.projeto = 'PJINSTFONI'
+    LIMIT 1
+    `,
     [cpf, turmaId]
   )
   return r.rowCount > 0
@@ -41,20 +52,27 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const cpf = normalizarCpf(req.professor?.login || '')
     const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
 
-    const where: string[] = [`cpf_professor = $1`]
+    const where: string[] = [
+      `s.cpf_professor = $1`,
+      `e.projeto = 'PJINSTFONI'`,
+      `et.projeto = 'PJINSTFONI'`,
+    ]
     const params: any[] = [cpf]
     let idx = 2
 
-    if (turmaId) { where.push(`id_turma = $${idx++}`); params.push(Number(turmaId)) }
-    if (alunoId) { where.push(`id_aluno = $${idx++}`); params.push(Number(alunoId)) }
+    if (turmaId) { where.push(`s.id_turma = $${idx++}`); params.push(Number(turmaId)) }
+    if (alunoId) { where.push(`s.id_aluno = $${idx++}`); params.push(Number(alunoId)) }
 
     const pool = getPgPool()
     const { rows } = await pool.query(
       `
-      SELECT id::text AS id, id_aluno::text AS "alunoId", status
-      FROM public.submissoes_pg
+      SELECT s.id::text AS id, s.id_aluno::text AS "alunoId", s.status
+      FROM public.submissoes_pg s
+      JOIN public.turmas t ON t.id_turma = s.id_turma
+      JOIN public.escolas e ON e.id_escola = t.id_escola
+      JOIN public.etapas et ON et.id_etapa = t.id_etapa
       WHERE ${where.join(' AND ')}
-      ORDER BY atualizada_em DESC
+      ORDER BY s.atualizada_em DESC
       `,
       params
     )
@@ -74,9 +92,15 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     const pool = getPgPool()
 
     const subRes = await pool.query(
-      `SELECT id, cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes
-       FROM public.submissoes_pg
-       WHERE id = $1 AND cpf_professor = $2
+      `SELECT s.id, s.cpf_professor, s.id_turma, s.id_aluno, s.formulario_id, s.status, s.observacoes
+       FROM public.submissoes_pg s
+       JOIN public.turmas t ON t.id_turma = s.id_turma
+       JOIN public.escolas e ON e.id_escola = t.id_escola
+       JOIN public.etapas et ON et.id_etapa = t.id_etapa
+       WHERE s.id = $1
+         AND s.cpf_professor = $2
+         AND e.projeto = 'PJINSTFONI'
+         AND et.projeto = 'PJINSTFONI'
        LIMIT 1`,
       [subId, cpf]
     )

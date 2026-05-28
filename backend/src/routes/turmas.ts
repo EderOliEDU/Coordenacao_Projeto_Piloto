@@ -26,23 +26,28 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       turno: string | null
       escola_id: string
       escola_nome: string
+      etapa_descricao: string | null
       alunos_count: string
     }>(
       `
       SELECT
         t.id_turma::text                                   AS id,
-        ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS nome,
+        ('Turma ' || COALESCE(NULLIF(et.descricao, ''), 'Etapa não informada') || ' ' || COALESCE(NULLIF(t.letra_turma, ''), t.id_turma::text))::text AS nome,
         t.turno::text                                      AS turno,
         e.id_escola::text                                  AS escola_id,
         e.nome_escola::text                                AS escola_nome,
+        et.descricao::text                                 AS etapa_descricao,
         COUNT(DISTINCT ea.id_aluno)::text                  AS alunos_count
       FROM public.atribuicao_professor ap
       JOIN public.turmas t ON t.id_turma = ap.id_turma
-      LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
+      JOIN public.escolas e ON e.id_escola = t.id_escola
+      JOIN public.etapas et ON et.id_etapa = t.id_etapa
       LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
       WHERE ap.cpf_professor = $1
-      GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola
-      ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
+        AND e.projeto = 'PJINSTFONI'
+        AND et.projeto = 'PJINSTFONI'
+      GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola, et.descricao
+      ORDER BY e.nome_escola NULLS LAST, et.descricao NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
       `,
       [cpf]
     )
@@ -53,6 +58,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       // seu schema não tem anoLetivo; devolvemos o ano atual para não quebrar o frontend
       anoLetivo: new Date().getFullYear(),
       turno: (r.turno || 'MANHA'),
+      etapaDescricao: r.etapa_descricao || '',
       escola: { id: r.escola_id || '', nome: r.escola_nome || '' },
       _count: { alunos: Number(r.alunos_count || 0) },
     }))
@@ -74,7 +80,18 @@ router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
 
     // checa se o professor tem essa turma atribuída
     const check = await pool.query(
-      `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma::text = $2 LIMIT 1`,
+      `
+      SELECT 1
+      FROM public.atribuicao_professor ap
+      JOIN public.turmas t ON t.id_turma = ap.id_turma
+      JOIN public.escolas e ON e.id_escola = t.id_escola
+      JOIN public.etapas et ON et.id_etapa = t.id_etapa
+      WHERE ap.cpf_professor = $1
+        AND ap.id_turma::text = $2
+        AND e.projeto = 'PJINSTFONI'
+        AND et.projeto = 'PJINSTFONI'
+      LIMIT 1
+      `,
       [cpf, turmaId]
     )
     if (check.rowCount === 0) {
