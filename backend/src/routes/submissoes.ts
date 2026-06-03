@@ -11,7 +11,7 @@ const STATUS_FINALIZADO = 'FINALIZADO'
 
 const salvarRespostaSchema = z.object({
   formularioId: z.string().min(1),
-  escolaId: z.string().min(1).optional(), // vindo do frontend, não usamos no PG agora
+  escolaId: z.string().min(1).optional(), // recebido do frontend; mantido para compatibilidade
   turmaId: z.string().min(1),
   alunoId: z.string().min(1),
   observacoes: z.string().optional(),
@@ -20,6 +20,14 @@ const salvarRespostaSchema = z.object({
     perguntaId: z.string().min(1),
     opcaoEscalaId: z.string().min(1),
   })).optional(),
+  necessidadesEspecificas: z.object({
+    paee: z.boolean().nullable().optional(),
+    estudoCaso: z.boolean().nullable().optional(),
+    apoioPedagogico: z.boolean().nullable().optional(),
+    tipo: z.enum(['PAEE', 'APOIO']).nullable().optional(),
+    selecionadas: z.array(z.string().min(1)).optional(),
+    descricaoOutros: z.string().optional(),
+  }).optional(),
 })
 
 function normalizarCpf(value: string) {
@@ -140,7 +148,7 @@ router.post('/respostas', async (req: AuthRequest, res: Response) => {
 
   try {
     const cpf = normalizarCpf(req.professor?.login || '')
-    const { formularioId, turmaId, alunoId, respostas, observacoes, status } = parsed.data
+    const { formularioId, turmaId, alunoId, respostas, observacoes, status, necessidadesEspecificas } = parsed.data
     const turmaIdNum = Number(turmaId)
     const alunoIdNum = Number(alunoId)
     const targetStatus = status || STATUS_RASCUNHO
@@ -188,6 +196,91 @@ router.post('/respostas', async (req: AuthRequest, res: Response) => {
             [alunoIdNum, cpf, perguntaId, opcaoId, targetStatus, observacoes || null]
           )
         }
+        await pool.query('COMMIT')
+      } catch (e) {
+        await pool.query('ROLLBACK')
+        throw e
+      }
+    }
+
+    if (necessidadesEspecificas) {
+      const tipo = necessidadesEspecificas.tipo || null
+      const selecionadas = necessidadesEspecificas.selecionadas || []
+      const descricaoOutros = (necessidadesEspecificas.descricaoOutros || '').trim()
+
+      await pool.query('BEGIN')
+      try {
+        await pool.query(
+          `
+          INSERT INTO public.aluno_necessidades_contexto (
+            id_aluno,
+            id_turma,
+            cpf_professor,
+            paee,
+            estudo_caso,
+            apoio_pedagogico
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (id_aluno, id_turma, cpf_professor)
+          DO UPDATE SET
+            paee = EXCLUDED.paee,
+            estudo_caso = EXCLUDED.estudo_caso,
+            apoio_pedagogico = EXCLUDED.apoio_pedagogico,
+            atualizada_em = CURRENT_TIMESTAMP
+          `,
+          [
+            alunoIdNum,
+            turmaIdNum,
+            cpf,
+            necessidadesEspecificas.paee ?? null,
+            necessidadesEspecificas.estudoCaso ?? null,
+            necessidadesEspecificas.apoioPedagogico ?? null,
+          ]
+        )
+
+        await pool.query(
+          `
+          DELETE FROM public.aluno_necessidades_especificas
+          WHERE id_aluno = $1
+            AND id_turma = $2
+            AND regexp_replace(cpf_professor, '\\D', '', 'g') = $3
+          `,
+          [alunoIdNum, turmaIdNum, cpf]
+        )
+
+        for (const necessidadeId of selecionadas) {
+          await pool.query(
+            `
+            INSERT INTO public.aluno_necessidades_especificas (
+              id_aluno,
+              id_turma,
+              cpf_professor,
+              id_necespecifica,
+              tipo
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            `,
+            [alunoIdNum, turmaIdNum, cpf, Number(necessidadeId), tipo]
+          )
+        }
+
+        if (descricaoOutros && tipo === 'APOIO') {
+          await pool.query(
+            `
+            INSERT INTO public.aluno_necessidades_especificas (
+              id_aluno,
+              id_turma,
+              cpf_professor,
+              id_necespecifica,
+              tipo,
+              descricao_outros
+            )
+            VALUES ($1, $2, $3, NULL, $4, $5)
+            `,
+            [alunoIdNum, turmaIdNum, cpf, tipo, descricaoOutros]
+          )
+        }
+
         await pool.query('COMMIT')
       } catch (e) {
         await pool.query('ROLLBACK')

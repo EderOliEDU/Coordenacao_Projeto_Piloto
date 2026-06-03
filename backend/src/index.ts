@@ -13,6 +13,7 @@ import formulariosRoutes from './routes/formularios';
 import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
 import resultadosRoutes from './routes/resultados';
+import necessidadesRoutes from './routes/necessidades';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -42,6 +43,7 @@ app.use('/api/turmas', turmasRoutes);
 app.use('/api/formularios', formulariosRoutes);
 app.use('/api/submissoes', submisoesRoutes);
 app.use('/api/resultados', resultadosRoutes);
+app.use('/api/necessidades-especificas', necessidadesRoutes);
 app.use('/api/admin', importacaoRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

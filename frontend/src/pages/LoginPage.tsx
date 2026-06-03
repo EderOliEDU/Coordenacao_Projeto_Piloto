@@ -1,4 +1,4 @@
-﻿import { useState, FormEvent } from 'react'
+import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -36,13 +36,15 @@ export default function LoginPage() {
   return (
     <main className="auth-shell">
       <section className="auth-brand">
-        <img className="brand-mark" src="/semecel_logo_horizontal_fundo_azul.png" alt="Prefeitura de Rondonópolis e SEMECEL" />
+        <img className="brand-mark" src="/semecel_logo_horizontal_fundo_branco.png" alt="Prefeitura de Rondonópolis e SEMECEL" />
         <h1>Projeto Instrução Fônica</h1>
         <p>Ambiente de acompanhamento pedagógico da Educação Infantil na rede municipal de Rondonópolis.</p>
       </section>
 
       <section className="auth-panel">
-        <div className="auth-card">
+        <div className="auth-panel-inner">
+          <img className="login-project-logo" src="/logo_instrucao_fonica.svg" alt="Projeto Instrucao Fonica" />
+          <div className="auth-card">
           <p className="eyebrow">Prefeitura Municipal de Rondonópolis</p>
           <h2>Acesso ao sistema</h2>
           <p className="hint">Informe o CPF somente com números. No primeiro acesso, deixe a senha em branco para receber o link de cadastro no e-mail corporativo.</p>
@@ -65,6 +67,7 @@ export default function LoginPage() {
               {loading ? 'Processando...' : 'Entrar ou enviar link'}
             </button>
           </form>
+          </div>
         </div>
       </section>
       <img className="dev-signature" src="/semecel_ti_tecnologia_ajustada_editavel.svg" alt="Desenvolvimento SEMECEL TI" />
