@@ -7,10 +7,11 @@ interface Props {
   value: string | null
   onChange: (opcaoId: string) => void
   disabled?: boolean
+  textOnly?: boolean
 }
 
-export default function EscalaSelector({ opcoes, value, onChange, disabled }: Props) {
-  const isPEA = opcoes.some(o => o.corHex)
+export default function EscalaSelector({ opcoes, value, onChange, disabled, textOnly = false }: Props) {
+  const isPEA = !textOnly && opcoes.some(o => o.corHex)
 
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
