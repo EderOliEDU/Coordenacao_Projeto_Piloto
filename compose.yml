@@ -26,29 +26,5 @@ services:
       - backend-dev
     restart: always
 
-# :::::::::  Servidor de Produção   :::::::::
-
-  backend-prod:
-    profiles: ["prod"]
-    build: ./backend
-    env_file:
-      - ./backend/.env_prod
-    environment:
-      - NODE_ENV=production
-    ports:
-      - "3001:3001"
-
-  frontend-prod:
-    profiles: ["prod"]
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: "http://172.17.2.40:3001"
-        NGINX_CONF: "nginx.prod.conf"
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend-prod
-
 volumes:
   pg_dev:

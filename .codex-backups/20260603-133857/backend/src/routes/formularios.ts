@@ -4,26 +4,6 @@ import { getPgPool } from '../services/pgPool'
 
 const router = Router()
 router.use(authMiddleware)
-function ordenarOpcoesEscala(tipo: string, opcoes: any[]) {
-  if (tipo !== 'PEA') return opcoes
-
-  const ordemPEA: Record<string, number> = {
-    'PEA-D': 1,
-    D: 1,
-    'PEA-PD': 2,
-    PD: 2,
-    'PEA-TD': 3,
-    TD: 3,
-    'PEA-NDA': 4,
-    NDA: 4,
-  }
-
-  return [...opcoes].sort((a, b) => {
-    const ordemA = ordemPEA[String(a.chave || '').toUpperCase()] ?? 99
-    const ordemB = ordemPEA[String(b.chave || '').toUpperCase()] ?? 99
-    return ordemA - ordemB || Number(a.id) - Number(b.id)
-  })
-}
 
 // GET /api/formularios/ativo (Postgres)
 router.get('/ativo', async (_req: Request, res: Response) => {
@@ -60,7 +40,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
             id: String(escalaCodigo), // ex: "PEA", "SN", "FLUXO"
             codigo: String(escalaCodigo),
             nomeExibicao: String(escalaCodigo),
-            opcoes: ordenarOpcoesEscala(String(escalaCodigo), opcoesByTipo.get(escalaCodigo) || []),
+            opcoes: opcoesByTipo.get(escalaCodigo) || [],
           }
         : null
 

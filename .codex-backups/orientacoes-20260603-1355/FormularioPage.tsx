@@ -3,45 +3,23 @@ import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import EscalaSelector from '../components/EscalaSelector'
 
-const orientacaoIntroducao = 'As legendas a seguir têm caráter formativo e orientador, servindo como apoio ao registro e à análise do percurso de aprendizagem das crianças no Plano Piloto. Elas não têm finalidade classificatória, mas auxiliam professoras e coordenadoras a identificar avanços, dificuldades e necessidades de intervenção pedagógica. Cada marcação deve considerar o ritmo, o contexto e as especificidades de cada criança, incluindo aquelas público-alvo da Educação Especial ou em estudo de caso.'
-
-const orientacaoLegendas = [
-  {
-    sigla: 'SF',
-    titulo: 'segue o fluxo',
-    descricao: 'quando a criança apresentou acompanhamento adequado das propostas desenvolvidas com o grupo, participando das atividades, compreendendo as orientações e realizando-as com apoio compatível às suas necessidades;',
-  },
-  {
-    sigla: 'SFP',
-    titulo: 'segue o fluxo parcialmente',
-    descricao: 'quando a criança apresentou oscilações no acompanhamento das propostas, participando de forma irregular, com momentos de envolvimento e outros de dificuldade, necessitando de mediações mais frequentes para se manter na atividade;',
-  },
-  {
-    sigla: 'NSF',
-    titulo: 'não segue o fluxo',
-    descricao: 'quando a criança apresentou não acompanhamento das propostas desenvolvidas, mesmo com o uso de estratégias pedagógicas diferenciadas, adaptações e intervenções, evidenciando a necessidade de um planejamento mais individualizado;',
-  },
-  {
-    sigla: 'PEA-NDA',
-    titulo: 'prática experienciada - apresentou que não domina ainda',
-    descricao: 'quando, durante a vivência da proposta, a criança apresentou que ainda não domina a habilidade, não conseguindo realizá-la mesmo com mediação, necessitando de retomadas, intervenções mais direcionadas e ampliação das oportunidades de aprendizagem;',
-  },
-  {
-    sigla: 'PEA-TD',
-    titulo: 'prática experienciada - apresentou que tem dificuldade',
-    descricao: 'quando, durante a vivência da proposta, a criança apresentou que tem dificuldade na realização da atividade, conseguindo executá-la parcialmente ou com muitas interrupções, necessitando de apoio frequente, explicações adicionais e, por vezes, adaptações;',
-  },
-  {
-    sigla: 'PEA-PD',
-    titulo: 'prática experienciada - apresentou que tem pouca dificuldade',
-    descricao: 'quando, durante a vivência da proposta, a criança apresentou que tem pouca dificuldade, conseguindo realizar a atividade com relativo êxito, mas ainda com inseguranças ou pequenos erros, indicando estar em processo de consolidação da habilidade;',
-  },
-  {
-    sigla: 'PEA-D',
-    titulo: 'prática experienciada - apresentou que domina',
-    descricao: 'quando, durante a vivência da proposta, a criança apresentou que domina a habilidade, realizando-a com autonomia, segurança, compreensão e consistência, podendo inclusive aplicá-la em diferentes contextos;',
-  },
+const orientacaoRespostas = [
+  'As legendas a seguir têm caráter formativo e orientador, servindo como apoio ao registro e à análise do percurso de aprendizagem das crianças no Plano Piloto. Elas não têm finalidade classificatória, mas auxiliam professoras e coordenadoras a identificar avanços, dificuldades e necessidades de intervenção pedagógica. Cada marcação deve considerar o ritmo, o contexto e as especificidades de cada criança, incluindo aquelas público-alvo da Educação Especial ou em estudo de caso.',
+  'A avaliação do projeto será realizada de forma contínua, sistemática e formativa, com o objetivo de acompanhar os processos de aprendizagem das crianças e contribuir com o aprimoramento do fazer pedagógico dos professores nas unidades participantes do Plano Piloto.',
+  'Ressalta-se que esta avaliação não tem como finalidade medir, classificar ou ranquear as crianças, mas sim compreender seus percursos de aprendizagem, respeitando seus tempos, ritmos e singularidades.',
+  'Parte-se do princípio de que as crianças não são números ou dados, mas sujeitos em pleno desenvolvimento. Assim, o compromisso da proposta está centrado no desenvolvimento integral e em um olhar sensível e individualizado para cada criança, considerando suas potencialidades, necessidades e contextos.',
+  'O processo contará com a aplicação de uma atividade diagnóstica inicial, com a finalidade de identificar os conhecimentos prévios das crianças no início do projeto, e uma atividade diagnóstica final, possibilitando a análise dos avanços ao longo do percurso, especialmente nas turmas do 5º agrupamento.',
+  'O monitoramento contínuo ocorrerá por meio de registros realizados pelas professoras, a partir de enfoques de observação previamente definidos. Este instrumento se configura como um apoio à prática docente, favorecendo a organização do olhar pedagógico, a reflexão sobre as estratégias utilizadas e o acompanhamento intencional das aprendizagens, sem caráter avaliativo classificatório.',
+  'Esse instrumento de registro será de caráter mensal, realizado pelas professoras em conjunto com as coordenadoras, em um processo colaborativo de análise e acompanhamento das aprendizagens. O registro será feito por meio de um website, com marcações orientadas pelos enfoques de observação e também por um sistema de cores, facilitando a visualização, o acompanhamento e a tomada de decisões pedagógicas.',
+  'Com o objetivo de fortalecer o alinhamento e garantir a unidade na implementação da proposta, a coordenadora de cada unidade realizará, mensalmente, momentos de acompanhamento junto às professoras, auxiliando na análise dos registros e no direcionamento das práticas.',
+  'Os registros contemplarão, principalmente, as habilidades relacionadas à consciência fonológica e fonêmica, à compreensão do princípio alfabético, à matemática e ao desenvolvimento do senso de organização, possibilitando um acompanhamento individualizado e próximo, respeitando as especificidades de cada turma e os diferentes ritmos de aprendizagem.',
+  'O projeto também considerará as crianças público-alvo da Educação Especial, assegurando práticas inclusivas, as adaptações necessárias e o respeito às particularidades de cada criança.',
+  'Ressalta-se que o relatório semestral descritivo será mantido, preservando-se, assim, um instrumento já consolidado na rede, que possibilita uma análise qualitativa mais ampla do desenvolvimento das crianças.',
+  'Além dos instrumentos estruturados, o acompanhamento será complementado por meio da observação das práticas em sala, registros pedagógicos e devolutivas formativas. A evolução ao longo do processo será sistematizada e analisada, permitindo a identificação de avanços, desafios e necessidades de ajuste, subsidiando a tomada de decisões pedagógicas e contribuindo para o aperfeiçoamento da proposta.',
+  'Os enfoques de observação permitem identificar desde o domínio das habilidades até situações que demandam maior intervenção pedagógica, assegurando um olhar individualizado para o percurso de aprendizagem das crianças.',
+  'Para as crianças público-alvo da Educação Especial e para aquelas que se encontram em estudo de caso, os enfoques consideram o nível de acompanhamento em relação ao fluxo das propostas pedagógicas, respeitando suas especificidades, ritmo de aprendizagem e a necessidade de estratégias diferenciadas. Nesse sentido, utiliza-se: SF, SFP e NSF.',
 ]
+
 interface OpcaoEscala { id: string; chave: string; rotuloUI: string; corHex?: string | null; descricaoLegenda: string; ordem: number }
 interface EscalaResposta { id: string; codigo: string; nomeExibicao: string; opcoes: OpcaoEscala[] }
 interface Pergunta { id: string; codigo: string; enunciado: string; ordem: number; escala?: EscalaResposta | null }
@@ -468,19 +446,9 @@ export default function FormularioPage() {
             </div>
 
             <div style={{ color: '#2d3436', fontSize: 14, lineHeight: 1.55 }}>
-              <p style={{ margin: '0 0 16px' }}>{orientacaoIntroducao}</p>
-              <h3 style={{ margin: '0 0 10px', color: '#0984e3', fontSize: 15 }}>Legendas</h3>
-              <div style={{ display: 'grid', gap: 10 }}>
-                {orientacaoLegendas.map(item => (
-                  <div key={item.sigla} style={{ border: '1px solid #dfe6e9', borderRadius: 8, padding: '10px 12px', background: '#f8fbff' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 4 }}>
-                      <strong style={{ color: '#0984e3', fontSize: 13 }}>{item.sigla}</strong>
-                      <span style={{ color: '#2d3436', fontWeight: 700 }}>({item.titulo})</span>
-                    </div>
-                    <p style={{ margin: 0, color: '#4a4a4a' }}>{item.descricao}</p>
-                  </div>
-                ))}
-              </div>
+              {orientacaoRespostas.map((paragrafo, index) => (
+                <p key={index} style={{ margin: index === 0 ? '0 0 12px' : '12px 0' }}>{paragrafo}</p>
+              ))}
             </div>
           </div>
         </div>
@@ -519,8 +487,6 @@ export default function FormularioPage() {
               {secao.perguntas.filter(pergunta => !isPerguntaEstudoCaso(pergunta)).map(pergunta => (
                 <div key={pergunta.id} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f5f6fa' }}>
                   <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2d3436', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#b2bec3', fontSize: 12 }}>{pergunta.codigo}</span>
-                    <span>{pergunta.enunciado}</span>
                     <button
                       type="button"
                       onClick={() => setOrientacaoAberta(true)}
@@ -536,6 +502,8 @@ export default function FormularioPage() {
                     >
                       Orientações
                     </button>
+                    <span style={{ color: '#b2bec3', fontSize: 12 }}>{pergunta.codigo}</span>
+                    <span>{pergunta.enunciado}</span>
                   </div>
                   {pergunta.escala ? (
                     <EscalaSelector

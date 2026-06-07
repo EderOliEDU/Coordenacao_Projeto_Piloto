@@ -4,11 +4,14 @@ import api from '../api/client'
 
 interface Aluno { id: string; nome: string; matricula?: string; dataNascimento?: string; sexo?: string }
 interface Submissao { id: string; alunoId: string; status: string }
+interface Turma { id: string; nome: string; turno: string; escola: { id: string; nome: string } }
 
 export default function AlunosPage() {
   const { turmaId } = useParams<{ turmaId: string }>()
   const [alunos, setAlunos] = useState<Aluno[]>([])
   const [submissoes, setSubmissoes] = useState<Submissao[]>([])
+  const [turma, setTurma] = useState<Turma | null>(null)
+  const [professorNome, setProfessorNome] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
@@ -21,9 +24,15 @@ export default function AlunosPage() {
       setError(null)
 
       try {
-        const alunosRes = await api.get(`/turmas/${turmaId}/alunos`)
+        const [alunosRes, turmasRes, meRes] = await Promise.all([
+          api.get(`/turmas/${turmaId}/alunos`),
+          api.get('/turmas'),
+          api.get('/auth/me').catch(() => ({ data: null })),
+        ])
         if (!active) return
         setAlunos(Array.isArray(alunosRes.data) ? alunosRes.data : [])
+        setTurma((Array.isArray(turmasRes.data) ? turmasRes.data : []).find((item: Turma) => item.id === turmaId) || null)
+        setProfessorNome(meRes.data?.professor?.nome || JSON.parse(localStorage.getItem('professor') || '{}').nome || '')
 
         try {
           const subRes = await api.get(`/submissoes?turmaId=${turmaId}`)
@@ -79,6 +88,12 @@ export default function AlunosPage() {
         <div className="page-header">
           <div className="page-title">
             <h1>Alunos da turma</h1>
+            {(professorNome || turma) && (
+              <p>
+                {professorNome && <>Professor: <strong>{professorNome}</strong></>}
+                {turma && <> · {turma.nome} · {turma.escola.nome}</>}
+              </p>
+            )}
             <p>Selecione um estudante para preencher ou revisar o formulário de observação.</p>
           </div>
         </div>
