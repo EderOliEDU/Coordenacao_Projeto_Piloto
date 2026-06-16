@@ -14,6 +14,7 @@ import submisoesRoutes from './routes/submissoes';
 import importacaoRoutes from './routes/importacao';
 import resultadosRoutes from './routes/resultados';
 import necessidadesRoutes from './routes/necessidades';
+import cronogramasRoutes from './routes/cronogramas';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -44,6 +45,7 @@ app.use('/api/formularios', formulariosRoutes);
 app.use('/api/submissoes', submisoesRoutes);
 app.use('/api/resultados', resultadosRoutes);
 app.use('/api/necessidades-especificas', necessidadesRoutes);
+app.use('/api/cronogramas', cronogramasRoutes);
 app.use('/api/admin', importacaoRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

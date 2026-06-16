@@ -56,7 +56,7 @@ export default function TurmasPage() {
         {turmas.map(turma => (
           <div
             key={turma.id}
-            onClick={() => navigate(`/turmas/${turma.id}/alunos`)}
+            onClick={() => navigate(`/turmas/${turma.id}/cronograma`)}
             style={{
               background: '#fff', borderRadius: 10, padding: '20px 24px', cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0',

@@ -60,8 +60,17 @@ export default function LoginPage() {
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Deixe em branco no primeiro acesso" autoComplete="current-password" />
             </div>
 
-            {message && <p className="success-text" style={{ fontSize: 13 }}>{message}</p>}
-            {error && <p className="error-text" style={{ fontSize: 13 }}>{error}</p>}
+            {message && (
+              <div className="auth-alert auth-alert-success" role="status" aria-live="polite">
+                {message}
+              </div>
+            )}
+            {error && (
+              <div className="auth-alert auth-alert-error" role="alert" aria-live="assertive">
+                <strong>Não foi possível entrar.</strong>
+                <span>{error}</span>
+              </div>
+            )}
 
             <button type="submit" disabled={loading} className="primary-btn" style={{ width: '100%', marginTop: 8 }}>
               {loading ? 'Processando...' : 'Entrar ou enviar link'}
