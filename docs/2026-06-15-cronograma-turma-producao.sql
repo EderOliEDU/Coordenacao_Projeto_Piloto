@@ -8,7 +8,7 @@
 -- apresentados até o momento da avaliação.
 --
 -- Execução:
--- psql -h 172.17.2.40 -U postgres -d dbsemecel \
+-- psql -h 192.168.0.121 -U postgres -d dbsemecel \
 --   -f docs/2026-06-15-cronograma-turma-producao.sql
 
 BEGIN;
