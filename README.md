@@ -22,6 +22,38 @@ frontend/   → Interface web (React + Vite)
 docs/       → Diagramas e documentação técnica
 ```
 
+## Ambientes e Infraestrutura
+
+### Código-fonte oficial para edição
+
+As alterações de código e documentação devem ser feitas no projeto mapeado em:
+
+```text
+Z:\
+```
+
+Evite editar cópias locais em outros caminhos, como `D:`, para não gerar divergência entre a documentação e o código/container realmente utilizados.
+
+### Desenvolvimento
+
+| Item | Local |
+|------|-------|
+| Servidor de desenvolvimento | `172.17.2.42` |
+| Código/container | `172.17.2.42` |
+| Banco de dados | `172.17.2.42` |
+| Diretório de edição | `Z:\` |
+
+No ambiente de desenvolvimento, código, containers e banco de dados ficam na mesma máquina.
+
+### Produção
+
+| Item | Local |
+|------|-------|
+| Servidor da aplicação/código/container | `192.168.0.122` |
+| Servidor do banco de dados | `192.168.0.121` |
+
+Em produção, a aplicação e o banco de dados ficam em servidores separados.
+
 ## Configuração e Execução
 
 ### Backend

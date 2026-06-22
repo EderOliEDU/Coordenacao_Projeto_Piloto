@@ -144,6 +144,10 @@ export default function FormularioPage() {
     return pergunta.id === '2' || pergunta.codigo === 'P2' || pergunta.codigo === 'P02' || texto.includes('ESTUDO DE CASO')
   }
 
+  function isPerguntaAtiva(pergunta: Pergunta) {
+    return Boolean(pergunta.escala)
+  }
+
   function isPerguntaFluxoInicial(pergunta: Pergunta) {
     return pergunta.id === '3' || pergunta.codigo === 'P3' || pergunta.codigo === 'P03'
   }
@@ -196,7 +200,10 @@ export default function FormularioPage() {
       const respostaPublicoAlvo = respostaSimNao(perguntaPublicoAlvo)
       const idsPaee = new Set(necessidades.filter(item => item.tipo === 'PAEE').map(item => item.id))
       const idsApoio = new Set(necessidades.filter(item => item.tipo !== 'PAEE').map(item => item.id))
-      const estudoCaso = respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'ESTUDO_CASO'
+      const perguntaEstudoCasoAtiva = formulario.secoes
+        .flatMap(secao => secao.perguntas)
+        .some(pergunta => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
+      const estudoCaso = perguntaEstudoCasoAtiva && respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'ESTUDO_CASO'
       const tipoNecessidade = respostaPublicoAlvo === 'SIM' || estudoCaso ? 'PAEE' : respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'APOIO' && apoioPedagogico === 'SIM' ? 'APOIO' : null
       const selecionadas = necessidadesSelecionadas.filter(id => tipoNecessidade === 'PAEE' ? idsPaee.has(id) : tipoNecessidade === 'APOIO' ? idsApoio.has(id) : false)
 
@@ -240,6 +247,9 @@ export default function FormularioPage() {
   if (!formulario || !aluno) return <div style={{ padding: 32, color: '#d63031' }}>Formulário ou aluno não encontrado.</div>
 
   const isEnviada = status === 'FINALIZADO'
+  const perguntaEstudoCasoAtiva = formulario.secoes
+    .flatMap(secao => secao.perguntas)
+    .some(pergunta => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
   const perguntaPublicoAlvo = formulario.secoes.flatMap(secao => secao.perguntas).find(isPerguntaPublicoAlvo) || null
   const respostaPublicoAlvo = respostaSimNao(perguntaPublicoAlvo)
   const paeeOptions = necessidades.filter(item => item.tipo === 'PAEE')
@@ -250,17 +260,19 @@ export default function FormularioPage() {
   const totalNecessidadesObrigatorias = respostaPublicoAlvo === 'SIM'
     ? 1
     : respostaPublicoAlvo === 'NAO'
-      ? (caminhoNaoPaee === 'ESTUDO_CASO' ? 2 : caminhoNaoPaee === 'APOIO' ? (apoioPedagogico === 'SIM' ? 3 : 2) : 1)
+      ? (perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' ? 2 : caminhoNaoPaee === 'APOIO' ? (apoioPedagogico === 'SIM' ? 3 : 2) : 1)
       : 0
   const totalNecessidadesRespondidas = respostaPublicoAlvo === 'SIM'
     ? (selectedPaeeCount > 0 ? 1 : 0)
     : respostaPublicoAlvo === 'NAO'
       ? (caminhoNaoPaee ? 1 : 0)
-        + (caminhoNaoPaee === 'ESTUDO_CASO' && selectedPaeeCount > 0 ? 1 : 0)
+        + (perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' && selectedPaeeCount > 0 ? 1 : 0)
         + (caminhoNaoPaee === 'APOIO' && apoioPedagogico ? 1 : 0)
         + (caminhoNaoPaee === 'APOIO' && apoioPedagogico === 'SIM' && (selectedApoioCount > 0 || precisaOutros) ? 1 : 0)
       : 0
-  const perguntasObrigatorias = formulario.secoes.flatMap(secao => secao.perguntas).filter(pergunta => pergunta.escala && !isPerguntaEstudoCaso(pergunta))
+  const perguntasObrigatorias = formulario.secoes
+    .flatMap(secao => secao.perguntas)
+    .filter(pergunta => isPerguntaAtiva(pergunta) && !isPerguntaEstudoCaso(pergunta))
   const totalObrigatorias = perguntasObrigatorias.length + totalNecessidadesObrigatorias
   const totalRespondidas = perguntasObrigatorias.filter(pergunta => Boolean(respostas[pergunta.id])).length + totalNecessidadesRespondidas
   const formularioCompleto = totalObrigatorias > 0 && totalRespondidas === totalObrigatorias
@@ -319,6 +331,7 @@ export default function FormularioPage() {
         <div style={{ marginTop: 12, padding: 12, border: '1px solid #dfe6e9', borderRadius: 8, background: '#f8fbff' }}>
           <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>Selecione a situação do estudante</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: caminhoNaoPaee ? 12 : 0 }}>
+            {perguntaEstudoCasoAtiva && (
             <button
               type="button"
               disabled={isEnviada}
@@ -335,6 +348,7 @@ export default function FormularioPage() {
             >
               P2 Em estudo de caso?
             </button>
+            )}
             <button
               type="button"
               disabled={isEnviada}
@@ -353,7 +367,7 @@ export default function FormularioPage() {
             </button>
           </div>
 
-          {caminhoNaoPaee === 'ESTUDO_CASO' && (
+          {perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' && (
             <>
               <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>Marque a necessidade específica do estudante em estudo de caso</div>
               {renderOpcoesNecessidades(paeeOptions)}
@@ -487,7 +501,7 @@ export default function FormularioPage() {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, padding: '12px 0', background: '#f5f6fa', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
         <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>Voltar</button>
         <div>
           <h1 style={{ margin: 0, fontSize: 20 }}>{formulario.nome}</h1>
@@ -516,12 +530,13 @@ export default function FormularioPage() {
           {formulario.secoes.map(secao => (
             <div key={secao.id} style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <h2 style={{ margin: '0 0 16px', fontSize: 16, color: '#0984e3', borderBottom: '2px solid #f0f0f0', paddingBottom: 10 }}>{secao.titulo}</h2>
-              {secao.perguntas.filter(pergunta => !isPerguntaEstudoCaso(pergunta)).map(pergunta => (
+              {secao.perguntas.filter(pergunta => isPerguntaAtiva(pergunta) && !isPerguntaEstudoCaso(pergunta)).map(pergunta => (
                 <div key={pergunta.id} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f5f6fa' }}>
                   <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2d3436', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                     <span style={{ color: '#b2bec3', fontSize: 12 }}>{pergunta.codigo}</span>
                     <span>{pergunta.enunciado}</span>
-                    <button
+                    {!isPerguntaPublicoAlvo(pergunta) && (
+                      <button
                       type="button"
                       onClick={() => setOrientacaoAberta(true)}
                       style={{
@@ -535,7 +550,8 @@ export default function FormularioPage() {
                       }}
                     >
                       Orientações
-                    </button>
+                      </button>
+                    )}
                   </div>
                   {pergunta.escala ? (
                     <EscalaSelector

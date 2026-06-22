@@ -32,7 +32,12 @@ router.get('/ativo', async (_req: Request, res: Response) => {
 
     const [gruposRes, perguntasRes, opcoesRes] = await Promise.all([
       pool.query(`SELECT id_grupo, nome_grupo FROM public.avaliacao_grupos ORDER BY id_grupo`),
-      pool.query(`SELECT id_pergunta, id_grupo, texto_pergunta, tipo_escala FROM public.avaliacao_perguntas ORDER BY id_grupo, id_pergunta`),
+      pool.query(`
+        SELECT id_pergunta, id_grupo, texto_pergunta, tipo_escala
+        FROM public.avaliacao_perguntas
+        WHERE NULLIF(BTRIM(tipo_escala::text), '') IS NOT NULL
+        ORDER BY id_grupo, id_pergunta
+      `),
       pool.query(`SELECT id_opcao, tipo_escala, sigla, descricao, cor_hex, simbolo FROM public.avaliacao_opcoes ORDER BY tipo_escala, id_opcao`),
     ])
 
