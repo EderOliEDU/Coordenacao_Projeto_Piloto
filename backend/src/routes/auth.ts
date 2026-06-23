@@ -1,4 +1,4 @@
-﻿import { Router, Request, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
@@ -47,7 +47,7 @@ async function sendPasswordSetupForCpf(cpfInput: string) {
       `SELECT
           regexp_replace(profissional_cpf, '\\D', '', 'g') AS cpf,
           COALESCE(NULLIF(trim(profissional_nome_social), ''), NULLIF(trim(profissional_nome), ''), '') AS nome,
-          COALESCE(NULLIF(trim(corporativo_e_mail), ''), NULLIF(trim(profissional_e_mail), '')) AS email,
+          NULLIF(trim(corporativo_e_mail), '') AS email,
           senha
        FROM public.professores
        WHERE regexp_replace(profissional_cpf, '\\D', '', 'g') = $1
@@ -223,4 +223,3 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 export default router;
-
