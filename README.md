@@ -1,207 +1,291 @@
-# Piloto EI – Coordenação Projeto Piloto Educação Infantil
+# Piloto EI - Coordenacao Projeto Piloto Educacao Infantil
 
-Sistema de acompanhamento de aprendizagem de alunos da Educação Infantil (EI), utilizado por professores para registro e envio de formulários de avaliação.
+Sistema de acompanhamento de aprendizagem da Educacao Infantil, utilizado por professores para organizar turmas, cronogramas e registros pedagogicos do Projeto Piloto.
 
-## Visão Geral
+## Visao Geral
 
-- **Backend**: Node.js + Express + Prisma ORM + SQLite
-- **Frontend**: React + Vite (TypeScript)
-- **Autenticação**: JWT + LDAP/Active Directory (com modo mock para desenvolvimento)
-- **Importação de dados**: Scripts CLI para importação via CSV
+- **Backend**: Node.js + Express + acesso direto ao PostgreSQL com `pg`
+- **Frontend**: React + Vite + TypeScript
+- **Autenticacao**: JWT + LDAP/Active Directory e login por CPF
+- **Banco de dados**: PostgreSQL existente da SEMECEL
+- **Importacao de dados**: CSV via API ou CLI, gravando diretamente no PostgreSQL
 
-## Pré-requisitos
+> Importante: o projeto **nao usa Prisma**. Referencias a Prisma, Prisma Client, migrations Prisma, `npx prisma generate` ou SQLite devem ser tratadas como legado e removidas/corrigidas. O driver correto para o banco e `pg`.
 
-- Node.js 18+
-- npm 9+
-
-## Estrutura
-
-```
-backend/    → API REST (Express + Prisma)
-frontend/   → Interface web (React + Vite)
-docs/       → Diagramas e documentação técnica
-```
-
-## Ambientes e Infraestrutura
-
-### Código-fonte oficial para edição
-
-As alterações de código e documentação devem ser feitas no projeto mapeado em:
-
-```text
-Z:\
-```
-
-Evite editar cópias locais em outros caminhos, como `D:`, para não gerar divergência entre a documentação e o código/container realmente utilizados.
+## Ambientes
 
 ### Desenvolvimento
 
-| Item | Local |
+| Item | Valor |
 |------|-------|
-| Servidor de desenvolvimento | `172.17.2.42` |
-| Código/container | `172.17.2.42` |
-| Banco de dados | `172.17.2.42` |
-| Diretório de edição | `Z:\` |
+| Servidor DEV | `bd-dev` |
+| IP DEV | `172.17.2.42` |
+| Caminho no servidor | `/opt/projeto_piloto_app/app` |
+| Frontend DEV | `http://172.17.2.42:5173` |
+| Backend DEV | `http://172.17.2.42:3001` |
+| Branch de atualizacao | `codex/cronograma-turma-login` |
 
-No ambiente de desenvolvimento, código, containers e banco de dados ficam na mesma máquina.
+Tudo que for feito para teste e validacao diaria deve ser tratado como **DEV**. Nao use comandos de producao, nem `build-prod.sh`, salvo pedido explicito.
 
-### Produção
+### Producao
 
-| Item | Local |
+| Item | Valor |
 |------|-------|
-| Servidor da aplicação/código/container | `192.168.0.122` |
-| Servidor do banco de dados | `192.168.0.121` |
+| Servidor da aplicacao | `192.168.0.122` |
+| Servidor do banco | `192.168.0.121` |
 
-Em produção, a aplicação e o banco de dados ficam em servidores separados.
+## Estrutura
 
-## Configuração e Execução
-
-### Backend
-
-```bash
-cd backend
-cp .env.example .env
-# Edite .env conforme necessário (LDAP_MOCK=true para dev)
-npm install
-npx prisma migrate dev --name init
-npx ts-node --project tsconfig.seed.json prisma/seed.ts
-npm run dev
+```text
+backend/    API REST Express e acesso direto ao PostgreSQL
+frontend/   Interface web React/Vite
+docs/       Diagramas, documentos e migracoes
 ```
 
-### Frontend
+## Configuracao do Backend
 
-```bash
-cd frontend
-npm install
-npm run dev
+O backend usa variaveis locais de ambiente. Em DEV, o arquivo esperado e:
+
+```text
+backend/.env_dev
 ```
 
-Acesse: http://localhost:5173
+Esse arquivo e local do servidor e pode nao estar versionado no GitHub.
 
-### Variáveis de Ambiente (backend/.env)
+Variaveis principais:
 
-| Variável | Descrição |
+| Variavel | Descricao |
 |----------|-----------|
-| `DATABASE_URL` | Caminho do banco SQLite (`file:./dev.db`) |
+| `PORT` | Porta do backend, normalmente `3001` |
 | `JWT_SECRET` | Segredo para assinatura dos tokens JWT |
-| `JWT_EXPIRES_IN` | Validade do token (ex: `8h`) |
-| `LDAP_URL` | URL do servidor AD/LDAP |
+| `JWT_EXPIRES_IN` | Validade do token, exemplo `8h` |
+| `LDAP_URL` | URL do servidor LDAP/AD |
 | `LDAP_BASE_DN` | Base DN de busca |
-| `LDAP_BIND_DN` | DN da conta de serviço |
-| `LDAP_BIND_PASSWORD` | Senha da conta de serviço |
-| `LDAP_SEARCH_FILTER` | Filtro de busca (ex: `(sAMAccountName={{username}})`) |
-| `LDAP_MOCK` | `"true"` para modo dev (qualquer senha aceita) |
-| `PORT` | Porta do servidor (padrão: 3001) |
-| `PILOTO_PG_HOST` | Host do Postgres `projPiloto` (autenticação por CPF) |
-| `PILOTO_PG_PORT` | Porta do Postgres (padrão: `5432`) |
-| `PILOTO_PG_DB` | Nome do banco Postgres (ex: `projPiloto`) |
-| `PILOTO_PG_USER` | Usuário do Postgres |
-| `PILOTO_PG_PASSWORD` | Senha do Postgres |
+| `LDAP_BIND_DN` | DN da conta de servico |
+| `LDAP_BIND_PASSWORD` | Senha da conta de servico |
+| `LDAP_SEARCH_FILTER` | Filtro de busca LDAP |
+| `LDAP_MOCK` | `true` para modo de teste |
+| `PILOTO_PG_HOST` | Host do PostgreSQL |
+| `PILOTO_PG_PORT` | Porta do PostgreSQL, normalmente `5432` |
+| `PILOTO_PG_DB` | Nome do banco PostgreSQL |
+| `PILOTO_PG_USER` | Usuario do PostgreSQL |
+| `PILOTO_PG_PASSWORD` | Senha do PostgreSQL |
+| `PILOTO_PG_SSL` | `true` quando SSL for necessario |
+| `RESULTADOS_ALLOWED_CPFS` | CPFs liberados para tela de resultados |
+| `SUPERADMIN_CPFS` | CPFs extras liberados para superadministracao |
 
-## Autenticação por CPF (ambiente de testes)
+O CPF `65495934172` e superadministrador padrao no codigo.
 
-O backend suporta dois métodos de login na rota `POST /api/auth/login`:
+## Execucao em Desenvolvimento
 
-### 1. Login de rede (LDAP/AD) — padrão
-Informe `login` (ex.: `joao.silva`) e `senha`.
+No servidor DEV:
 
-### 2. Login por CPF + data de nascimento (fallback para testes)
-Quando o campo `login` contém exatamente **11 dígitos** (CPF, com ou sem
-pontuação), o backend consulta a tabela `public.usuarios` do banco Postgres
-`projPiloto` e aplica a seguinte lógica:
-
-| Situação de `senha_hash` | Verificação |
-|--------------------------|-------------|
-| NULL ou vazio (trim) | Aceita se a senha fornecida, reduzida a dígitos, for igual a `data_nascimento` reduzida a dígitos e tiver 8 dígitos (DDMMYYYY) |
-| Preenchido | Verifica com **bcryptjs** |
-
-**Exemplo de login de teste:**
-- Login: `01443081183` (CPF sem pontuação)
-- Senha: `08061986` (data de nascimento no formato DDMMYYYY)
-
-Quando o login é bem-sucedido via fallback e `must_change_password = true` na
-tabela, o campo `mustChangePassword: true` é incluído na resposta JSON, mas a
-autenticação **não é bloqueada** (para que os testes funcionem sem etapas
-extras).
-
-> **Atenção:** configure as variáveis `PILOTO_PG_*` no `.env` do backend antes
-> de usar este modo. Veja `.env.example` para referência.
-
-## Importação de Dados via CSV
-
-### Via API (multipart/form-data)
-
+```bash
+cd /opt/projeto_piloto_app/app
+./build-dev.sh
 ```
+
+O script deve:
+
+1. Parar os containers DEV.
+2. Rebuildar backend e frontend.
+3. Subir:
+   - `app-backend-dev-1`
+   - `app-frontend-dev-1`
+4. Validar:
+   - `/` retorna `200 OK`
+   - `/api/turmas` sem token retorna `401 Unauthorized`
+   - Nginx usa `proxy_pass http://backend-dev:3001/api/;`
+
+Se os scripts `.sh` vierem com quebra de linha Windows:
+
+```bash
+sed -i 's/\r$//' build-dev.sh stop-dev.sh start-dev.sh
+chmod +x build-dev.sh stop-dev.sh start-dev.sh
+```
+
+Se ainda aparecer erro de shebang como `#!/usr/bin/env: Arquivo ou diretorio inexistente`, remova BOM/caracter invisivel:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+for name in ["build-dev.sh", "stop-dev.sh", "start-dev.sh"]:
+    p = Path(name)
+    data = p.read_bytes()
+    data = data.replace(b"\xef\xbb\xbf", b"").replace(b"\r\n", b"\n")
+    p.write_bytes(data)
+PY
+chmod +x build-dev.sh stop-dev.sh start-dev.sh
+```
+
+## Atualizacao Pelo GitHub
+
+A branch usada para atualizar DEV e:
+
+```text
+codex/cronograma-turma-login
+```
+
+Fluxo para publicar alteracoes:
+
+```bash
+git status
+git add ARQUIVOS_ALTERADOS
+git commit -m "Mensagem da alteracao"
+git push origin codex/cronograma-turma-login
+```
+
+Se o push direto do ambiente do Codex falhar, use o fluxo validado com clone temporario HTTPS:
+
+```bash
+git clone https://github.com/EderOliEDU/Coordenacao_Projeto_Piloto.git projeto-temp
+cd projeto-temp
+git checkout codex/cronograma-turma-login
+```
+
+Depois aplique as alteracoes no clone temporario, confira e publique:
+
+```bash
+git diff
+git diff --check
+git status
+git add ARQUIVOS_ALTERADOS
+git commit -m "Mensagem da alteracao"
+git push origin codex/cronograma-turma-login
+```
+
+## Atualizacao do Servidor DEV
+
+Depois do push no GitHub:
+
+```bash
+cd /opt/projeto_piloto_app/app
+git fetch origin
+git reset --hard origin/codex/cronograma-turma-login
+./build-dev.sh
+```
+
+Se `backend/.env_dev` nao existir apos o `reset --hard`, restaure do backup ou recrie antes do build:
+
+```bash
+cp /tmp/.env_dev.backup backend/.env_dev
+```
+
+## Importacao de Dados via CSV
+
+A importacao CSV continua disponivel para atualizacao de dados no PostgreSQL. Ela nao usa Prisma.
+
+### Via API
+
+```text
 POST /api/admin/importar/:tipo
 Authorization: Bearer <token>
 Content-Type: multipart/form-data
 arquivo: <arquivo.csv>
 ```
 
-Tipos: `escolas`, `turmas`, `professores`, `alocacoes`, `alunos`
+Tipos aceitos:
+
+```text
+escolas
+etapas
+turmas
+professores
+alocacoes
+alunos
+```
 
 ### Via CLI
 
 ```bash
 cd backend
-npx ts-node src/scripts/importCsv.ts --tipo alunos --arquivo /caminho/alunos.csv
+npm run import:csv -- --tipo alunos --arquivo /caminho/alunos.csv
 ```
 
-### Formatos CSV
+### Colunas aceitas
+
+O importador aceita os nomes atuais do PostgreSQL e alguns aliases comuns.
 
 **escolas.csv**
+
 ```csv
-nome,municipio,uf
-Escola Municipal X,São Paulo,SP
+id_escola,nome_escola,projeto
+1,EMEI Exemplo,PJINSTFONI
+```
+
+**etapas.csv**
+
+```csv
+id_etapa,descricao,projeto
+1,Pre I,PJINSTFONI
 ```
 
 **turmas.csv**
+
 ```csv
-nome,codigo,anoLetivo,turno,escolaNome
-Turma A,T001,2024,MANHA,Escola Municipal X
+id_turma,id_escola,id_etapa,letra_turma,turno
+10,1,1,A,MANHA
 ```
 
 **professores.csv**
+
 ```csv
-nome,login,email,matricula
-João Silva,joao.silva,joao@escola.local,MAT001
+profissional_cpf,profissional_nome,profissional_nome_social,profissional_dt_nascimento,profissional_e_mail
+12345678900,Nome do Professor,,1980-01-01,professor@exemplo.local
 ```
 
 **alocacoes.csv**
+
 ```csv
-professorLogin,turmaNome
-joao.silva,Turma A
+cpf_professor,id_turma
+12345678900,10
 ```
 
 **alunos.csv**
+
 ```csv
-nome,matricula,dataNascimento,sexo,turmaNome
-Pedro Santos,ALU001,2017-03-15,M,Turma A
+id_aluno,nome,cpf,inep,situacao,id_turma,escola,serie,turma,turno
+100,Nome do Aluno,,123456789,ATIVO,10,EMEI Exemplo,Pre I,A,MANHA
 ```
 
-## Seed
+## Autenticacao
 
-O seed popula o banco com:
-- 3 escalas de resposta: `ESC_PEA_COR` (cores), `ESC_FLUXO`, `ESC_SIM_NAO`
-- 1 formulário ativo "Formulário Piloto EI" v1.0.0 com 6 seções e ~20 perguntas
+O backend suporta login em `POST /api/auth/login`.
 
-```bash
-cd backend && npx ts-node --project tsconfig.seed.json prisma/seed.ts
+### Login LDAP/AD
+
+Use `login` e `senha` de rede.
+
+### Login por CPF
+
+Quando `login` contem 11 digitos, o backend consulta `public.professores` no PostgreSQL e valida a senha armazenada na coluna `senha`.
+
+Senhas suportadas:
+
+- bcrypt (`$2...`)
+- MD5 legado
+- texto puro legado, apenas como compatibilidade
+
+## Superadministracao
+
+Usuarios com permissao `superadmin` acessam:
+
+```text
+/superadmin
 ```
 
-## Diagrama de Classes
+Funcoes:
 
-Ver: `docs/diagrama-classes-formulario-v4.puml`
+- Buscar professor por nome, CPF ou e-mail.
+- Resetar senha para `NULL`.
+- Alterar senha por CPF.
 
-## Fluxo do Usuário
+As rotas ficam em:
 
-1. Professor acessa `/login` e entra com credenciais de rede
-2. Vê suas turmas atribuídas em `/turmas`
-3. Acessa uma turma e vê a lista de alunos
-4. Clica em um aluno para preencher o formulário
-5. Responde as perguntas usando seletores de cor (PEA) ou botões de texto (Fluxo/Sim-Não)
-6. Salva como rascunho ou envia definitivamente
+```text
+/api/superadmin
+```
 
-## Licença
+## Licenca
 
-Uso interno – Secretaria de Educação.
+Uso interno - Secretaria Municipal de Educacao.
