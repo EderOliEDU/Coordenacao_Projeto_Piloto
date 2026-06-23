@@ -7,6 +7,7 @@ import PendenciasPage from './pages/PendenciasPage'
 import ResultadosPage from './pages/ResultadosPage'
 import CronogramaTurmaPage from './pages/CronogramaTurmaPage'
 import CadastrarSenhaPage from './pages/CadastrarSenhaPage'
+import SuperadminPage from './pages/SuperadminPage'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem('token')
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/turmas" element={<RequireAuth><TurmasPage /></RequireAuth>} />
         <Route path="/pendencias" element={<RequireAuth><PendenciasPage /></RequireAuth>} />
         <Route path="/resultados" element={<RequireAuth><ResultadosPage /></RequireAuth>} />
+        <Route path="/superadmin" element={<RequireAuth><SuperadminPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/cronograma" element={<RequireAuth><CronogramaTurmaPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/alunos" element={<RequireAuth><AlunosPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/alunos/:alunoId/formulario" element={<RequireAuth><FormularioPage /></RequireAuth>} />

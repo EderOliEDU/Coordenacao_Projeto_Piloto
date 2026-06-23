@@ -14,6 +14,7 @@ export default function TurmasPage() {
   const navigate = useNavigate()
   const professor = JSON.parse(localStorage.getItem('professor') || '{}')
   const [canViewResultados, setCanViewResultados] = useState(Boolean(professor.permissoes?.resultados))
+  const [canViewSuperadmin, setCanViewSuperadmin] = useState(Boolean(professor.permissoes?.superadmin))
 
   useEffect(() => {
     api.get('/turmas').then(r => setTurmas(r.data)).finally(() => setLoading(false))
@@ -22,9 +23,11 @@ export default function TurmasPage() {
       if (refreshedProfessor) {
         localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
         setCanViewResultados(Boolean(refreshedProfessor.permissoes?.resultados))
+        setCanViewSuperadmin(Boolean(refreshedProfessor.permissoes?.superadmin))
       }
     }).catch(() => {
       setCanViewResultados(Boolean(professor.permissoes?.resultados))
+      setCanViewSuperadmin(Boolean(professor.permissoes?.superadmin))
     })
   }, [])
 
@@ -45,6 +48,7 @@ export default function TurmasPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
           {canViewResultados && <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>}
+          {canViewSuperadmin && <button onClick={() => navigate('/superadmin')} style={{ background: '#6c5ce7', color: '#fff' }}>Superadmin</button>}
           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
         </div>
       </div>

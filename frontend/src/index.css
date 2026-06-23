@@ -539,3 +539,9 @@ input:focus, select:focus, textarea:focus {
   .login-project-logo { max-height: 92px; }
   .auth-card { padding: 24px; }
 }
+
+@media (max-width: 760px) {
+  .superadmin-layout {
+    grid-template-columns: 1fr !important;
+  }
+}

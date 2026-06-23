@@ -15,6 +15,7 @@ import importacaoRoutes from './routes/importacao';
 import resultadosRoutes from './routes/resultados';
 import necessidadesRoutes from './routes/necessidades';
 import cronogramasRoutes from './routes/cronogramas';
+import superadminRoutes from './routes/superadmin';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -47,6 +48,7 @@ app.use('/api/resultados', resultadosRoutes);
 app.use('/api/necessidades-especificas', necessidadesRoutes);
 app.use('/api/cronogramas', cronogramasRoutes);
 app.use('/api/admin', importacaoRoutes);
+app.use('/api/superadmin', superadminRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
