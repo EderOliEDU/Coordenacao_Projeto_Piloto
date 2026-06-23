@@ -1,0 +1,3 @@
+﻿fonica.rondonopolis.mt.gov.br {
+  reverse_proxy frontend-prod:80
+}
