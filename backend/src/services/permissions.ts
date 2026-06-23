@@ -1,5 +1,6 @@
 export interface UserPermissions {
   resultados: boolean
+  superadmin: boolean
 }
 
 export function normalizarCpf(value: string) {
@@ -18,8 +19,15 @@ export function canViewResultados(cpf: string) {
   return allowedCpfs.includes(normalizarCpf(cpf))
 }
 
+export function isSuperadmin(cpf: string) {
+  const defaultSuperadmins = ['65495934172']
+  const envSuperadmins = parseCpfList(process.env.SUPERADMIN_CPFS)
+  return [...defaultSuperadmins, ...envSuperadmins].includes(normalizarCpf(cpf))
+}
+
 export function getUserPermissions(cpf: string): UserPermissions {
   return {
     resultados: canViewResultados(cpf),
+    superadmin: isSuperadmin(cpf),
   }
 }

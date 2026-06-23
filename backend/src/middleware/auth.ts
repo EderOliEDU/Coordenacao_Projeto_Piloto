@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { canViewResultados, getUserPermissions } from '../services/permissions';
 
 export interface AuthRequest extends Request {
-  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { resultados: boolean } };
+  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { resultados: boolean; superadmin?: boolean } };
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {

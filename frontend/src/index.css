@@ -31,3 +31,9 @@ input {
 }
 
 input:focus { border-color: #0984e3; box-shadow: 0 0 0 3px rgba(9,132,227,0.15); }
+
+@media (max-width: 760px) {
+  .superadmin-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
