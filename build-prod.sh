@@ -7,6 +7,7 @@ FRONT_PORT="5173"
 BACK_PORT="3001"
 PUBLIC_HOST="fonica.rondonopolis.mt.gov.br"
 PUBLIC_URL="https://${PUBLIC_HOST}/"
+ENV_BACKUP_DIR="/tmp/projeto_piloto_env_backup"
 
 cd "$APP_DIR"
 
@@ -15,6 +16,27 @@ if [[ "$HOST_IP" != "$PROD_IP" ]]; then
   echo "ERRO: este script é para PROD. IP esperado: $PROD_IP | IP atual: $HOST_IP"
   exit 1
 fi
+
+echo "==> Preservando arquivos .env locais..."
+rm -rf "$ENV_BACKUP_DIR"
+mkdir -p "$ENV_BACKUP_DIR/backend" "$ENV_BACKUP_DIR/frontend" "$ENV_BACKUP_DIR/root"
+find backend frontend -maxdepth 1 -type f \( -name '.env' -o -name '.env_*' -o -name '.env.*' \) -print0 | while IFS= read -r -d '' file; do
+  mkdir -p "$ENV_BACKUP_DIR/$(dirname "$file")"
+  cp -p "$file" "$ENV_BACKUP_DIR/$file"
+done
+find . -maxdepth 1 -type f \( -name '.env' -o -name '.env_*' -o -name '.env.*' \) -print0 | while IFS= read -r -d '' file; do
+  cp -p "$file" "$ENV_BACKUP_DIR/root/$(basename "$file")"
+done
+restore_env_files() {
+  if [[ -d "$ENV_BACKUP_DIR" ]]; then
+    cp -a "$ENV_BACKUP_DIR/backend/." backend/ 2>/dev/null || true
+    cp -a "$ENV_BACKUP_DIR/frontend/." frontend/ 2>/dev/null || true
+    cp -a "$ENV_BACKUP_DIR/root/." ./ 2>/dev/null || true
+  fi
+}
+trap restore_env_files EXIT
+
+restore_env_files
 
 echo "==> Build + Start PROD em $HOST_IP"
 ./stop-prod.sh
