@@ -1,0 +1,914 @@
+From 341e83764972e07822a0b7388ce15f10faddce5c Mon Sep 17 00:00:00 2001
+From: Eder de Oliveira <EDER.OLIVEIRA@rondonopolis.local>
+Date: Wed, 27 May 2026 14:08:59 -0400
+Subject: [PATCH 1/2] Adicionar resultados e acesso supervisor
+
+---
+ backend/.env.example                   |   3 +
+ backend/package.json                   |   3 +-
+ backend/src/index.ts                   |   2 +
+ backend/src/middleware/auth.ts         |  12 +-
+ backend/src/routes/auth.ts             |  19 +-
+ backend/src/routes/resultados.ts       | 245 +++++++++++++++++++++++++
+ backend/src/scripts/criarSupervisor.ts | 170 +++++++++++++++++
+ backend/src/services/permissions.ts    |  25 +++
+ frontend/src/App.tsx                   |   2 +
+ frontend/src/pages/ResultadosPage.tsx  | 238 ++++++++++++++++++++++++
+ frontend/src/pages/TurmasPage.tsx      |  11 ++
+ 11 files changed, 727 insertions(+), 3 deletions(-)
+ create mode 100644 backend/src/routes/resultados.ts
+ create mode 100644 backend/src/scripts/criarSupervisor.ts
+ create mode 100644 backend/src/services/permissions.ts
+ create mode 100644 frontend/src/pages/ResultadosPage.tsx
+
+diff --git a/backend/.env.example b/backend/.env.example
+index e485f9c..d960578 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -16,3 +16,6 @@ PILOTO_PG_PORT=5432
+ PILOTO_PG_DB=projPiloto
+ PILOTO_PG_USER=userprojetopiloto
+ PILOTO_PG_PASSWORD=
++
++# CPFs autorizados a visualizar /resultados, separados por virgula.
++RESULTADOS_ALLOWED_CPFS=
+diff --git a/backend/package.json b/backend/package.json
+index ea0c36c..1e6eabd 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -7,7 +7,8 @@
+     "start": "node dist/index.js",
+     "db:migrate": "prisma migrate dev",
+     "db:seed": "ts-node prisma/seed.ts",
+-    "import:csv": "ts-node src/scripts/importCsv.ts"
++    "import:csv": "ts-node src/scripts/importCsv.ts",
++    "supervisor:create": "ts-node src/scripts/criarSupervisor.ts"
+   },
+   "dependencies": {
+     "@prisma/client": "^5.0.0",
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index 6596285..a3ab64d 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -12,6 +12,7 @@ import turmasRoutes from './routes/turmas';
+ import formulariosRoutes from './routes/formularios';
+ import submisoesRoutes from './routes/submissoes';
+ import importacaoRoutes from './routes/importacao';
++import resultadosRoutes from './routes/resultados';
+ 
+ const app = express();
+ app.set('trust proxy', 1);
+@@ -40,6 +41,7 @@ app.use('/api/auth', authRoutes);
+ app.use('/api/turmas', turmasRoutes);
+ app.use('/api/formularios', formulariosRoutes);
+ app.use('/api/submissoes', submisoesRoutes);
++app.use('/api/resultados', resultadosRoutes);
+ app.use('/api/admin', importacaoRoutes);
+ 
+ app.get('/api/health', (req, res) => res.json({ ok: true }));
+diff --git a/backend/src/middleware/auth.ts b/backend/src/middleware/auth.ts
+index 4b3bbfe..cd64bcd 100644
+--- a/backend/src/middleware/auth.ts
++++ b/backend/src/middleware/auth.ts
+@@ -1,8 +1,9 @@
+ import { Request, Response, NextFunction } from 'express';
+ import jwt from 'jsonwebtoken';
++import { canViewResultados, getUserPermissions } from '../services/permissions';
+ 
+ export interface AuthRequest extends Request {
+-  professor?: { id: string; login: string; nome: string };
++  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { resultados: boolean } };
+ }
+ 
+ export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+@@ -19,6 +20,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
+       login: payload.login || payload.cpf,
+       nome:  payload.nome,
+       cpf:   payload.cpf,
++      permissoes: payload.permissoes || getUserPermissions(payload.cpf || payload.login || ''),
+       // inclua outros campos se necessário
+     } as any;
+     next();
+@@ -26,3 +28,11 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
+     res.status(401).json({ error: 'Token inválido' });
+   }
+ }
++
++export function resultadosAccessMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
++  const cpf = req.professor?.cpf || req.professor?.login || ''
++  if (!canViewResultados(cpf)) {
++    return res.status(403).json({ error: 'Acesso negado aos resultados' })
++  }
++  next()
++}
+diff --git a/backend/src/routes/auth.ts b/backend/src/routes/auth.ts
+index 3348306..d014537 100644
+--- a/backend/src/routes/auth.ts
++++ b/backend/src/routes/auth.ts
+@@ -4,6 +4,8 @@ import rateLimit from 'express-rate-limit';
+ import { authenticate } from '../services/ldap';
+ import { authenticateByCpf } from '../services/cpfAuth';
+ import { getPgPool } from '../services/pgPool';
++import { getUserPermissions } from '../services/permissions';
++import { authMiddleware, AuthRequest } from '../middleware/auth';
+ 
+ const router = Router();
+ const pool = getPgPool();
+@@ -67,11 +69,13 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
+     }
+ 
+     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
++    const permissoes = getUserPermissions(professor.profissional_cpf);
+     const token = jwt.sign(
+       {
+         cpf: professor.profissional_cpf,
+         nome: professor.profissional_nome,
+         login: professor.profissional_cpf,
++        permissoes,
+       },
+       process.env.JWT_SECRET!,
+       { expiresIn }
+@@ -81,7 +85,8 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
+       token,
+       professor: {
+         cpf: professor.profissional_cpf,
+-        nome: professor.profissional_nome
++        nome: professor.profissional_nome,
++        permissoes,
+       },
+     };
+ 
+@@ -97,4 +102,16 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
+   }
+ });
+ 
++router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
++  const cpf = req.professor?.cpf || req.professor?.login || '';
++  const permissoes = getUserPermissions(cpf);
++  res.json({
++    professor: {
++      cpf,
++      nome: req.professor?.nome || '',
++      permissoes,
++    },
++  });
++});
++
+ export default router;
+diff --git a/backend/src/routes/resultados.ts b/backend/src/routes/resultados.ts
+new file mode 100644
+index 0000000..ed0b958
+--- /dev/null
++++ b/backend/src/routes/resultados.ts
+@@ -0,0 +1,245 @@
++import { Router, Response } from 'express'
++import { authMiddleware, resultadosAccessMiddleware, AuthRequest } from '../middleware/auth'
++import { getPgPool } from '../services/pgPool'
++
++const router = Router()
++router.use(authMiddleware)
++router.use(resultadosAccessMiddleware)
++
++function normalizarCpf(value: string) {
++  return (value || '').replace(/\D/g, '')
++}
++
++function opcaoIndicaDificuldade(sigla: string) {
++  const chave = (sigla || '').toUpperCase()
++  return ['PEA-NDA', 'PEA-TD', 'PEA-PD', 'NDA', 'ND', 'MD/ME', 'TD', 'PD', 'NSF', 'SFP'].includes(chave)
++}
++
++function opcaoIndicaDominio(sigla: string) {
++  const chave = (sigla || '').toUpperCase()
++  return ['PEA-D', 'D', 'SF', 'SIM'].includes(chave)
++}
++
++router.get('/', async (req: AuthRequest, res: Response) => {
++  try {
++    const cpf = normalizarCpf(req.professor?.login || '')
++    if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
++
++    const { turmaId, escolaId, status } = req.query as {
++      turmaId?: string
++      escolaId?: string
++      status?: string
++    }
++
++    const pool = getPgPool()
++
++    const scopeWhere: string[] = ['ap.cpf_professor = $1']
++    const scopeParams: any[] = [cpf]
++    let idx = 2
++
++    if (turmaId) {
++      scopeWhere.push(`t.id_turma::text = $${idx++}`)
++      scopeParams.push(turmaId)
++    }
++
++    if (escolaId) {
++      scopeWhere.push(`e.id_escola::text = $${idx++}`)
++      scopeParams.push(escolaId)
++    }
++
++    const statusNormalizado = (status || 'FINALIZADO').toUpperCase()
++    const filtrarStatus = statusNormalizado !== 'TODOS'
++
++    const statusWhere = filtrarStatus ? `AND s.status = $${idx}` : ''
++    const queryParams = filtrarStatus ? [...scopeParams, statusNormalizado] : scopeParams
++
++    const [filtrosRes, resumoRes, distribuicaoRes] = await Promise.all([
++      pool.query(
++        `
++        SELECT DISTINCT
++          e.id_escola::text AS "escolaId",
++          e.nome_escola::text AS "escolaNome",
++          t.id_turma::text AS "turmaId",
++          ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS "turmaNome",
++          t.turno::text AS "turno"
++        FROM public.atribuicao_professor ap
++        JOIN public.turmas t ON t.id_turma = ap.id_turma
++        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        WHERE ${scopeWhere.join(' AND ')}
++        ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma
++        `,
++        scopeParams
++      ),
++      pool.query(
++        `
++        SELECT
++          COUNT(DISTINCT ea.id_aluno)::int AS "totalAlunos",
++          COUNT(DISTINCT t.id_turma)::int AS "totalTurmas",
++          COUNT(DISTINCT e.id_escola)::int AS "totalEscolas",
++          COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'FINALIZADO')::int AS "finalizados",
++          COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'RASCUNHO')::int AS "rascunhos",
++          COUNT(DISTINCT s.id)::int AS "submissoes",
++          COUNT(ar.id_pergunta)::int AS "respostas"
++        FROM public.atribuicao_professor ap
++        JOIN public.turmas t ON t.id_turma = ap.id_turma
++        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
++        LEFT JOIN public.submissoes_pg s
++          ON s.cpf_professor = ap.cpf_professor
++         AND s.id_turma = t.id_turma
++         AND s.id_aluno = ea.id_aluno
++        LEFT JOIN public.avaliacao_respostas ar
++          ON ar.cpf_professor = s.cpf_professor
++         AND ar.id_aluno = s.id_aluno
++        WHERE ${scopeWhere.join(' AND ')}
++        `,
++        scopeParams
++      ),
++      pool.query(
++        `
++        SELECT
++          g.id_grupo::int AS "grupoId",
++          g.nome_grupo::text AS "grupoNome",
++          p.id_pergunta::int AS "perguntaId",
++          p.texto_pergunta::text AS "perguntaTexto",
++          p.tipo_escala::text AS "tipoEscala",
++          o.id_opcao::int AS "opcaoId",
++          o.sigla::text AS "sigla",
++          o.descricao::text AS "descricao",
++          o.cor_hex::text AS "corHex",
++          o.simbolo::text AS "simbolo",
++          COUNT(*)::int AS "total"
++        FROM public.atribuicao_professor ap
++        JOIN public.turmas t ON t.id_turma = ap.id_turma
++        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.submissoes_pg s
++          ON s.cpf_professor = ap.cpf_professor
++         AND s.id_turma = t.id_turma
++        JOIN public.avaliacao_respostas ar
++          ON ar.cpf_professor = s.cpf_professor
++         AND ar.id_aluno = s.id_aluno
++        JOIN public.avaliacao_perguntas p ON p.id_pergunta = ar.id_pergunta
++        JOIN public.avaliacao_grupos g ON g.id_grupo = p.id_grupo
++        JOIN public.avaliacao_opcoes o ON o.id_opcao = ar.id_opcao
++        WHERE ${scopeWhere.join(' AND ')}
++          ${statusWhere}
++        GROUP BY g.id_grupo, g.nome_grupo, p.id_pergunta, p.texto_pergunta, p.tipo_escala,
++                 o.id_opcao, o.sigla, o.descricao, o.cor_hex, o.simbolo
++        ORDER BY g.id_grupo, p.id_pergunta, o.id_opcao
++        `,
++        queryParams
++      ),
++    ])
++
++    const resumo = resumoRes.rows[0] || {}
++    const totalAlunos = Number(resumo.totalAlunos || 0)
++    const finalizados = Number(resumo.finalizados || 0)
++
++    const perguntas = new Map<string, any>()
++    const grupos = new Map<string, any>()
++
++    for (const row of distribuicaoRes.rows) {
++      const perguntaKey = String(row.perguntaId)
++      if (!perguntas.has(perguntaKey)) {
++        perguntas.set(perguntaKey, {
++          grupoId: String(row.grupoId),
++          grupoNome: row.grupoNome,
++          perguntaId: String(row.perguntaId),
++          perguntaTexto: row.perguntaTexto,
++          tipoEscala: row.tipoEscala,
++          total: 0,
++          dominio: 0,
++          dificuldade: 0,
++          opcoes: [],
++        })
++      }
++
++      const pergunta = perguntas.get(perguntaKey)
++      const total = Number(row.total || 0)
++      pergunta.total += total
++      if (opcaoIndicaDominio(row.sigla)) pergunta.dominio += total
++      if (opcaoIndicaDificuldade(row.sigla)) pergunta.dificuldade += total
++
++      pergunta.opcoes.push({
++        id: String(row.opcaoId),
++        sigla: row.sigla || '',
++        descricao: row.descricao || '',
++        corHex: row.corHex || null,
++        simbolo: row.simbolo || row.sigla || '',
++        total,
++      })
++    }
++
++    for (const pergunta of perguntas.values()) {
++      pergunta.percentualDominio = pergunta.total ? Math.round((pergunta.dominio / pergunta.total) * 100) : 0
++      pergunta.percentualDificuldade = pergunta.total ? Math.round((pergunta.dificuldade / pergunta.total) * 100) : 0
++
++      const grupoKey = pergunta.grupoId
++      if (!grupos.has(grupoKey)) {
++        grupos.set(grupoKey, {
++          id: grupoKey,
++          nome: pergunta.grupoNome,
++          total: 0,
++          dominio: 0,
++          dificuldade: 0,
++          perguntas: [],
++        })
++      }
++
++      const grupo = grupos.get(grupoKey)
++      grupo.total += pergunta.total
++      grupo.dominio += pergunta.dominio
++      grupo.dificuldade += pergunta.dificuldade
++      grupo.perguntas.push(pergunta)
++    }
++
++    const eixos = Array.from(grupos.values()).map((grupo) => ({
++      ...grupo,
++      percentualDominio: grupo.total ? Math.round((grupo.dominio / grupo.total) * 100) : 0,
++      percentualDificuldade: grupo.total ? Math.round((grupo.dificuldade / grupo.total) * 100) : 0,
++    }))
++
++    const habilidadesCriticas = Array.from(perguntas.values())
++      .filter((pergunta) => pergunta.total > 0)
++      .sort((a, b) => b.percentualDificuldade - a.percentualDificuldade || b.dificuldade - a.dificuldade)
++      .slice(0, 10)
++
++    const escolasMap = new Map<string, { id: string; nome: string }>()
++    for (const row of filtrosRes.rows) {
++      if (row.escolaId && !escolasMap.has(row.escolaId)) {
++        escolasMap.set(row.escolaId, { id: row.escolaId, nome: row.escolaNome || 'Escola sem nome' })
++      }
++    }
++
++    return res.json({
++      filtros: {
++        escolas: Array.from(escolasMap.values()),
++        turmas: filtrosRes.rows.map((row) => ({
++          id: row.turmaId,
++          nome: row.turmaNome,
++          escolaId: row.escolaId,
++          escolaNome: row.escolaNome,
++          turno: row.turno,
++        })),
++        status: statusNormalizado,
++      },
++      resumo: {
++        totalAlunos,
++        totalTurmas: Number(resumo.totalTurmas || 0),
++        totalEscolas: Number(resumo.totalEscolas || 0),
++        finalizados,
++        rascunhos: Number(resumo.rascunhos || 0),
++        submissoes: Number(resumo.submissoes || 0),
++        respostas: Number(resumo.respostas || 0),
++        percentualFinalizacao: totalAlunos ? Math.round((finalizados / totalAlunos) * 100) : 0,
++      },
++      eixos,
++      habilidadesCriticas,
++    })
++  } catch (err) {
++    console.error(err)
++    return res.status(500).json({ error: 'Erro ao calcular resultados' })
++  }
++})
++
++export default router
+diff --git a/backend/src/scripts/criarSupervisor.ts b/backend/src/scripts/criarSupervisor.ts
+new file mode 100644
+index 0000000..5aca00c
+--- /dev/null
++++ b/backend/src/scripts/criarSupervisor.ts
+@@ -0,0 +1,170 @@
++import bcrypt from 'bcryptjs'
++import dotenv from 'dotenv'
++import path from 'path'
++import { getPgPool } from '../services/pgPool'
++
++const ESCOLAS_PARTICIPANTES = [
++  'EMEI Mateus Vinicius Braz',
++  'EMEI Rubens Alves de Souza',
++  'EMEI Elaine Aparecida de Oliveira Lopes',
++  'EMEI Cora Coralina',
++  'CMEI Antônio Vanier',
++  'CMEI Widisney Aparecido Pereira Rodrigues',
++  'CMEI Celina Fialho Bezerra',
++  'EMCEB Rural Fazenda Carimã',
++  'CMEI LEONESE DE PINHO CARVALHO'
++]
++
++function normalizarCpf(value: string) {
++  return (value || '').replace(/\D/g, '')
++}
++
++function getArg(name: string) {
++  const idx = process.argv.indexOf(name)
++  return idx >= 0 ? process.argv[idx + 1] : undefined
++}
++
++function hasFlag(name: string) {
++  return process.argv.includes(name)
++}
++
++function printUsage() {
++  console.log(`
++Uso:
++  ts-node src/scripts/criarSupervisor.ts --cpf <cpf> --nome "<nome>" --senha "<senha>" [--email <email>] [--env <arquivo>] [--todas-escolas]
++
++Exemplo:
++  ts-node src/scripts/criarSupervisor.ts --env .env_dev --cpf 12345678900 --nome "Supervisor Projeto Piloto" --senha "Senha@123"
++
++Por padrao, o acesso e criado para as 8 escolas participantes do projeto.
++Use --todas-escolas para vincular o supervisor a todas as turmas cadastradas no banco.
++`)
++}
++
++function carregarEnv() {
++  const envArg = getArg('--env')
++  const candidates = envArg
++    ? [path.resolve(process.cwd(), envArg)]
++    : [
++        path.join(__dirname, '../../.env'),
++        path.join(__dirname, '../../.env_dev'),
++      ]
++
++  for (const candidate of candidates) {
++    const result = dotenv.config({ path: candidate })
++    if (!result.error) {
++      console.log(`Ambiente carregado de ${candidate}`)
++      return
++    }
++  }
++
++  dotenv.config()
++}
++
++async function main() {
++  const cpf = normalizarCpf(getArg('--cpf') || '')
++  const nome = (getArg('--nome') || '').trim()
++  const senha = getArg('--senha') || ''
++  const email = (getArg('--email') || '').trim() || null
++  const todasEscolas = hasFlag('--todas-escolas')
++
++  if (!cpf || cpf.length !== 11 || !nome || !senha) {
++    printUsage()
++    process.exit(1)
++  }
++
++  carregarEnv()
++
++  const pool = getPgPool()
++  const client = await pool.connect()
++
++  try {
++    await client.query('BEGIN')
++
++    const senhaHash = await bcrypt.hash(senha, 10)
++    await client.query(
++      `
++      INSERT INTO public.professores (profissional_cpf, profissional_nome, profissional_e_mail, senha)
++      VALUES ($1, $2, $3, $4)
++      ON CONFLICT (profissional_cpf)
++      DO UPDATE SET
++        profissional_nome = EXCLUDED.profissional_nome,
++        profissional_e_mail = EXCLUDED.profissional_e_mail,
++        senha = EXCLUDED.senha
++      `,
++      [cpf, nome, email, senhaHash]
++    )
++
++    const turmasQuery = todasEscolas
++      ? `
++        SELECT t.id_turma, e.nome_escola
++        FROM public.turmas t
++        JOIN public.escolas e ON e.id_escola = t.id_escola
++        ORDER BY e.nome_escola, t.id_turma
++        `
++      : `
++        SELECT t.id_turma, e.nome_escola
++        FROM public.turmas t
++        JOIN public.escolas e ON e.id_escola = t.id_escola
++        WHERE e.nome_escola = ANY($1::text[])
++        ORDER BY e.nome_escola, t.id_turma
++        `
++
++    const turmasRes = await client.query(
++      turmasQuery,
++      todasEscolas ? [] : [ESCOLAS_PARTICIPANTES]
++    )
++
++    if (turmasRes.rowCount === 0) {
++      throw new Error('Nenhuma turma encontrada para as escolas selecionadas.')
++    }
++
++    let vinculadas = 0
++    for (const turma of turmasRes.rows) {
++      const existe = await client.query(
++        `
++        SELECT 1
++        FROM public.atribuicao_professor
++        WHERE cpf_professor = $1 AND id_turma = $2
++        LIMIT 1
++        `,
++        [cpf, turma.id_turma]
++      )
++
++      if ((existe.rowCount || 0) > 0) {
++        continue
++      }
++
++      await client.query(
++        `
++        INSERT INTO public.atribuicao_professor (cpf_professor, id_turma)
++        VALUES ($1, $2)
++        `,
++        [cpf, turma.id_turma]
++      )
++      vinculadas += 1
++    }
++
++    await client.query('COMMIT')
++
++    const escolas = Array.from(new Set(turmasRes.rows.map((turma) => turma.nome_escola))).length
++    console.log('Supervisor criado/atualizado com sucesso.')
++    console.log(`CPF: ${cpf}`)
++    console.log(`Escolas contempladas: ${escolas}`)
++    console.log(`Turmas encontradas: ${turmasRes.rowCount}`)
++    console.log(`Novas vinculacoes criadas: ${vinculadas}`)
++    console.log('')
++    console.log('Para liberar a tela Resultados, inclua este CPF em RESULTADOS_ALLOWED_CPFS e reinicie o backend.')
++  } catch (err) {
++    await client.query('ROLLBACK')
++    throw err
++  } finally {
++    client.release()
++    await pool.end()
++  }
++}
++
++main().catch((err) => {
++  console.error('Erro ao criar supervisor:', err.message || err)
++  process.exit(1)
++})
+diff --git a/backend/src/services/permissions.ts b/backend/src/services/permissions.ts
+new file mode 100644
+index 0000000..79feb6b
+--- /dev/null
++++ b/backend/src/services/permissions.ts
+@@ -0,0 +1,25 @@
++export interface UserPermissions {
++  resultados: boolean
++}
++
++export function normalizarCpf(value: string) {
++  return (value || '').replace(/\D/g, '')
++}
++
++function parseCpfList(value: string | undefined) {
++  return (value || '')
++    .split(',')
++    .map((cpf) => normalizarCpf(cpf))
++    .filter(Boolean)
++}
++
++export function canViewResultados(cpf: string) {
++  const allowedCpfs = parseCpfList(process.env.RESULTADOS_ALLOWED_CPFS)
++  return allowedCpfs.includes(normalizarCpf(cpf))
++}
++
++export function getUserPermissions(cpf: string): UserPermissions {
++  return {
++    resultados: canViewResultados(cpf),
++  }
++}
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index b9fc941..fe8e009 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -4,6 +4,7 @@ import TurmasPage from './pages/TurmasPage'
+ import AlunosPage from './pages/AlunosPage'
+ import FormularioPage from './pages/FormularioPage'
+ import PendenciasPage from './pages/PendenciasPage'
++import ResultadosPage from './pages/ResultadosPage'
+ 
+ function RequireAuth({ children }: { children: JSX.Element }) {
+   const token = localStorage.getItem('token')
+@@ -18,6 +19,7 @@ export default function App() {
+         <Route path="/login" element={<LoginPage />} />
+         <Route path="/turmas" element={<RequireAuth><TurmasPage /></RequireAuth>} />
+         <Route path="/pendencias" element={<RequireAuth><PendenciasPage /></RequireAuth>} />
++        <Route path="/resultados" element={<RequireAuth><ResultadosPage /></RequireAuth>} />
+         <Route path="/turmas/:turmaId/alunos" element={<RequireAuth><AlunosPage /></RequireAuth>} />
+         <Route path="/turmas/:turmaId/alunos/:alunoId/formulario" element={<RequireAuth><FormularioPage /></RequireAuth>} />
+         <Route path="*" element={<Navigate to="/turmas" replace />} />
+diff --git a/frontend/src/pages/ResultadosPage.tsx b/frontend/src/pages/ResultadosPage.tsx
+new file mode 100644
+index 0000000..a154f0e
+--- /dev/null
++++ b/frontend/src/pages/ResultadosPage.tsx
+@@ -0,0 +1,238 @@
++import { useEffect, useMemo, useState } from 'react'
++import { useNavigate } from 'react-router-dom'
++import api from '../api/client'
++
++interface EscolaFiltro { id: string; nome: string }
++interface TurmaFiltro { id: string; nome: string; escolaId: string; escolaNome: string; turno?: string }
++interface Resumo {
++  totalAlunos: number
++  totalTurmas: number
++  totalEscolas: number
++  finalizados: number
++  rascunhos: number
++  submissoes: number
++  respostas: number
++  percentualFinalizacao: number
++}
++interface OpcaoResultado {
++  id: string
++  sigla: string
++  descricao: string
++  corHex: string | null
++  simbolo: string
++  total: number
++}
++interface PerguntaResultado {
++  perguntaId: string
++  perguntaTexto: string
++  grupoNome: string
++  total: number
++  dificuldade: number
++  percentualDificuldade: number
++  percentualDominio: number
++  opcoes: OpcaoResultado[]
++}
++interface EixoResultado {
++  id: string
++  nome: string
++  total: number
++  percentualDominio: number
++  percentualDificuldade: number
++  perguntas: PerguntaResultado[]
++}
++interface ResultadosResponse {
++  filtros: { escolas: EscolaFiltro[]; turmas: TurmaFiltro[]; status: string }
++  resumo: Resumo
++  eixos: EixoResultado[]
++  habilidadesCriticas: PerguntaResultado[]
++}
++
++const emptyData: ResultadosResponse = {
++  filtros: { escolas: [], turmas: [], status: 'FINALIZADO' },
++  resumo: {
++    totalAlunos: 0,
++    totalTurmas: 0,
++    totalEscolas: 0,
++    finalizados: 0,
++    rascunhos: 0,
++    submissoes: 0,
++    respostas: 0,
++    percentualFinalizacao: 0,
++  },
++  eixos: [],
++  habilidadesCriticas: [],
++}
++
++function pct(value: number) {
++  return `${Number.isFinite(value) ? value : 0}%`
++}
++
++function cardStyle() {
++  return {
++    background: '#fff',
++    border: '1px solid #e8edf1',
++    borderRadius: 8,
++    padding: 16,
++    boxShadow: '0 2px 8px rgba(45,52,54,0.05)',
++  }
++}
++
++export default function ResultadosPage() {
++  const navigate = useNavigate()
++  const [data, setData] = useState<ResultadosResponse>(emptyData)
++  const [loading, setLoading] = useState(true)
++  const [error, setError] = useState<string | null>(null)
++  const [escolaId, setEscolaId] = useState('')
++  const [turmaId, setTurmaId] = useState('')
++  const [status, setStatus] = useState('FINALIZADO')
++
++  useEffect(() => {
++    const params = new URLSearchParams()
++    if (escolaId) params.set('escolaId', escolaId)
++    if (turmaId) params.set('turmaId', turmaId)
++    if (status) params.set('status', status)
++
++    setLoading(true)
++    setError(null)
++    api.get(`/resultados?${params.toString()}`)
++      .then((res) => setData(res.data || emptyData))
++      .catch((err) => setError(err.response?.data?.error || 'Erro ao carregar resultados.'))
++      .finally(() => setLoading(false))
++  }, [escolaId, turmaId, status])
++
++  const turmasFiltradas = useMemo(() => {
++    if (!escolaId) return data.filtros.turmas
++    return data.filtros.turmas.filter((turma) => turma.escolaId === escolaId)
++  }, [data.filtros.turmas, escolaId])
++
++  function onEscolaChange(value: string) {
++    setEscolaId(value)
++    setTurmaId('')
++  }
++
++  const resumoCards = [
++    { label: 'Alunos', value: data.resumo.totalAlunos },
++    { label: 'Finalizados', value: data.resumo.finalizados },
++    { label: 'Pendentes', value: Math.max(data.resumo.totalAlunos - data.resumo.finalizados, 0) },
++    { label: 'Finalizacao', value: pct(data.resumo.percentualFinalizacao) },
++  ]
++
++  return (
++    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 16px 40px' }}>
++      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 20 }}>
++        <div>
++          <h1 style={{ margin: 0, fontSize: 24, color: '#0984e3' }}>Resultados</h1>
++          <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Indicadores do Projeto Instrução Fônica</p>
++        </div>
++        <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436' }}>Voltar</button>
++      </div>
++
++      <div style={{ ...cardStyle(), marginBottom: 16 }}>
++        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
++          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
++            Escola
++            <select value={escolaId} onChange={(e) => onEscolaChange(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
++              <option value="">Todas</option>
++              {data.filtros.escolas.map((escola) => <option key={escola.id} value={escola.id}>{escola.nome}</option>)}
++            </select>
++          </label>
++          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
++            Turma
++            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
++              <option value="">Todas</option>
++              {turmasFiltradas.map((turma) => <option key={turma.id} value={turma.id}>{turma.escolaNome} - {turma.nome}</option>)}
++            </select>
++          </label>
++          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
++            Status
++            <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
++              <option value="FINALIZADO">Finalizados</option>
++              <option value="RASCUNHO">Rascunhos</option>
++              <option value="TODOS">Todos com resposta</option>
++            </select>
++          </label>
++        </div>
++      </div>
++
++      {loading && <p>Carregando resultados...</p>}
++      {!loading && error && <p style={{ color: '#d63031' }}>{error}</p>}
++
++      {!loading && !error && (
++        <>
++          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
++            {resumoCards.map((item) => (
++              <div key={item.label} style={cardStyle()}>
++                <div style={{ color: '#636e72', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
++                <div style={{ fontSize: 28, fontWeight: 800, color: '#2d3436', marginTop: 6 }}>{item.value}</div>
++              </div>
++            ))}
++          </div>
++
++          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16, alignItems: 'start' }}>
++            <section>
++              <h2 style={{ fontSize: 18, margin: '0 0 10px' }}>Resultados por eixo</h2>
++              <div style={{ display: 'grid', gap: 12 }}>
++                {data.eixos.map((eixo) => (
++                  <div key={eixo.id} style={cardStyle()}>
++                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
++                      <div>
++                        <h3 style={{ margin: 0, fontSize: 16 }}>{eixo.nome}</h3>
++                        <div style={{ color: '#636e72', fontSize: 13 }}>{eixo.total} respostas registradas</div>
++                      </div>
++                      <div style={{ textAlign: 'right', fontWeight: 800, color: '#00a383' }}>{pct(eixo.percentualDominio)}</div>
++                    </div>
++                    <div style={{ height: 10, background: '#edf2f4', borderRadius: 999, overflow: 'hidden', marginBottom: 12 }}>
++                      <div style={{ height: '100%', width: pct(eixo.percentualDominio), background: '#00b894' }} />
++                    </div>
++                    <div style={{ display: 'grid', gap: 8 }}>
++                      {eixo.perguntas.slice(0, 5).map((pergunta) => (
++                        <div key={pergunta.perguntaId} style={{ borderTop: '1px solid #f0f2f4', paddingTop: 8 }}>
++                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
++                            <span>{pergunta.perguntaTexto}</span>
++                            <strong>{pct(pergunta.percentualDominio)}</strong>
++                          </div>
++                        </div>
++                      ))}
++                    </div>
++                  </div>
++                ))}
++                {data.eixos.length === 0 && <p style={{ color: '#636e72' }}>Ainda não há respostas para os filtros selecionados.</p>}
++              </div>
++            </section>
++
++            <section>
++              <h2 style={{ fontSize: 18, margin: '0 0 10px' }}>Habilidades críticas</h2>
++              <div style={{ ...cardStyle(), display: 'grid', gap: 12 }}>
++                {data.habilidadesCriticas.map((pergunta, index) => (
++                  <div key={pergunta.perguntaId} style={{ borderBottom: index === data.habilidadesCriticas.length - 1 ? 'none' : '1px solid #f0f2f4', paddingBottom: 12 }}>
++                    <div style={{ color: '#636e72', fontSize: 12, fontWeight: 700 }}>{pergunta.grupoNome}</div>
++                    <div style={{ fontWeight: 700, margin: '3px 0 8px', lineHeight: 1.35 }}>{pergunta.perguntaTexto}</div>
++                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
++                      <span>{pergunta.dificuldade} com dificuldade</span>
++                      <strong style={{ color: '#d63031' }}>{pct(pergunta.percentualDificuldade)}</strong>
++                    </div>
++                    <div style={{ display: 'grid', gap: 5 }}>
++                      {pergunta.opcoes.map((opcao) => {
++                        const percentual = pergunta.total ? Math.round((opcao.total / pergunta.total) * 100) : 0
++                        return (
++                          <div key={opcao.id} title={opcao.descricao} style={{ display: 'grid', gridTemplateColumns: '58px 1fr 42px', gap: 8, alignItems: 'center', fontSize: 12 }}>
++                            <strong>{opcao.simbolo || opcao.sigla}</strong>
++                            <div style={{ height: 7, background: '#edf2f4', borderRadius: 999, overflow: 'hidden' }}>
++                              <div style={{ height: '100%', width: pct(percentual), background: opcao.corHex || '#74b9ff' }} />
++                            </div>
++                            <span style={{ textAlign: 'right' }}>{opcao.total}</span>
++                          </div>
++                        )
++                      })}
++                    </div>
++                  </div>
++                ))}
++                {data.habilidadesCriticas.length === 0 && <p style={{ color: '#636e72', margin: 0 }}>Sem habilidades críticas para exibir.</p>}
++              </div>
++            </section>
++          </div>
++        </>
++      )}
++    </div>
++  )
++}
+diff --git a/frontend/src/pages/TurmasPage.tsx b/frontend/src/pages/TurmasPage.tsx
+index 6d204f7..6130989 100644
+--- a/frontend/src/pages/TurmasPage.tsx
++++ b/frontend/src/pages/TurmasPage.tsx
+@@ -13,9 +13,19 @@ export default function TurmasPage() {
+   const [loading, setLoading] = useState(true)
+   const navigate = useNavigate()
+   const professor = JSON.parse(localStorage.getItem('professor') || '{}')
++  const [canViewResultados, setCanViewResultados] = useState(Boolean(professor.permissoes?.resultados))
+ 
+   useEffect(() => {
+     api.get('/turmas').then(r => setTurmas(r.data)).finally(() => setLoading(false))
++    api.get('/auth/me').then((res) => {
++      const refreshedProfessor = res.data?.professor
++      if (refreshedProfessor) {
++        localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
++        setCanViewResultados(Boolean(refreshedProfessor.permissoes?.resultados))
++      }
++    }).catch(() => {
++      setCanViewResultados(Boolean(professor.permissoes?.resultados))
++    })
+   }, [])
+ 
+   function logout() {
+@@ -34,6 +44,7 @@ export default function TurmasPage() {
+         </div>
+         <div style={{ display: 'flex', gap: 8 }}>
+           <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
++          {canViewResultados && <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>}
+           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
+         </div>
+       </div>
+-- 
+2.54.0.windows.1
+

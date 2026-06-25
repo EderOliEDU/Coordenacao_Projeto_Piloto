@@ -14,6 +14,16 @@ if [[ "$HOST_IP" != "$DEV_IP" ]]; then
 fi
 
 echo "==> Build + Start DEV em $HOST_IP"
+
+if [[ "${SKIP_GIT_PULL:-0}" != "1" ]]; then
+  CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  echo "==> Atualizando codigo do GitHub (branch: $CURRENT_BRANCH)..."
+  git fetch origin "$CURRENT_BRANCH"
+  git pull --ff-only origin "$CURRENT_BRANCH"
+else
+  echo "==> SKIP_GIT_PULL=1 informado; pulando atualizacao do Git."
+fi
+
 ./stop-dev.sh
 
 echo "==> Subindo DEV (build + remove-orphans)..."

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { isSuperadmin, normalizarCpf } from '../services/permissions'
+import { syncAtribuicoesFromDesignacoes } from '../services/syncAtribuicoesDesignacoes'
 
 const router = Router()
 const pool = getPgPool()
@@ -131,6 +132,11 @@ router.post('/professores/alterar-senha', async (req: AuthRequest, res: Response
   }
 
   res.json({ ok: true, cpf })
+})
+
+router.post('/atribuicoes/sincronizar', async (_req: AuthRequest, res: Response) => {
+  const report = await syncAtribuicoesFromDesignacoes(pool)
+  res.json(report)
 })
 
 export default router

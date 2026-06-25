@@ -1,8 +1,24 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import EscalaSelector from '../components/EscalaSelector'
-import LegendaPanel from '../components/LegendaPanel'
+
+const orientacaoRespostas = [
+  'As legendas a seguir têm caráter formativo e orientador, servindo como apoio ao registro e à análise do percurso de aprendizagem das crianças no Plano Piloto. Elas não têm finalidade classificatória, mas auxiliam professoras e coordenadoras a identificar avanços, dificuldades e necessidades de intervenção pedagógica. Cada marcação deve considerar o ritmo, o contexto e as especificidades de cada criança, incluindo aquelas público-alvo da Educação Especial ou em estudo de caso.',
+  'A avaliação do projeto será realizada de forma contínua, sistemática e formativa, com o objetivo de acompanhar os processos de aprendizagem das crianças e contribuir com o aprimoramento do fazer pedagógico dos professores nas unidades participantes do Plano Piloto.',
+  'Ressalta-se que esta avaliação não tem como finalidade medir, classificar ou ranquear as crianças, mas sim compreender seus percursos de aprendizagem, respeitando seus tempos, ritmos e singularidades.',
+  'Parte-se do princípio de que as crianças não são números ou dados, mas sujeitos em pleno desenvolvimento. Assim, o compromisso da proposta está centrado no desenvolvimento integral e em um olhar sensível e individualizado para cada criança, considerando suas potencialidades, necessidades e contextos.',
+  'O processo contará com a aplicação de uma atividade diagnóstica inicial, com a finalidade de identificar os conhecimentos prévios das crianças no início do projeto, e uma atividade diagnóstica final, possibilitando a análise dos avanços ao longo do percurso, especialmente nas turmas do 5º agrupamento.',
+  'O monitoramento contínuo ocorrerá por meio de registros realizados pelas professoras, a partir de enfoques de observação previamente definidos. Este instrumento se configura como um apoio à prática docente, favorecendo a organização do olhar pedagógico, a reflexão sobre as estratégias utilizadas e o acompanhamento intencional das aprendizagens, sem caráter avaliativo classificatório.',
+  'Esse instrumento de registro será de caráter mensal, realizado pelas professoras em conjunto com as coordenadoras, em um processo colaborativo de análise e acompanhamento das aprendizagens. O registro será feito por meio de um website, com marcações orientadas pelos enfoques de observação e também por um sistema de cores, facilitando a visualização, o acompanhamento e a tomada de decisões pedagógicas.',
+  'Com o objetivo de fortalecer o alinhamento e garantir a unidade na implementação da proposta, a coordenadora de cada unidade realizará, mensalmente, momentos de acompanhamento junto às professoras, auxiliando na análise dos registros e no direcionamento das práticas.',
+  'Os registros contemplarão, principalmente, as habilidades relacionadas à consciência fonológica e fonêmica, à compreensão do princípio alfabético, à matemática e ao desenvolvimento do senso de organização, possibilitando um acompanhamento individualizado e próximo, respeitando as especificidades de cada turma e os diferentes ritmos de aprendizagem.',
+  'O projeto também considerará as crianças público-alvo da Educação Especial, assegurando práticas inclusivas, as adaptações necessárias e o respeito às particularidades de cada criança.',
+  'Ressalta-se que o relatório semestral descritivo será mantido, preservando-se, assim, um instrumento já consolidado na rede, que possibilita uma análise qualitativa mais ampla do desenvolvimento das crianças.',
+  'Além dos instrumentos estruturados, o acompanhamento será complementado por meio da observação das práticas em sala, registros pedagógicos e devolutivas formativas. A evolução ao longo do processo será sistematizada e analisada, permitindo a identificação de avanços, desafios e necessidades de ajuste, subsidiando a tomada de decisões pedagógicas e contribuindo para o aperfeiçoamento da proposta.',
+  'Os enfoques de observação permitem identificar desde o domínio das habilidades até situações que demandam maior intervenção pedagógica, assegurando um olhar individualizado para o percurso de aprendizagem das crianças.',
+  'Para as crianças público-alvo da Educação Especial e para aquelas que se encontram em estudo de caso, os enfoques consideram o nível de acompanhamento em relação ao fluxo das propostas pedagógicas, respeitando suas especificidades, ritmo de aprendizagem e a necessidade de estratégias diferenciadas. Nesse sentido, utiliza-se: SF, SFP e NSF.',
+]
 
 interface OpcaoEscala { id: string; chave: string; rotuloUI: string; corHex?: string | null; descricaoLegenda: string; ordem: number }
 interface EscalaResposta { id: string; codigo: string; nomeExibicao: string; opcoes: OpcaoEscala[] }
@@ -32,8 +48,10 @@ export default function FormularioPage() {
   const [professorNome, setProfessorNome] = useState('')
   const [necessidades, setNecessidades] = useState<NecessidadeEspecifica[]>([])
   const [necessidadesSelecionadas, setNecessidadesSelecionadas] = useState<string[]>([])
+  const [caminhoNaoPaee, setCaminhoNaoPaee] = useState<'' | 'ESTUDO_CASO' | 'APOIO'>('')
   const [apoioPedagogico, setApoioPedagogico] = useState<'' | 'SIM' | 'NAO'>('')
   const [descricaoOutros, setDescricaoOutros] = useState('')
+  const [orientacaoAberta, setOrientacaoAberta] = useState(false)
 
   function showNotification(type: 'success' | 'error', message: string) {
     setNotification({ type, message })
@@ -63,6 +81,11 @@ export default function FormularioPage() {
       const outroSalvo = necessidadesSalvas.find((item: any) => item.descricaoOutros)
       setDescricaoOutros(outroSalvo?.descricaoOutros || '')
       const contexto = alunoNecRes.data?.contexto
+      const perguntaEstudoCasoAtiva = formRes.data?.secoes
+        ?.flatMap((secao: Secao) => secao.perguntas)
+        .some((pergunta: Pergunta) => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
+      if (perguntaEstudoCasoAtiva && contexto?.estudoCaso === true) setCaminhoNaoPaee('ESTUDO_CASO')
+      if (contexto?.apoioPedagogico !== null && contexto?.apoioPedagogico !== undefined) setCaminhoNaoPaee('APOIO')
       if (contexto?.apoioPedagogico === true) setApoioPedagogico('SIM')
       if (contexto?.apoioPedagogico === false) setApoioPedagogico('NAO')
 
@@ -84,15 +107,6 @@ export default function FormularioPage() {
     }).finally(() => setLoading(false))
   }, [turmaId, alunoId])
 
-  const allEscalas = useCallback((): EscalaResposta[] => {
-    if (!formulario) return []
-    const map = new Map<string, EscalaResposta>()
-    formulario.secoes.forEach(s => s.perguntas.forEach(p => {
-      if (p.escala) map.set(p.escala.id, p.escala)
-    }))
-    return Array.from(map.values())
-  }, [formulario])
-
   function normalizarTexto(value: string) {
     return value
       .normalize('NFD')
@@ -104,6 +118,19 @@ export default function FormularioPage() {
 
   function isPerguntaPublicoAlvo(pergunta: Pergunta) {
     return normalizarTexto(pergunta.enunciado).includes('PUBLICO ALVO DA EDUCACAO ESPECIAL')
+  }
+
+  function isPerguntaEstudoCaso(pergunta: Pergunta) {
+    const texto = normalizarTexto(`${pergunta.codigo} ${pergunta.enunciado}`)
+    return pergunta.id === '2' || pergunta.codigo === 'P2' || pergunta.codigo === 'P02' || texto.includes('ESTUDO DE CASO')
+  }
+
+  function isPerguntaAtiva(pergunta: Pergunta) {
+    return Boolean(
+      pergunta.escala?.codigo?.trim()
+      && Array.isArray(pergunta.escala.opcoes)
+      && pergunta.escala.opcoes.length > 0
+    )
   }
 
   function isPerguntaFluxoInicial(pergunta: Pergunta) {
@@ -126,6 +153,28 @@ export default function FormularioPage() {
 
   function selecionarResposta(pergunta: Pergunta, opcaoId: string) {
     setRespostas(prev => ({ ...prev, [pergunta.id]: opcaoId }))
+    if (isPerguntaPublicoAlvo(pergunta)) {
+      const opcao = pergunta.escala?.opcoes.find(item => item.id === opcaoId)
+      const texto = normalizarTexto(`${opcao?.chave || ''} ${opcao?.rotuloUI || ''} ${opcao?.descricaoLegenda || ''}`)
+      if (texto.includes('SIM') || texto === 'S') {
+        setCaminhoNaoPaee('')
+        setApoioPedagogico('')
+        setDescricaoOutros('')
+      }
+    }
+  }
+
+  function selecionarCaminhoNaoPaee(caminho: 'ESTUDO_CASO' | 'APOIO') {
+    setCaminhoNaoPaee(caminho)
+    if (caminho === 'ESTUDO_CASO') {
+      const idsPaee = new Set(necessidades.filter(item => item.tipo === 'PAEE').map(item => item.id))
+      setNecessidadesSelecionadas(prev => prev.filter(id => idsPaee.has(id)))
+      setApoioPedagogico('')
+      setDescricaoOutros('')
+    } else {
+      const idsApoio = new Set(necessidades.filter(item => item.tipo !== 'PAEE').map(item => item.id))
+      setNecessidadesSelecionadas(prev => prev.filter(id => idsApoio.has(id)))
+    }
   }
 
   async function salvar(enviar = false) {
@@ -136,7 +185,11 @@ export default function FormularioPage() {
       const respostaPublicoAlvo = respostaSimNao(perguntaPublicoAlvo)
       const idsPaee = new Set(necessidades.filter(item => item.tipo === 'PAEE').map(item => item.id))
       const idsApoio = new Set(necessidades.filter(item => item.tipo !== 'PAEE').map(item => item.id))
-      const tipoNecessidade = respostaPublicoAlvo === 'SIM' ? 'PAEE' : respostaPublicoAlvo === 'NAO' && apoioPedagogico === 'SIM' ? 'APOIO' : null
+      const perguntaEstudoCasoAtiva = formulario.secoes
+        .flatMap(secao => secao.perguntas)
+        .some(pergunta => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
+      const estudoCaso = perguntaEstudoCasoAtiva && respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'ESTUDO_CASO'
+      const tipoNecessidade = respostaPublicoAlvo === 'SIM' || estudoCaso ? 'PAEE' : respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'APOIO' && apoioPedagogico === 'SIM' ? 'APOIO' : null
       const selecionadas = necessidadesSelecionadas.filter(id => tipoNecessidade === 'PAEE' ? idsPaee.has(id) : tipoNecessidade === 'APOIO' ? idsApoio.has(id) : false)
 
       const body = {
@@ -149,7 +202,8 @@ export default function FormularioPage() {
         respostas: Object.entries(respostas).map(([perguntaId, opcaoEscalaId]) => ({ perguntaId, opcaoEscalaId })),
         necessidadesEspecificas: {
           paee: respostaPublicoAlvo === 'SIM' ? true : respostaPublicoAlvo === 'NAO' ? false : null,
-          apoioPedagogico: respostaPublicoAlvo === 'NAO' ? apoioPedagogico === 'SIM' : null,
+          estudoCaso,
+          apoioPedagogico: respostaPublicoAlvo === 'NAO' && caminhoNaoPaee === 'APOIO' ? apoioPedagogico === 'SIM' : null,
           tipo: tipoNecessidade,
           selecionadas,
           descricaoOutros: tipoNecessidade === 'APOIO' ? descricaoOutros : '',
@@ -178,7 +232,9 @@ export default function FormularioPage() {
   if (!formulario || !aluno) return <div style={{ padding: 32, color: '#d63031' }}>Formulário ou aluno não encontrado.</div>
 
   const isEnviada = status === 'FINALIZADO'
-  const escalas = allEscalas()
+  const perguntaEstudoCasoAtiva = formulario.secoes
+    .flatMap(secao => secao.perguntas)
+    .some(pergunta => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
   const perguntaPublicoAlvo = formulario.secoes.flatMap(secao => secao.perguntas).find(isPerguntaPublicoAlvo) || null
   const respostaPublicoAlvo = respostaSimNao(perguntaPublicoAlvo)
   const paeeOptions = necessidades.filter(item => item.tipo === 'PAEE')
@@ -186,13 +242,22 @@ export default function FormularioPage() {
   const selectedPaeeCount = necessidadesSelecionadas.filter(id => paeeOptions.some(item => item.id === id)).length
   const selectedApoioCount = necessidadesSelecionadas.filter(id => apoioOptions.some(item => item.id === id)).length
   const precisaOutros = descricaoOutros.trim().length > 0
-  const totalNecessidadesObrigatorias = respostaPublicoAlvo === 'SIM' ? 1 : respostaPublicoAlvo === 'NAO' ? (apoioPedagogico === 'SIM' ? 2 : 1) : 0
+  const totalNecessidadesObrigatorias = respostaPublicoAlvo === 'SIM'
+    ? 1
+    : respostaPublicoAlvo === 'NAO'
+      ? (perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' ? 2 : caminhoNaoPaee === 'APOIO' ? (apoioPedagogico === 'SIM' ? 3 : 2) : 1)
+      : 0
   const totalNecessidadesRespondidas = respostaPublicoAlvo === 'SIM'
     ? (selectedPaeeCount > 0 ? 1 : 0)
     : respostaPublicoAlvo === 'NAO'
-      ? (apoioPedagogico ? 1 : 0) + (apoioPedagogico === 'SIM' && (selectedApoioCount > 0 || precisaOutros) ? 1 : 0)
+      ? (caminhoNaoPaee ? 1 : 0)
+        + (perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' && selectedPaeeCount > 0 ? 1 : 0)
+        + (caminhoNaoPaee === 'APOIO' && apoioPedagogico ? 1 : 0)
+        + (caminhoNaoPaee === 'APOIO' && apoioPedagogico === 'SIM' && (selectedApoioCount > 0 || precisaOutros) ? 1 : 0)
       : 0
-  const perguntasObrigatorias = formulario.secoes.flatMap(secao => secao.perguntas).filter(pergunta => pergunta.escala)
+  const perguntasObrigatorias = formulario.secoes
+    .flatMap(secao => secao.perguntas)
+    .filter(pergunta => isPerguntaAtiva(pergunta) && !isPerguntaEstudoCaso(pergunta))
   const totalObrigatorias = perguntasObrigatorias.length + totalNecessidadesObrigatorias
   const totalRespondidas = perguntasObrigatorias.filter(pergunta => Boolean(respostas[pergunta.id])).length + totalNecessidadesRespondidas
   const formularioCompleto = totalObrigatorias > 0 && totalRespondidas === totalObrigatorias
@@ -249,8 +314,55 @@ export default function FormularioPage() {
     if (respostaPublicoAlvo === 'NAO') {
       return (
         <div style={{ marginTop: 12, padding: 12, border: '1px solid #dfe6e9', borderRadius: 8, background: '#f8fbff' }}>
-          <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>{'Não são PAEE, mas podem precisar de apoio pedagógico?'}</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: apoioPedagogico === 'SIM' ? 12 : 0 }}>
+          <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>Selecione a situação do estudante</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: caminhoNaoPaee ? 12 : 0 }}>
+            {perguntaEstudoCasoAtiva && (
+              <button
+                type="button"
+                disabled={isEnviada}
+                onClick={() => selecionarCaminhoNaoPaee('ESTUDO_CASO')}
+                style={{
+                  background: caminhoNaoPaee === 'ESTUDO_CASO' ? '#0984e3' : '#fff',
+                  color: caminhoNaoPaee === 'ESTUDO_CASO' ? '#fff' : '#2d3436',
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  border: caminhoNaoPaee === 'ESTUDO_CASO' ? '2px solid #0984e3' : '2px solid #dfe6e9',
+                }}
+              >
+                P2 Em estudo de caso?
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isEnviada}
+              onClick={() => selecionarCaminhoNaoPaee('APOIO')}
+              style={{
+                background: caminhoNaoPaee === 'APOIO' ? '#0984e3' : '#fff',
+                color: caminhoNaoPaee === 'APOIO' ? '#fff' : '#2d3436',
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 700,
+                border: caminhoNaoPaee === 'APOIO' ? '2px solid #0984e3' : '2px solid #dfe6e9',
+              }}
+            >
+              Não são PAEE, mas podem precisar de apoio pedagógico?
+            </button>
+          </div>
+
+          {perguntaEstudoCasoAtiva && caminhoNaoPaee === 'ESTUDO_CASO' && (
+            <>
+              <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>Marque a necessidade específica do estudante em estudo de caso</div>
+              {renderOpcoesNecessidades(paeeOptions)}
+            </>
+          )}
+
+          {caminhoNaoPaee === 'APOIO' && (
+            <>
+              <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>Precisa de apoio pedagógico?</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: apoioPedagogico === 'SIM' ? 12 : 0 }}>
             {(['SIM', 'NAO'] as const).map(opcao => (
               <button
                 key={opcao}
@@ -270,21 +382,23 @@ export default function FormularioPage() {
                 {opcao === 'SIM' ? 'Sim' : 'Não'}
               </button>
             ))}
-          </div>
+              </div>
 
-          {apoioPedagogico === 'SIM' && (
-            <>
-              {renderOpcoesNecessidades(apoioOptions)}
-              <label style={{ display: 'block', marginTop: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>
-                Outros
-                <input
-                  value={descricaoOutros}
-                  onChange={event => setDescricaoOutros(event.target.value)}
-                  disabled={isEnviada}
-                  style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid #dfe6e9', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
-                  placeholder="Descreva outra necessidade de apoio"
-                />
-              </label>
+              {apoioPedagogico === 'SIM' && (
+                <>
+                  {renderOpcoesNecessidades(apoioOptions)}
+                  <label style={{ display: 'block', marginTop: 10, fontSize: 13, fontWeight: 700, color: '#2d3436' }}>
+                    Outros
+                    <input
+                      value={descricaoOutros}
+                      onChange={event => setDescricaoOutros(event.target.value)}
+                      disabled={isEnviada}
+                      style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid #dfe6e9', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
+                      placeholder="Descreva outra necessidade de apoio"
+                    />
+                  </label>
+                </>
+              )}
             </>
           )}
         </div>
@@ -308,6 +422,59 @@ export default function FormularioPage() {
           {notification.message}
         </div>
       )}
+
+      {orientacaoAberta && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="orientacao-respostas-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            background: 'rgba(45, 52, 54, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => setOrientacaoAberta(false)}
+        >
+          <div
+            style={{
+              width: 'min(760px, 100%)',
+              maxHeight: '86vh',
+              overflowY: 'auto',
+              background: '#fff',
+              borderRadius: 8,
+              padding: '20px 24px',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.22)',
+            }}
+            onClick={event => event.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 16, marginBottom: 12 }}>
+              <div>
+                <h2 id="orientacao-respostas-title" style={{ margin: 0, fontSize: 18, color: '#2d3436' }}>Orientação para as respostas</h2>
+                <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 13 }}>Texto de apoio ao registro e à análise do percurso de aprendizagem.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrientacaoAberta(false)}
+                style={{ background: '#dfe6e9', color: '#2d3436', padding: '6px 12px', borderRadius: 6 }}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div style={{ color: '#2d3436', fontSize: 14, lineHeight: 1.55 }}>
+              {orientacaoRespostas.map((paragrafo, index) => (
+                <p key={index} style={{ margin: index === 0 ? '0 0 12px' : '12px 0' }}>{paragrafo}</p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>Voltar</button>
@@ -332,29 +499,40 @@ export default function FormularioPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 24, alignItems: 'start' }}>
+      <div>
         {/* Form */}
         <div>
           {formulario.secoes.map(secao => (
             <div key={secao.id} style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <h2 style={{ margin: '0 0 16px', fontSize: 16, color: '#0984e3', borderBottom: '2px solid #f0f0f0', paddingBottom: 10 }}>{secao.titulo}</h2>
-              {secao.perguntas.map(pergunta => (
+              {secao.perguntas.filter(pergunta => isPerguntaAtiva(pergunta) && !isPerguntaEstudoCaso(pergunta)).map(pergunta => (
                 <div key={pergunta.id} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f5f6fa' }}>
-                  <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2d3436' }}>
-                    <span style={{ color: '#b2bec3', fontSize: 12, marginRight: 6 }}>{pergunta.codigo}</span>
-                    {pergunta.enunciado}
+                  <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500, color: '#2d3436', display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setOrientacaoAberta(true)}
+                      style={{
+                        background: 'transparent',
+                        border: 0,
+                        color: '#0984e3',
+                        padding: 0,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Orientações
+                    </button>
+                    <span style={{ color: '#b2bec3', fontSize: 12 }}>{pergunta.codigo}</span>
+                    <span>{pergunta.enunciado}</span>
                   </div>
-                  {pergunta.escala ? (
-                    <EscalaSelector
-                      opcoes={pergunta.escala.opcoes}
-                      value={respostas[pergunta.id] || null}
-                      onChange={(opcaoId) => selecionarResposta(pergunta, opcaoId)}
-                      disabled={isEnviada}
-                      textOnly={isPerguntaFluxoInicial(pergunta)}
-                    />
-                  ) : (
-                    <span style={{ color: '#b2bec3', fontSize: 12 }}>Sem escala definida</span>
-                  )}
+                  <EscalaSelector
+                    opcoes={pergunta.escala!.opcoes}
+                    value={respostas[pergunta.id] || null}
+                    onChange={(opcaoId) => selecionarResposta(pergunta, opcaoId)}
+                    disabled={isEnviada}
+                    textOnly={isPerguntaFluxoInicial(pergunta)}
+                  />
                   {isPerguntaPublicoAlvo(pergunta) && renderNecessidadesPanel()}
                 </div>
               ))}
@@ -398,9 +576,6 @@ export default function FormularioPage() {
             </div>
           )}
         </div>
-
-        {/* Legenda */}
-        <LegendaPanel escalas={escalas} />
       </div>
     </div>
   )

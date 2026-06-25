@@ -82,6 +82,7 @@ router.get('/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
         `
         SELECT
           paee,
+          estudo_caso AS "estudoCaso",
           apoio_pedagogico AS "apoioPedagogico"
         FROM public.aluno_necessidades_contexto
         WHERE id_aluno = $1

@@ -5,6 +5,27 @@ import { getPgPool } from '../services/pgPool'
 const router = Router()
 router.use(authMiddleware)
 
+function ordenarOpcoesEscala(tipo: string, opcoes: any[]) {
+  if (tipo !== 'PEA') return opcoes
+
+  const ordemPEA: Record<string, number> = {
+    'PEA-D': 1,
+    D: 1,
+    'PEA-PD': 2,
+    PD: 2,
+    'PEA-TD': 3,
+    TD: 3,
+    'PEA-NDA': 4,
+    NDA: 4,
+  }
+
+  return [...opcoes].sort((a, b) => {
+    const ordemA = ordemPEA[String(a.chave || '').toUpperCase()] ?? 99
+    const ordemB = ordemPEA[String(b.chave || '').toUpperCase()] ?? 99
+    return ordemA - ordemB || Number(a.id) - Number(b.id)
+  })
+}
+
 // GET /api/formularios/ativo (Postgres)
 router.get('/ativo', async (_req: Request, res: Response) => {
   try {
@@ -12,7 +33,17 @@ router.get('/ativo', async (_req: Request, res: Response) => {
 
     const [gruposRes, perguntasRes, opcoesRes] = await Promise.all([
       pool.query(`SELECT id_grupo, nome_grupo FROM public.avaliacao_grupos ORDER BY id_grupo`),
-      pool.query(`SELECT id_pergunta, id_grupo, texto_pergunta, tipo_escala FROM public.avaliacao_perguntas ORDER BY id_grupo, id_pergunta`),
+      pool.query(`
+        SELECT id_pergunta, id_grupo, texto_pergunta, tipo_escala
+        FROM public.avaliacao_perguntas p
+        WHERE NULLIF(BTRIM(p.tipo_escala::text), '') IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM public.avaliacao_opcoes o
+            WHERE BTRIM(o.tipo_escala::text) = BTRIM(p.tipo_escala::text)
+          )
+        ORDER BY id_grupo, id_pergunta
+      `),
       pool.query(`SELECT id_opcao, tipo_escala, sigla, descricao, cor_hex, simbolo FROM public.avaliacao_opcoes ORDER BY tipo_escala, id_opcao`),
     ])
 
@@ -40,7 +71,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
             id: String(escalaCodigo), // ex: "PEA", "SN", "FLUXO"
             codigo: String(escalaCodigo),
             nomeExibicao: String(escalaCodigo),
-            opcoes: opcoesByTipo.get(escalaCodigo) || [],
+            opcoes: ordenarOpcoesEscala(String(escalaCodigo), opcoesByTipo.get(escalaCodigo) || []),
           }
         : null
 

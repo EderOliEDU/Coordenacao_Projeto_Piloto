@@ -5,7 +5,8 @@
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "supervisor:create": "ts-node src/scripts/criarSupervisor.ts"
+    "supervisor:create": "ts-node src/scripts/criarSupervisor.ts",
+    "turmas:sem-professor": "ts-node src/scripts/conferirTurmasSemProfessor.ts"
   },
   "dependencies": {
     "@types/pg": "^8.20.0",

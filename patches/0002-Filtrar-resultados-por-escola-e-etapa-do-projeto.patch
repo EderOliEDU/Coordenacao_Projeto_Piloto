@@ -1,0 +1,323 @@
+From f29d10d22b7a7c0bdf93a883b295ff8a045f7b9c Mon Sep 17 00:00:00 2001
+From: Eder de Oliveira <EDER.OLIVEIRA@rondonopolis.local>
+Date: Thu, 28 May 2026 07:53:57 -0400
+Subject: [PATCH 2/2] Filtrar resultados por escola e etapa do projeto
+
+---
+ backend/src/routes/resultados.ts       | 22 +++++++++----
+ backend/src/routes/submissoes.ts       | 44 ++++++++++++++++++++------
+ backend/src/routes/turmas.ts           | 27 +++++++++++++---
+ backend/src/scripts/criarSupervisor.ts | 21 ++++--------
+ frontend/src/pages/FormularioPage.tsx  | 18 +++++++++--
+ 5 files changed, 95 insertions(+), 37 deletions(-)
+
+diff --git a/backend/src/routes/resultados.ts b/backend/src/routes/resultados.ts
+index ed0b958..105a3de 100644
+--- a/backend/src/routes/resultados.ts
++++ b/backend/src/routes/resultados.ts
+@@ -33,7 +33,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+ 
+     const pool = getPgPool()
+ 
+-    const scopeWhere: string[] = ['ap.cpf_professor = $1']
++    const scopeWhere: string[] = [
++      'ap.cpf_professor = $1',
++      `e.projeto = 'PJINSTFONI'`,
++      `et.projeto = 'PJINSTFONI'`,
++    ]
+     const scopeParams: any[] = [cpf]
+     let idx = 2
+ 
+@@ -60,13 +64,16 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+           e.id_escola::text AS "escolaId",
+           e.nome_escola::text AS "escolaNome",
+           t.id_turma::text AS "turmaId",
+-          ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS "turmaNome",
++          ('Turma ' || COALESCE(NULLIF(et.descricao, ''), 'Etapa não informada') || ' ' || COALESCE(NULLIF(t.letra_turma, ''), t.id_turma::text))::text AS "turmaNome",
++          t.letra_turma::text AS "turmaLetra",
++          et.descricao::text AS "etapaDescricao",
+           t.turno::text AS "turno"
+         FROM public.atribuicao_professor ap
+         JOIN public.turmas t ON t.id_turma = ap.id_turma
+-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+         WHERE ${scopeWhere.join(' AND ')}
+-        ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma
++        ORDER BY e.nome_escola NULLS LAST, et.descricao::text NULLS LAST, t.letra_turma::text NULLS LAST, t.id_turma::text
+         `,
+         scopeParams
+       ),
+@@ -82,7 +89,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+           COUNT(ar.id_pergunta)::int AS "respostas"
+         FROM public.atribuicao_professor ap
+         JOIN public.turmas t ON t.id_turma = ap.id_turma
+-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+         LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
+         LEFT JOIN public.submissoes_pg s
+           ON s.cpf_professor = ap.cpf_professor
+@@ -111,7 +119,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+           COUNT(*)::int AS "total"
+         FROM public.atribuicao_professor ap
+         JOIN public.turmas t ON t.id_turma = ap.id_turma
+-        LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+         JOIN public.submissoes_pg s
+           ON s.cpf_professor = ap.cpf_professor
+          AND s.id_turma = t.id_turma
+@@ -219,6 +228,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+           nome: row.turmaNome,
+           escolaId: row.escolaId,
+           escolaNome: row.escolaNome,
++          etapaDescricao: row.etapaDescricao,
+           turno: row.turno,
+         })),
+         status: statusNormalizado,
+diff --git a/backend/src/routes/submissoes.ts b/backend/src/routes/submissoes.ts
+index 01b4e0d..ea45016 100644
+--- a/backend/src/routes/submissoes.ts
++++ b/backend/src/routes/submissoes.ts
+@@ -29,7 +29,18 @@ function normalizarCpf(value: string) {
+ async function assertTurmaAssignment(cpf: string, turmaId: number) {
+   const pool = getPgPool()
+   const r = await pool.query(
+-    `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma = $2 LIMIT 1`,
++    `
++    SELECT 1
++    FROM public.atribuicao_professor ap
++    JOIN public.turmas t ON t.id_turma = ap.id_turma
++    JOIN public.escolas e ON e.id_escola = t.id_escola
++    JOIN public.etapas et ON et.id_etapa = t.id_etapa
++    WHERE ap.cpf_professor = $1
++      AND ap.id_turma = $2
++      AND e.projeto = 'PJINSTFONI'
++      AND et.projeto = 'PJINSTFONI'
++    LIMIT 1
++    `,
+     [cpf, turmaId]
+   )
+   return r.rowCount > 0
+@@ -41,20 +52,27 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+     const cpf = normalizarCpf(req.professor?.login || '')
+     const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
+ 
+-    const where: string[] = [`cpf_professor = $1`]
++    const where: string[] = [
++      `s.cpf_professor = $1`,
++      `e.projeto = 'PJINSTFONI'`,
++      `et.projeto = 'PJINSTFONI'`,
++    ]
+     const params: any[] = [cpf]
+     let idx = 2
+ 
+-    if (turmaId) { where.push(`id_turma = $${idx++}`); params.push(Number(turmaId)) }
+-    if (alunoId) { where.push(`id_aluno = $${idx++}`); params.push(Number(alunoId)) }
++    if (turmaId) { where.push(`s.id_turma = $${idx++}`); params.push(Number(turmaId)) }
++    if (alunoId) { where.push(`s.id_aluno = $${idx++}`); params.push(Number(alunoId)) }
+ 
+     const pool = getPgPool()
+     const { rows } = await pool.query(
+       `
+-      SELECT id::text AS id, id_aluno::text AS "alunoId", status
+-      FROM public.submissoes_pg
++      SELECT s.id::text AS id, s.id_aluno::text AS "alunoId", s.status
++      FROM public.submissoes_pg s
++      JOIN public.turmas t ON t.id_turma = s.id_turma
++      JOIN public.escolas e ON e.id_escola = t.id_escola
++      JOIN public.etapas et ON et.id_etapa = t.id_etapa
+       WHERE ${where.join(' AND ')}
+-      ORDER BY atualizada_em DESC
++      ORDER BY s.atualizada_em DESC
+       `,
+       params
+     )
+@@ -74,9 +92,15 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
+     const pool = getPgPool()
+ 
+     const subRes = await pool.query(
+-      `SELECT id, cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes
+-       FROM public.submissoes_pg
+-       WHERE id = $1 AND cpf_professor = $2
++      `SELECT s.id, s.cpf_professor, s.id_turma, s.id_aluno, s.formulario_id, s.status, s.observacoes
++       FROM public.submissoes_pg s
++       JOIN public.turmas t ON t.id_turma = s.id_turma
++       JOIN public.escolas e ON e.id_escola = t.id_escola
++       JOIN public.etapas et ON et.id_etapa = t.id_etapa
++       WHERE s.id = $1
++         AND s.cpf_professor = $2
++         AND e.projeto = 'PJINSTFONI'
++         AND et.projeto = 'PJINSTFONI'
+        LIMIT 1`,
+       [subId, cpf]
+     )
+diff --git a/backend/src/routes/turmas.ts b/backend/src/routes/turmas.ts
+index c381ca7..02fc4b1 100644
+--- a/backend/src/routes/turmas.ts
++++ b/backend/src/routes/turmas.ts
+@@ -26,23 +26,28 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+       turno: string | null
+       escola_id: string
+       escola_nome: string
++      etapa_descricao: string | null
+       alunos_count: string
+     }>(
+       `
+       SELECT
+         t.id_turma::text                                   AS id,
+-        ('Turma ' || COALESCE(t.letra_turma, t.id_turma::text))::text AS nome,
++        ('Turma ' || COALESCE(NULLIF(et.descricao, ''), 'Etapa não informada') || ' ' || COALESCE(NULLIF(t.letra_turma, ''), t.id_turma::text))::text AS nome,
+         t.turno::text                                      AS turno,
+         e.id_escola::text                                  AS escola_id,
+         e.nome_escola::text                                AS escola_nome,
++        et.descricao::text                                 AS etapa_descricao,
+         COUNT(DISTINCT ea.id_aluno)::text                  AS alunos_count
+       FROM public.atribuicao_professor ap
+       JOIN public.turmas t ON t.id_turma = ap.id_turma
+-      LEFT JOIN public.escolas e ON e.id_escola = t.id_escola
++      JOIN public.escolas e ON e.id_escola = t.id_escola
++      JOIN public.etapas et ON et.id_etapa = t.id_etapa
+       LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
+       WHERE ap.cpf_professor = $1
+-      GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola
+-      ORDER BY e.nome_escola NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
++        AND e.projeto = 'PJINSTFONI'
++        AND et.projeto = 'PJINSTFONI'
++      GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola, et.descricao
++      ORDER BY e.nome_escola NULLS LAST, et.descricao NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
+       `,
+       [cpf]
+     )
+@@ -53,6 +58,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
+       // seu schema não tem anoLetivo; devolvemos o ano atual para não quebrar o frontend
+       anoLetivo: new Date().getFullYear(),
+       turno: (r.turno || 'MANHA'),
++      etapaDescricao: r.etapa_descricao || '',
+       escola: { id: r.escola_id || '', nome: r.escola_nome || '' },
+       _count: { alunos: Number(r.alunos_count || 0) },
+     }))
+@@ -74,7 +80,18 @@ router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
+ 
+     // checa se o professor tem essa turma atribuída
+     const check = await pool.query(
+-      `SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor = $1 AND id_turma::text = $2 LIMIT 1`,
++      `
++      SELECT 1
++      FROM public.atribuicao_professor ap
++      JOIN public.turmas t ON t.id_turma = ap.id_turma
++      JOIN public.escolas e ON e.id_escola = t.id_escola
++      JOIN public.etapas et ON et.id_etapa = t.id_etapa
++      WHERE ap.cpf_professor = $1
++        AND ap.id_turma::text = $2
++        AND e.projeto = 'PJINSTFONI'
++        AND et.projeto = 'PJINSTFONI'
++      LIMIT 1
++      `,
+       [cpf, turmaId]
+     )
+     if (check.rowCount === 0) {
+diff --git a/backend/src/scripts/criarSupervisor.ts b/backend/src/scripts/criarSupervisor.ts
+index 5aca00c..dc271e5 100644
+--- a/backend/src/scripts/criarSupervisor.ts
++++ b/backend/src/scripts/criarSupervisor.ts
+@@ -3,17 +3,7 @@ import dotenv from 'dotenv'
+ import path from 'path'
+ import { getPgPool } from '../services/pgPool'
+ 
+-const ESCOLAS_PARTICIPANTES = [
+-  'EMEI Mateus Vinicius Braz',
+-  'EMEI Rubens Alves de Souza',
+-  'EMEI Elaine Aparecida de Oliveira Lopes',
+-  'EMEI Cora Coralina',
+-  'CMEI Antônio Vanier',
+-  'CMEI Widisney Aparecido Pereira Rodrigues',
+-  'CMEI Celina Fialho Bezerra',
+-  'EMCEB Rural Fazenda Carimã',
+-  'CMEI LEONESE DE PINHO CARVALHO'
+-]
++const PROJETO_INSTRUCAO_FONICA = 'PJINSTFONI'
+ 
+ function normalizarCpf(value: string) {
+   return (value || '').replace(/\D/g, '')
+@@ -36,7 +26,7 @@ Uso:
+ Exemplo:
+   ts-node src/scripts/criarSupervisor.ts --env .env_dev --cpf 12345678900 --nome "Supervisor Projeto Piloto" --senha "Senha@123"
+ 
+-Por padrao, o acesso e criado para as 8 escolas participantes do projeto.
++Por padrao, o acesso e criado para escolas com projeto = PJINSTFONI.
+ Use --todas-escolas para vincular o supervisor a todas as turmas cadastradas no banco.
+ `)
+ }
+@@ -100,19 +90,22 @@ async function main() {
+         SELECT t.id_turma, e.nome_escola
+         FROM public.turmas t
+         JOIN public.escolas e ON e.id_escola = t.id_escola
++        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+         ORDER BY e.nome_escola, t.id_turma
+         `
+       : `
+         SELECT t.id_turma, e.nome_escola
+         FROM public.turmas t
+         JOIN public.escolas e ON e.id_escola = t.id_escola
+-        WHERE e.nome_escola = ANY($1::text[])
++        JOIN public.etapas et ON et.id_etapa = t.id_etapa
++        WHERE e.projeto = $1
++          AND et.projeto = $1
+         ORDER BY e.nome_escola, t.id_turma
+         `
+ 
+     const turmasRes = await client.query(
+       turmasQuery,
+-      todasEscolas ? [] : [ESCOLAS_PARTICIPANTES]
++      todasEscolas ? [] : [PROJETO_INSTRUCAO_FONICA]
+     )
+ 
+     if (turmasRes.rowCount === 0) {
+diff --git a/frontend/src/pages/FormularioPage.tsx b/frontend/src/pages/FormularioPage.tsx
+index e32a932..2d026f3 100644
+--- a/frontend/src/pages/FormularioPage.tsx
++++ b/frontend/src/pages/FormularioPage.tsx
+@@ -111,6 +111,11 @@ export default function FormularioPage() {
+ 
+   const isEnviada = status === 'FINALIZADO'
+   const escalas = allEscalas()
++  const perguntasObrigatorias = formulario.secoes.flatMap(secao => secao.perguntas).filter(pergunta => pergunta.escala)
++  const totalObrigatorias = perguntasObrigatorias.length
++  const totalRespondidas = perguntasObrigatorias.filter(pergunta => Boolean(respostas[pergunta.id])).length
++  const formularioCompleto = totalObrigatorias > 0 && totalRespondidas === totalObrigatorias
++  const faltantes = Math.max(totalObrigatorias - totalRespondidas, 0)
+ 
+   return (
+     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+@@ -138,6 +143,14 @@ export default function FormularioPage() {
+         )}
+       </div>
+ 
++      {!isEnviada && (
++        <div style={{ background: formularioCompleto ? '#e8f8f3' : '#fff8e1', border: `1px solid ${formularioCompleto ? '#b7eadb' : '#ffe3a3'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#2d3436', fontSize: 14 }}>
++          {formularioCompleto
++            ? 'Todas as perguntas obrigatórias foram respondidas. O formulário já pode ser finalizado.'
++            : `${totalRespondidas}/${totalObrigatorias} perguntas obrigatórias respondidas. Faltam ${faltantes}; enquanto isso, salve como rascunho.`}
++        </div>
++      )}
++
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 24, alignItems: 'start' }}>
+         {/* Form */}
+         <div>
+@@ -193,8 +206,9 @@ export default function FormularioPage() {
+               </button>
+               <button
+                 onClick={() => salvar(true)}
+-                disabled={saving}
+-                style={{ background: '#0984e3', color: '#fff', padding: '10px 24px', flex: 2 }}
++                disabled={saving || !formularioCompleto}
++                title={!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined}
++                style={{ background: formularioCompleto ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto ? 'pointer' : 'not-allowed' }}
+               >
+                 {saving ? 'Finalizando...' : 'Finalizar Formulário'}
+               </button>
+-- 
+2.54.0.windows.1
+

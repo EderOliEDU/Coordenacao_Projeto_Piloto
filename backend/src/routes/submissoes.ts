@@ -22,6 +22,7 @@ const salvarRespostaSchema = z.object({
   })).optional(),
   necessidadesEspecificas: z.object({
     paee: z.boolean().nullable().optional(),
+    estudoCaso: z.boolean().nullable().optional(),
     apoioPedagogico: z.boolean().nullable().optional(),
     tipo: z.enum(['PAEE', 'APOIO']).nullable().optional(),
     selecionadas: z.array(z.string().min(1)).optional(),
@@ -216,12 +217,14 @@ router.post('/respostas', async (req: AuthRequest, res: Response) => {
             id_turma,
             cpf_professor,
             paee,
+            estudo_caso,
             apoio_pedagogico
           )
-          VALUES ($1, $2, $3, $4, $5)
+          VALUES ($1, $2, $3, $4, $5, $6)
           ON CONFLICT (id_aluno, id_turma, cpf_professor)
           DO UPDATE SET
             paee = EXCLUDED.paee,
+            estudo_caso = EXCLUDED.estudo_caso,
             apoio_pedagogico = EXCLUDED.apoio_pedagogico,
             atualizada_em = CURRENT_TIMESTAMP
           `,
@@ -230,6 +233,7 @@ router.post('/respostas', async (req: AuthRequest, res: Response) => {
             turmaIdNum,
             cpf,
             necessidadesEspecificas.paee ?? null,
+            necessidadesEspecificas.estudoCaso ?? null,
             necessidadesEspecificas.apoioPedagogico ?? null,
           ]
         )

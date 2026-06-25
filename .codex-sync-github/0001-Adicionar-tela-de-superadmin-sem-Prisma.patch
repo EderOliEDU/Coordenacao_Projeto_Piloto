@@ -1,0 +1,865 @@
+From 027bf9c96ae218c4679ab1ba1a81412ade2581f3 Mon Sep 17 00:00:00 2001
+From: Eder de Oliveira <EDER.OLIVEIRA@rondonopolis.local>
+Date: Tue, 23 Jun 2026 14:28:40 -0400
+Subject: [PATCH] Adicionar tela de superadmin sem Prisma
+
+---
+ backend/package-lock.json             |  90 ------------
+ backend/package.json                  |   5 -
+ backend/src/index.ts                  |   2 +
+ backend/src/middleware/auth.ts        |   2 +-
+ backend/src/routes/importacao.ts      | 100 ++-----------
+ backend/src/routes/superadmin.ts      | 136 ++++++++++++++++++
+ backend/src/scripts/importCsv.ts      | 108 +-------------
+ backend/src/services/permissions.ts   |   8 ++
+ frontend/src/App.tsx                  |   2 +
+ frontend/src/index.css                |   6 +
+ frontend/src/pages/SuperadminPage.tsx | 196 ++++++++++++++++++++++++++
+ frontend/src/pages/TurmasPage.tsx     |   4 +
+ 12 files changed, 367 insertions(+), 292 deletions(-)
+ create mode 100644 backend/src/routes/superadmin.ts
+ create mode 100644 frontend/src/pages/SuperadminPage.tsx
+
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index 43806a3..4a4a5b5 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -8,7 +8,6 @@
+       "name": "piloto-ei-backend",
+       "version": "1.0.0",
+       "dependencies": {
+-        "@prisma/client": "^5.0.0",
+         "@types/pg": "^8.20.0",
+         "bcryptjs": "^2.4.3",
+         "cookie-parser": "^1.4.6",
+@@ -32,7 +31,6 @@
+         "@types/ldapjs": "^3.0.0",
+         "@types/multer": "^1.4.0",
+         "@types/node": "^20.0.0",
+-        "prisma": "^5.0.0",
+         "ts-node": "^10.9.0",
+         "ts-node-dev": "^2.0.0",
+         "typescript": "^5.0.0"
+@@ -174,74 +172,6 @@
+       "deprecated": "This package has been decomissioned. See https://github.com/ldapjs/node-ldapjs/blob/8ffd0bc9c149088a10ec4c1ec6a18450f76ad05d/README.md",
+       "license": "MIT"
+     },
+-    "node_modules/@prisma/client": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/@prisma/client/-/client-5.22.0.tgz",
+-      "integrity": "sha512-M0SVXfyHnQREBKxCgyo7sffrKttwE6R8PMq330MIUF0pTwjUhLbW84pFDlf06B27XyCR++VtjugEnIHdr07SVA==",
+-      "hasInstallScript": true,
+-      "license": "Apache-2.0",
+-      "engines": {
+-        "node": ">=16.13"
+-      },
+-      "peerDependencies": {
+-        "prisma": "*"
+-      },
+-      "peerDependenciesMeta": {
+-        "prisma": {
+-          "optional": true
+-        }
+-      }
+-    },
+-    "node_modules/@prisma/debug": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/@prisma/debug/-/debug-5.22.0.tgz",
+-      "integrity": "sha512-AUt44v3YJeggO2ZU5BkXI7M4hu9BF2zzH2iF2V5pyXT/lRTyWiElZ7It+bRH1EshoMRxHgpYg4VB6rCM+mG5jQ==",
+-      "devOptional": true,
+-      "license": "Apache-2.0"
+-    },
+-    "node_modules/@prisma/engines": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/@prisma/engines/-/engines-5.22.0.tgz",
+-      "integrity": "sha512-UNjfslWhAt06kVL3CjkuYpHAWSO6L4kDCVPegV6itt7nD1kSJavd3vhgAEhjglLJJKEdJ7oIqDJ+yHk6qO8gPA==",
+-      "devOptional": true,
+-      "hasInstallScript": true,
+-      "license": "Apache-2.0",
+-      "dependencies": {
+-        "@prisma/debug": "5.22.0",
+-        "@prisma/engines-version": "5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2",
+-        "@prisma/fetch-engine": "5.22.0",
+-        "@prisma/get-platform": "5.22.0"
+-      }
+-    },
+-    "node_modules/@prisma/engines-version": {
+-      "version": "5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2",
+-      "resolved": "https://registry.npmjs.org/@prisma/engines-version/-/engines-version-5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2.tgz",
+-      "integrity": "sha512-2PTmxFR2yHW/eB3uqWtcgRcgAbG1rwG9ZriSvQw+nnb7c4uCr3RAcGMb6/zfE88SKlC1Nj2ziUvc96Z379mHgQ==",
+-      "devOptional": true,
+-      "license": "Apache-2.0"
+-    },
+-    "node_modules/@prisma/fetch-engine": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/@prisma/fetch-engine/-/fetch-engine-5.22.0.tgz",
+-      "integrity": "sha512-bkrD/Mc2fSvkQBV5EpoFcZ87AvOgDxbG99488a5cexp5Ccny+UM6MAe/UFkUC0wLYD9+9befNOqGiIJhhq+HbA==",
+-      "devOptional": true,
+-      "license": "Apache-2.0",
+-      "dependencies": {
+-        "@prisma/debug": "5.22.0",
+-        "@prisma/engines-version": "5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2",
+-        "@prisma/get-platform": "5.22.0"
+-      }
+-    },
+-    "node_modules/@prisma/get-platform": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/@prisma/get-platform/-/get-platform-5.22.0.tgz",
+-      "integrity": "sha512-pHhpQdr1UPFpt+zFfnPazhulaZYCUqeIcPpJViYoq9R+D/yw4fjE+CtnsnKzPYm0ddUbeXUzjGVGIRVgPDCk4Q==",
+-      "devOptional": true,
+-      "license": "Apache-2.0",
+-      "dependencies": {
+-        "@prisma/debug": "5.22.0"
+-      }
+-    },
+     "node_modules/@tsconfig/node10": {
+       "version": "1.0.12",
+       "resolved": "https://registry.npmjs.org/@tsconfig/node10/-/node10-1.0.12.tgz",
+@@ -1865,26 +1795,6 @@
+         "node": ">= 0.6"
+       }
+     },
+-    "node_modules/prisma": {
+-      "version": "5.22.0",
+-      "resolved": "https://registry.npmjs.org/prisma/-/prisma-5.22.0.tgz",
+-      "integrity": "sha512-vtpjW3XuYCSnMsNVBjLMNkTj6OZbudcPPTPYHqX0CJfpcdWciI1dM8uHETwmDxxiqEwCIE6WvXucWUetJgfu/A==",
+-      "devOptional": true,
+-      "hasInstallScript": true,
+-      "license": "Apache-2.0",
+-      "dependencies": {
+-        "@prisma/engines": "5.22.0"
+-      },
+-      "bin": {
+-        "prisma": "build/index.js"
+-      },
+-      "engines": {
+-        "node": ">=16.13"
+-      },
+-      "optionalDependencies": {
+-        "fsevents": "2.3.3"
+-      }
+-    },
+     "node_modules/process-warning": {
+       "version": "2.3.2",
+       "resolved": "https://registry.npmjs.org/process-warning/-/process-warning-2.3.2.tgz",
+diff --git a/backend/package.json b/backend/package.json
+index 1e6eabd..c58c236 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -5,13 +5,9 @@
+     "dev": "ts-node-dev --respawn src/index.ts",
+     "build": "tsc",
+     "start": "node dist/index.js",
+-    "db:migrate": "prisma migrate dev",
+-    "db:seed": "ts-node prisma/seed.ts",
+-    "import:csv": "ts-node src/scripts/importCsv.ts",
+     "supervisor:create": "ts-node src/scripts/criarSupervisor.ts"
+   },
+   "dependencies": {
+-    "@prisma/client": "^5.0.0",
+     "@types/pg": "^8.20.0",
+     "bcryptjs": "^2.4.3",
+     "cookie-parser": "^1.4.6",
+@@ -35,7 +31,6 @@
+     "@types/ldapjs": "^3.0.0",
+     "@types/multer": "^1.4.0",
+     "@types/node": "^20.0.0",
+-    "prisma": "^5.0.0",
+     "ts-node": "^10.9.0",
+     "ts-node-dev": "^2.0.0",
+     "typescript": "^5.0.0"
+diff --git a/backend/src/index.ts b/backend/src/index.ts
+index ebdfe52..d26bcf5 100644
+--- a/backend/src/index.ts
++++ b/backend/src/index.ts
+@@ -14,6 +14,7 @@ import submisoesRoutes from './routes/submissoes';
+ import importacaoRoutes from './routes/importacao';
+ import resultadosRoutes from './routes/resultados';
+ import necessidadesRoutes from './routes/necessidades';
++import superadminRoutes from './routes/superadmin';
+ 
+ const app = express();
+ app.set('trust proxy', 1);
+@@ -45,6 +46,7 @@ app.use('/api/submissoes', submisoesRoutes);
+ app.use('/api/resultados', resultadosRoutes);
+ app.use('/api/necessidades-especificas', necessidadesRoutes);
+ app.use('/api/admin', importacaoRoutes);
++app.use('/api/superadmin', superadminRoutes);
+ 
+ app.get('/api/health', (req, res) => res.json({ ok: true }));
+ 
+diff --git a/backend/src/middleware/auth.ts b/backend/src/middleware/auth.ts
+index cd64bcd..8b094bb 100644
+--- a/backend/src/middleware/auth.ts
++++ b/backend/src/middleware/auth.ts
+@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
+ import { canViewResultados, getUserPermissions } from '../services/permissions';
+ 
+ export interface AuthRequest extends Request {
+-  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { resultados: boolean } };
++  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { resultados: boolean; superadmin?: boolean } };
+ }
+ 
+ export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+diff --git a/backend/src/routes/importacao.ts b/backend/src/routes/importacao.ts
+index ad951fe..cddc58a 100644
+--- a/backend/src/routes/importacao.ts
++++ b/backend/src/routes/importacao.ts
+@@ -1,94 +1,14 @@
+-import { Router, Request, Response } from 'express';
+-import multer from 'multer';
+-import { parse } from 'csv-parse/sync';
+-import { PrismaClient } from '@prisma/client';
+-import { authMiddleware } from '../middleware/auth';
++import { Router, Request, Response } from 'express'
++import { authMiddleware } from '../middleware/auth'
+ 
+-const router = Router();
+-const prisma = new PrismaClient();
+-const upload = multer({ storage: multer.memoryStorage() });
++const router = Router()
+ 
+-router.use(authMiddleware);
++router.use(authMiddleware)
+ 
+-router.post('/importar/:tipo', upload.single('arquivo'), async (req: Request, res: Response) => {
+-  if (!req.file) return res.status(400).json({ error: 'Arquivo CSV obrigatório' });
++router.post('/importar/:tipo', async (req: Request, res: Response) => {
++  res.status(410).json({
++    error: 'Importação CSV legada desativada. O sistema atual usa acesso direto ao PostgreSQL.',
++  })
++})
+ 
+-  const tipo = req.params.tipo;
+-  const records = parse(req.file.buffer.toString('utf-8'), { columns: true, skip_empty_lines: true, trim: true });
+-
+-  try {
+-    let count = 0;
+-    const warnings: string[] = [];
+-
+-    if (tipo === 'escolas') {
+-      for (const r of records) {
+-        if (r.id) {
+-          await prisma.escola.upsert({
+-            where: { id: r.id },
+-            create: { id: r.id, nome: r.nome, municipio: r.municipio, uf: r.uf },
+-            update: { nome: r.nome, municipio: r.municipio, uf: r.uf },
+-          });
+-        } else {
+-          await prisma.escola.create({
+-            data: { nome: r.nome, municipio: r.municipio, uf: r.uf },
+-          });
+-        }
+-        count++;
+-      }
+-    } else if (tipo === 'turmas') {
+-      for (const r of records) {
+-        const escola = await prisma.escola.findFirst({ where: { nome: r.escolaNome } });
+-        if (!escola) { warnings.push(`Escola não encontrada: "${r.escolaNome}" — linha ignorada`); continue; }
+-        await prisma.turma.create({
+-          data: { nome: r.nome, codigo: r.codigo, anoLetivo: parseInt(r.anoLetivo), turno: r.turno, escolaId: escola.id },
+-        });
+-        count++;
+-      }
+-    } else if (tipo === 'professores') {
+-      for (const r of records) {
+-        await prisma.professor.upsert({
+-          where: { login: r.login },
+-          create: { nome: r.nome, login: r.login, email: r.email, matricula: r.matricula },
+-          update: { nome: r.nome, email: r.email, matricula: r.matricula },
+-        });
+-        count++;
+-      }
+-    } else if (tipo === 'alocacoes') {
+-      for (const r of records) {
+-        const professor = await prisma.professor.findUnique({ where: { login: r.professorLogin } });
+-        const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
+-        if (!professor) { warnings.push(`Professor não encontrado: "${r.professorLogin}" — linha ignorada`); continue; }
+-        if (!turma) { warnings.push(`Turma não encontrada: "${r.turmaNome}" — linha ignorada`); continue; }
+-        await prisma.professorTurma.upsert({
+-          where: { professorId_turmaId: { professorId: professor.id, turmaId: turma.id } },
+-          create: { professorId: professor.id, turmaId: turma.id },
+-          update: {},
+-        });
+-        count++;
+-      }
+-    } else if (tipo === 'alunos') {
+-      for (const r of records) {
+-        const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
+-        if (!turma) { warnings.push(`Turma não encontrada: "${r.turmaNome}" — aluno "${r.nome}" ignorado`); continue; }
+-        await prisma.aluno.create({
+-          data: {
+-            nome: r.nome,
+-            matricula: r.matricula,
+-            dataNascimento: r.dataNascimento ? new Date(r.dataNascimento) : undefined,
+-            sexo: r.sexo,
+-            turmaId: turma.id,
+-          },
+-        });
+-        count++;
+-      }
+-    } else {
+-      return res.status(400).json({ error: `Tipo inválido: ${tipo}` });
+-    }
+-
+-    res.json({ message: `Importados ${count} registros`, count, warnings });
+-  } catch (err: any) {
+-    res.status(500).json({ error: err.message });
+-  }
+-});
+-
+-export default router;
++export default router
+diff --git a/backend/src/routes/superadmin.ts b/backend/src/routes/superadmin.ts
+new file mode 100644
+index 0000000..f1f125e
+--- /dev/null
++++ b/backend/src/routes/superadmin.ts
+@@ -0,0 +1,136 @@
++import { Router, Response, NextFunction } from 'express'
++import bcrypt from 'bcryptjs'
++import { authMiddleware, AuthRequest } from '../middleware/auth'
++import { getPgPool } from '../services/pgPool'
++import { isSuperadmin, normalizarCpf } from '../services/permissions'
++
++const router = Router()
++const pool = getPgPool()
++
++interface ProfessorAdmin {
++  cpf: string
++  nome: string
++  nomeSocial: string | null
++  email: string | null
++  corporativoEmail: string | null
++  senhaConfigurada: boolean
++}
++
++function requireSuperadmin(req: AuthRequest, res: Response, next: NextFunction) {
++  const cpf = req.professor?.cpf || req.professor?.login || ''
++  if (!isSuperadmin(cpf)) {
++    return res.status(403).json({ error: 'Acesso restrito ao superadministrador' })
++  }
++  next()
++}
++
++function normalizeSearchTerm(value: unknown) {
++  return String(value || '').trim()
++}
++
++async function getProfessorEmailColumns() {
++  const result = await pool.query<{ column_name: string }>(
++    `SELECT column_name
++       FROM information_schema.columns
++      WHERE table_schema = 'public'
++        AND table_name = 'professores'
++        AND column_name = ANY($1::text[])`,
++    [['profissional_e_mail', 'Corporativo_e_mail']]
++  )
++
++  const columns = new Set(result.rows.map((row) => row.column_name))
++  return {
++    profissionalEmail: columns.has('profissional_e_mail') ? 'profissional_e_mail' : null,
++    corporativoEmail: columns.has('Corporativo_e_mail') ? '"Corporativo_e_mail"' : null,
++  }
++}
++
++router.use(authMiddleware, requireSuperadmin)
++
++router.get('/professores', async (req: AuthRequest, res: Response) => {
++  const termo = normalizeSearchTerm(req.query.q)
++  if (termo.length < 2) {
++    return res.json([])
++  }
++
++  const cpfTermo = normalizarCpf(termo)
++  const emails = await getProfessorEmailColumns()
++  const emailSelect = emails.profissionalEmail ? 'profissional_e_mail::text' : 'NULL::text'
++  const corporativoSelect = emails.corporativoEmail ? `${emails.corporativoEmail}::text` : 'NULL::text'
++  const emailFilters = [
++    emails.profissionalEmail ? 'lower(COALESCE(profissional_e_mail::text, \'\')) LIKE lower($1)' : null,
++    emails.corporativoEmail ? `lower(COALESCE(${emails.corporativoEmail}::text, '')) LIKE lower($1)` : null,
++  ].filter(Boolean)
++  const cpfFilter = cpfTermo ? 'OR regexp_replace(profissional_cpf::text, \'\\D\', \'\', \'g\') LIKE $2' : ''
++
++  const query = `
++    SELECT
++      regexp_replace(profissional_cpf::text, '\\D', '', 'g') AS cpf,
++      COALESCE(NULLIF(trim(profissional_nome::text), ''), '') AS nome,
++      NULLIF(trim(COALESCE(profissional_nome_social::text, '')), '') AS "nomeSocial",
++      ${emailSelect} AS email,
++      ${corporativoSelect} AS "corporativoEmail",
++      senha IS NOT NULL AND trim(senha::text) <> '' AS "senhaConfigurada"
++    FROM public.professores
++    WHERE
++      lower(COALESCE(profissional_nome::text, '')) LIKE lower($1)
++      OR lower(COALESCE(profissional_nome_social::text, '')) LIKE lower($1)
++      ${cpfFilter}
++      ${emailFilters.length ? `OR ${emailFilters.join(' OR ')}` : ''}
++    ORDER BY profissional_nome
++    LIMIT 50
++  `
++
++  const params = cpfTermo ? [`%${termo}%`, `%${cpfTermo}%`] : [`%${termo}%`]
++  const result = await pool.query<ProfessorAdmin>(query, params)
++  res.json(result.rows)
++})
++
++router.post('/professores/resetar-senha', async (req: AuthRequest, res: Response) => {
++  const cpf = normalizarCpf(req.body?.cpf)
++  if (cpf.length !== 11) {
++    return res.status(400).json({ error: 'Informe um CPF válido' })
++  }
++
++  const result = await pool.query(
++    `UPDATE public.professores
++        SET senha = NULL
++      WHERE regexp_replace(profissional_cpf::text, '\\D', '', 'g') = $1
++      RETURNING regexp_replace(profissional_cpf::text, '\\D', '', 'g') AS cpf`,
++    [cpf]
++  )
++
++  if (result.rowCount === 0) {
++    return res.status(404).json({ error: 'Professor não encontrado' })
++  }
++
++  res.json({ ok: true, cpf })
++})
++
++router.post('/professores/alterar-senha', async (req: AuthRequest, res: Response) => {
++  const cpf = normalizarCpf(req.body?.cpf)
++  const senha = String(req.body?.senha || '')
++  if (cpf.length !== 11) {
++    return res.status(400).json({ error: 'Informe um CPF válido' })
++  }
++  if (senha.length < 6) {
++    return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' })
++  }
++
++  const senhaHash = await bcrypt.hash(senha, 10)
++  const result = await pool.query(
++    `UPDATE public.professores
++        SET senha = $2
++      WHERE regexp_replace(profissional_cpf::text, '\\D', '', 'g') = $1
++      RETURNING regexp_replace(profissional_cpf::text, '\\D', '', 'g') AS cpf`,
++    [cpf, senhaHash]
++  )
++
++  if (result.rowCount === 0) {
++    return res.status(404).json({ error: 'Professor não encontrado' })
++  }
++
++  res.json({ ok: true, cpf })
++})
++
++export default router
+diff --git a/backend/src/scripts/importCsv.ts b/backend/src/scripts/importCsv.ts
+index 4368718..f21e818 100644
+--- a/backend/src/scripts/importCsv.ts
++++ b/backend/src/scripts/importCsv.ts
+@@ -1,106 +1,2 @@
+-import * as fs from 'fs';
+-import * as path from 'path';
+-import { parse } from 'csv-parse/sync';
+-import { PrismaClient } from '@prisma/client';
+-import dotenv from 'dotenv';
+-
+-dotenv.config({ path: path.join(__dirname, '../../.env') });
+-
+-const prisma = new PrismaClient();
+-
+-async function main() {
+-  const args = process.argv.slice(2);
+-  const tipoIdx = args.indexOf('--tipo');
+-  const arquivoIdx = args.indexOf('--arquivo');
+-
+-  if (tipoIdx === -1 || arquivoIdx === -1) {
+-    console.error('Uso: ts-node src/scripts/importCsv.ts --tipo <tipo> --arquivo <arquivo>');
+-    console.error('Tipos: escolas, turmas, professores, alocacoes, alunos');
+-    process.exit(1);
+-  }
+-
+-  const tipo = args[tipoIdx + 1];
+-  const arquivo = args[arquivoIdx + 1];
+-
+-  if (!fs.existsSync(arquivo)) {
+-    console.error(`Arquivo não encontrado: ${arquivo}`);
+-    process.exit(1);
+-  }
+-
+-  const content = fs.readFileSync(arquivo, 'utf-8');
+-  const records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+-
+-  console.log(`Importando ${records.length} registros do tipo "${tipo}"...`);
+-  let count = 0;
+-
+-  if (tipo === 'escolas') {
+-    for (const r of records) {
+-      if (r.id) {
+-        await prisma.escola.upsert({
+-          where: { id: r.id },
+-          create: { id: r.id, nome: r.nome, municipio: r.municipio, uf: r.uf },
+-          update: { nome: r.nome, municipio: r.municipio, uf: r.uf },
+-        });
+-      } else {
+-        await prisma.escola.create({ data: { nome: r.nome, municipio: r.municipio, uf: r.uf } });
+-      }
+-      count++;
+-    }
+-  } else if (tipo === 'turmas') {
+-    for (const r of records) {
+-      const escola = await prisma.escola.findFirst({ where: { nome: r.escolaNome } });
+-      if (!escola) { console.warn(`Escola não encontrada: ${r.escolaNome}`); continue; }
+-      await prisma.turma.create({
+-        data: { nome: r.nome, codigo: r.codigo, anoLetivo: parseInt(r.anoLetivo), turno: r.turno, escolaId: escola.id },
+-      });
+-      count++;
+-    }
+-  } else if (tipo === 'professores') {
+-    for (const r of records) {
+-      await prisma.professor.upsert({
+-        where: { login: r.login },
+-        create: { nome: r.nome, login: r.login, email: r.email, matricula: r.matricula },
+-        update: { nome: r.nome, email: r.email, matricula: r.matricula },
+-      });
+-      count++;
+-    }
+-  } else if (tipo === 'alocacoes') {
+-    for (const r of records) {
+-      const professor = await prisma.professor.findUnique({ where: { login: r.professorLogin } });
+-      const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
+-      if (!professor || !turma) { console.warn(`Professor ou turma não encontrados`); continue; }
+-      await prisma.professorTurma.upsert({
+-        where: { professorId_turmaId: { professorId: professor.id, turmaId: turma.id } },
+-        create: { professorId: professor.id, turmaId: turma.id },
+-        update: {},
+-      });
+-      count++;
+-    }
+-  } else if (tipo === 'alunos') {
+-    for (const r of records) {
+-      const turma = await prisma.turma.findFirst({ where: { nome: r.turmaNome } });
+-      if (!turma) { console.warn(`Turma não encontrada: ${r.turmaNome}`); continue; }
+-      await prisma.aluno.create({
+-        data: {
+-          nome: r.nome,
+-          matricula: r.matricula,
+-          dataNascimento: r.dataNascimento ? new Date(r.dataNascimento) : undefined,
+-          sexo: r.sexo,
+-          turmaId: turma.id,
+-        },
+-      });
+-      count++;
+-    }
+-  } else {
+-    console.error(`Tipo inválido: ${tipo}`);
+-    process.exit(1);
+-  }
+-
+-  console.log(`✓ ${count} registros importados com sucesso`);
+-  await prisma.$disconnect();
+-}
+-
+-main().catch((err) => {
+-  console.error(err);
+-  process.exit(1);
+-});
++console.error('Importação CSV legada desativada. O sistema atual usa acesso direto ao PostgreSQL.')
++process.exit(1)
+diff --git a/backend/src/services/permissions.ts b/backend/src/services/permissions.ts
+index 79feb6b..946a976 100644
+--- a/backend/src/services/permissions.ts
++++ b/backend/src/services/permissions.ts
+@@ -1,5 +1,6 @@
+ export interface UserPermissions {
+   resultados: boolean
++  superadmin: boolean
+ }
+ 
+ export function normalizarCpf(value: string) {
+@@ -18,8 +19,15 @@ export function canViewResultados(cpf: string) {
+   return allowedCpfs.includes(normalizarCpf(cpf))
+ }
+ 
++export function isSuperadmin(cpf: string) {
++  const defaultSuperadmins = ['65495934172']
++  const envSuperadmins = parseCpfList(process.env.SUPERADMIN_CPFS)
++  return [...defaultSuperadmins, ...envSuperadmins].includes(normalizarCpf(cpf))
++}
++
+ export function getUserPermissions(cpf: string): UserPermissions {
+   return {
+     resultados: canViewResultados(cpf),
++    superadmin: isSuperadmin(cpf),
+   }
+ }
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index fe8e009..39538a3 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -5,6 +5,7 @@ import AlunosPage from './pages/AlunosPage'
+ import FormularioPage from './pages/FormularioPage'
+ import PendenciasPage from './pages/PendenciasPage'
+ import ResultadosPage from './pages/ResultadosPage'
++import SuperadminPage from './pages/SuperadminPage'
+ 
+ function RequireAuth({ children }: { children: JSX.Element }) {
+   const token = localStorage.getItem('token')
+@@ -20,6 +21,7 @@ export default function App() {
+         <Route path="/turmas" element={<RequireAuth><TurmasPage /></RequireAuth>} />
+         <Route path="/pendencias" element={<RequireAuth><PendenciasPage /></RequireAuth>} />
+         <Route path="/resultados" element={<RequireAuth><ResultadosPage /></RequireAuth>} />
++        <Route path="/superadmin" element={<RequireAuth><SuperadminPage /></RequireAuth>} />
+         <Route path="/turmas/:turmaId/alunos" element={<RequireAuth><AlunosPage /></RequireAuth>} />
+         <Route path="/turmas/:turmaId/alunos/:alunoId/formulario" element={<RequireAuth><FormularioPage /></RequireAuth>} />
+         <Route path="*" element={<Navigate to="/turmas" replace />} />
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+index 0b352c0..e6a5573 100644
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -31,3 +31,9 @@ input {
+ }
+ 
+ input:focus { border-color: #0984e3; box-shadow: 0 0 0 3px rgba(9,132,227,0.15); }
++
++@media (max-width: 760px) {
++  .superadmin-layout {
++    grid-template-columns: 1fr !important;
++  }
++}
+diff --git a/frontend/src/pages/SuperadminPage.tsx b/frontend/src/pages/SuperadminPage.tsx
+new file mode 100644
+index 0000000..a2cc636
+--- /dev/null
++++ b/frontend/src/pages/SuperadminPage.tsx
+@@ -0,0 +1,196 @@
++import { FormEvent, useEffect, useState } from 'react'
++import { useNavigate } from 'react-router-dom'
++import api from '../api/client'
++
++interface ProfessorAdmin {
++  cpf: string
++  nome: string
++  nomeSocial: string | null
++  email: string | null
++  corporativoEmail: string | null
++  senhaConfigurada: boolean
++}
++
++function formatarCpf(cpf: string) {
++  const digitos = (cpf || '').replace(/\D/g, '').padStart(11, '0')
++  return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
++}
++
++function onlyDigits(value: string) {
++  return value.replace(/\D/g, '')
++}
++
++export default function SuperadminPage() {
++  const navigate = useNavigate()
++  const professor = JSON.parse(localStorage.getItem('professor') || '{}')
++  const [query, setQuery] = useState('')
++  const [loading, setLoading] = useState(false)
++  const [professores, setProfessores] = useState<ProfessorAdmin[]>([])
++  const [cpf, setCpf] = useState('')
++  const [senha, setSenha] = useState('')
++  const [message, setMessage] = useState('')
++  const [error, setError] = useState('')
++
++  useEffect(() => {
++    const trimmed = query.trim()
++    if (trimmed.length < 2) {
++      setProfessores([])
++      return
++    }
++
++    const timer = window.setTimeout(() => {
++      setLoading(true)
++      setError('')
++      api.get('/superadmin/professores', { params: { q: trimmed } })
++        .then((res) => setProfessores(res.data || []))
++        .catch((err) => setError(err.response?.data?.error || 'Não foi possível buscar professores'))
++        .finally(() => setLoading(false))
++    }, 300)
++
++    return () => window.clearTimeout(timer)
++  }, [query])
++
++  function selectProfessor(item: ProfessorAdmin) {
++    setCpf(item.cpf)
++    setMessage(`Professor selecionado: ${item.nome || formatarCpf(item.cpf)}`)
++    setError('')
++  }
++
++  async function resetarSenha(targetCpf: string) {
++    const cpfLimpo = onlyDigits(targetCpf)
++    if (!window.confirm(`Resetar a senha do CPF ${formatarCpf(cpfLimpo)} para NULL?`)) return
++
++    setMessage('')
++    setError('')
++    try {
++      await api.post('/superadmin/professores/resetar-senha', { cpf: cpfLimpo })
++      setMessage(`Senha resetada para NULL: ${formatarCpf(cpfLimpo)}`)
++      setProfessores((items) => items.map((item) => item.cpf === cpfLimpo ? { ...item, senhaConfigurada: false } : item))
++    } catch (err: any) {
++      setError(err.response?.data?.error || 'Não foi possível resetar a senha')
++    }
++  }
++
++  async function alterarSenha(event: FormEvent) {
++    event.preventDefault()
++    const cpfLimpo = onlyDigits(cpf)
++
++    setMessage('')
++    setError('')
++    try {
++      await api.post('/superadmin/professores/alterar-senha', { cpf: cpfLimpo, senha })
++      setMessage(`Senha alterada: ${formatarCpf(cpfLimpo)}`)
++      setSenha('')
++      setProfessores((items) => items.map((item) => item.cpf === cpfLimpo ? { ...item, senhaConfigurada: true } : item))
++    } catch (err: any) {
++      setError(err.response?.data?.error || 'Não foi possível alterar a senha')
++    }
++  }
++
++  return (
++    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '32px 16px' }}>
++      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
++        <div>
++          <h1 style={{ margin: 0, color: '#0984e3', fontSize: 24 }}>Superadministração</h1>
++          <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Olá, {professor.nome || 'superadministrador'}</p>
++        </div>
++        <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436' }}>Voltar</button>
++      </div>
++
++      {(message || error) && (
++        <div
++          style={{
++            marginBottom: 16,
++            padding: '12px 14px',
++            borderRadius: 8,
++            background: error ? '#fff5f5' : '#f0fff8',
++            border: `1px solid ${error ? '#fab1a0' : '#55efc4'}`,
++            color: error ? '#c0392b' : '#006b54',
++            fontWeight: 600,
++          }}
++        >
++          {error || message}
++        </div>
++      )}
++
++      <div className="superadmin-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: 16, alignItems: 'start' }}>
++        <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
++          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Buscar professores</h2>
++          <input
++            value={query}
++            onChange={(event) => setQuery(event.target.value)}
++            placeholder="Nome, CPF ou e-mail corporativo"
++            autoFocus
++          />
++
++          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
++            {loading && <p style={{ margin: 0, color: '#636e72' }}>Buscando...</p>}
++            {!loading && query.trim().length >= 2 && professores.length === 0 && (
++              <p style={{ margin: 0, color: '#636e72' }}>Nenhum professor encontrado.</p>
++            )}
++
++            {professores.map((item) => (
++              <div
++                key={item.cpf}
++                style={{
++                  border: '1px solid #f0f0f0',
++                  borderRadius: 8,
++                  padding: 14,
++                  display: 'grid',
++                  gridTemplateColumns: 'minmax(0, 1fr) auto',
++                  gap: 12,
++                  alignItems: 'center',
++                }}
++              >
++                <div>
++                  <div style={{ fontWeight: 700 }}>{item.nomeSocial || item.nome || 'Nome não informado'}</div>
++                  <div style={{ color: '#636e72', fontSize: 13, marginTop: 3 }}>
++                    {formatarCpf(item.cpf)} · {item.corporativoEmail || item.email || 'e-mail não informado'}
++                  </div>
++                  <div style={{ color: item.senhaConfigurada ? '#00b894' : '#d63031', fontSize: 12, marginTop: 5, fontWeight: 700 }}>
++                    {item.senhaConfigurada ? 'Senha configurada' : 'Senha NULL'}
++                  </div>
++                </div>
++                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
++                  <button onClick={() => selectProfessor(item)} style={{ background: '#74b9ff', color: '#fff' }}>Selecionar</button>
++                  <button onClick={() => resetarSenha(item.cpf)} style={{ background: '#ff7675', color: '#fff' }}>Resetar</button>
++                </div>
++              </div>
++            ))}
++          </div>
++        </section>
++
++        <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
++          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Alterar senha por CPF</h2>
++          <form onSubmit={alterarSenha} style={{ display: 'grid', gap: 12 }}>
++            <label style={{ display: 'grid', gap: 6, fontWeight: 700, fontSize: 13 }}>
++              CPF
++              <input
++                value={cpf}
++                onChange={(event) => setCpf(event.target.value)}
++                placeholder="00000000000"
++                inputMode="numeric"
++                required
++              />
++            </label>
++            <label style={{ display: 'grid', gap: 6, fontWeight: 700, fontSize: 13 }}>
++              Nova senha
++              <input
++                value={senha}
++                onChange={(event) => setSenha(event.target.value)}
++                type="password"
++                placeholder="Mínimo de 6 caracteres"
++                minLength={6}
++                required
++              />
++            </label>
++            <button type="submit" style={{ background: '#0984e3', color: '#fff', width: '100%' }}>Alterar senha</button>
++            <button type="button" onClick={() => resetarSenha(cpf)} style={{ background: '#ff7675', color: '#fff', width: '100%' }}>
++              Resetar senha para NULL
++            </button>
++          </form>
++        </section>
++      </div>
++    </div>
++  )
++}
+diff --git a/frontend/src/pages/TurmasPage.tsx b/frontend/src/pages/TurmasPage.tsx
+index 6130989..85f9f8f 100644
+--- a/frontend/src/pages/TurmasPage.tsx
++++ b/frontend/src/pages/TurmasPage.tsx
+@@ -14,6 +14,7 @@ export default function TurmasPage() {
+   const navigate = useNavigate()
+   const professor = JSON.parse(localStorage.getItem('professor') || '{}')
+   const [canViewResultados, setCanViewResultados] = useState(Boolean(professor.permissoes?.resultados))
++  const [canViewSuperadmin, setCanViewSuperadmin] = useState(Boolean(professor.permissoes?.superadmin))
+ 
+   useEffect(() => {
+     api.get('/turmas').then(r => setTurmas(r.data)).finally(() => setLoading(false))
+@@ -22,9 +23,11 @@ export default function TurmasPage() {
+       if (refreshedProfessor) {
+         localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
+         setCanViewResultados(Boolean(refreshedProfessor.permissoes?.resultados))
++        setCanViewSuperadmin(Boolean(refreshedProfessor.permissoes?.superadmin))
+       }
+     }).catch(() => {
+       setCanViewResultados(Boolean(professor.permissoes?.resultados))
++      setCanViewSuperadmin(Boolean(professor.permissoes?.superadmin))
+     })
+   }, [])
+ 
+@@ -45,6 +48,7 @@ export default function TurmasPage() {
+         <div style={{ display: 'flex', gap: 8 }}>
+           <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
+           {canViewResultados && <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>}
++          {canViewSuperadmin && <button onClick={() => navigate('/superadmin')} style={{ background: '#6c5ce7', color: '#fff' }}>Superadmin</button>}
+           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
+         </div>
+       </div>
+-- 
+2.54.0.windows.1
+

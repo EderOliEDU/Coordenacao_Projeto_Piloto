@@ -7,12 +7,16 @@ CREATE TABLE IF NOT EXISTS public.aluno_necessidades_contexto (
   id_turma integer NOT NULL,
   cpf_professor text NOT NULL,
   paee boolean,
+  estudo_caso boolean,
   apoio_pedagogico boolean,
   criada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   atualizada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT aluno_necessidades_contexto_pkey
     PRIMARY KEY (id_aluno, id_turma, cpf_professor)
 );
+
+ALTER TABLE public.aluno_necessidades_contexto
+  ADD COLUMN IF NOT EXISTS estudo_caso boolean;
 
 CREATE TABLE IF NOT EXISTS public.aluno_necessidades_especificas (
   id_aluno_necespecifica bigserial PRIMARY KEY,
