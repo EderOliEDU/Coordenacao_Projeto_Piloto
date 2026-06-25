@@ -3,5 +3,16 @@ dist/
 *.db
 *.db-journal
 .env
+.env.*
+*.env
+*.env.*
 backend/.env
+backend/.env_*
+backend/.env.*
 frontend/.env
+frontend/.env_*
+frontend/.env.*
+
+.codex-backups/
+backup_respostas_*.sql
+out/

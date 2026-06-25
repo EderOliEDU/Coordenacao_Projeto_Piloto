@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/projeto_piloto_app/app"
-PROD_IP="172.17.2.40"
+PROD_IP="192.168.0.122"
 FRONT_PORT="5173"
 BACK_PORT="3001"
 
@@ -19,8 +19,8 @@ echo "==> Subindo PROD em $HOST_IP (frontend :$FRONT_PORT, backend :$BACK_PORT)"
 echo "==> Limpando containers DEV (se existirem)..."
 sudo docker rm -f app-frontend-dev-1 app-backend-dev-1 app-db-dev-1 2>/dev/null || true
 
-echo "==> Subindo stack PROD (build + remove-orphans)..."
-sudo docker compose --profile prod up -d --build --remove-orphans
+echo "==> Subindo stack PROD (build)..."
+sudo docker compose --profile prod up -d --build
 
 echo "==> Containers:"
 sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

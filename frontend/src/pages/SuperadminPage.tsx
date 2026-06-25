@@ -11,26 +11,6 @@ interface ProfessorAdmin {
   senhaConfigurada: boolean
 }
 
-interface AtribuicaoSyncItem {
-  cpf_professor: string
-  professor_nome: string
-  id_turma: number
-  escola_nome: string
-  letra_turma?: string | null
-  turno?: string | null
-}
-
-interface AtribuicaoSyncReport {
-  projeto: string
-  novasAtribuicoes: number
-  atribuicoesExcluidas: number
-  jaExistiam: number
-  pendencias: number
-  pendenciasPorMotivo: Record<string, number>
-  novasAtribuicoesPreview: AtribuicaoSyncItem[]
-  atribuicoesExcluidasPreview: AtribuicaoSyncItem[]
-}
-
 function formatarCpf(cpf: string) {
   const digitos = (cpf || '').replace(/\D/g, '').padStart(11, '0')
   return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
@@ -50,8 +30,6 @@ export default function SuperadminPage() {
   const [senha, setSenha] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [syncLoading, setSyncLoading] = useState(false)
-  const [syncReport, setSyncReport] = useState<AtribuicaoSyncReport | null>(null)
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -107,44 +85,6 @@ export default function SuperadminPage() {
     } catch (err: any) {
       setError(err.response?.data?.error || 'Não foi possível alterar a senha')
     }
-  }
-
-  async function sincronizarAtribuicoes() {
-    if (!window.confirm('Atualizar as atribuicoes de professores a partir das designacoes do projeto PJINSTFONI?')) return
-
-    setSyncLoading(true)
-    setSyncReport(null)
-    setMessage('')
-    setError('')
-    try {
-      const res = await api.post<AtribuicaoSyncReport>('/superadmin/atribuicoes/sincronizar')
-      setSyncReport(res.data)
-      const novas = res.data.novasAtribuicoes
-      const excluidas = res.data.atribuicoesExcluidas
-      if (novas === 0 && excluidas === 0) {
-        setMessage('Atribuicoes atualizadas: nenhuma mudanca necessaria.')
-      } else {
-        setMessage(`Atribuicoes atualizadas: ${novas} nova(s), ${excluidas} excluida(s).`)
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Nao foi possivel atualizar as atribuicoes')
-    } finally {
-      setSyncLoading(false)
-    }
-  }
-
-  function renderSyncItems(items: AtribuicaoSyncItem[]) {
-    if (items.length === 0) return null
-
-    return (
-      <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
-        {items.slice(0, 5).map((item) => (
-          <div key={`${item.cpf_professor}-${item.id_turma}`} style={{ color: '#636e72', fontSize: 13 }}>
-            {item.professor_nome || formatarCpf(item.cpf_professor)} - {item.escola_nome} / turma {item.letra_turma || item.id_turma}
-          </div>
-        ))}
-      </div>
-    )
   }
 
   return (
@@ -249,45 +189,6 @@ export default function SuperadminPage() {
               Resetar senha para NULL
             </button>
           </form>
-        </section>
-
-        <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Atribuicoes</h2>
-          <button
-            type="button"
-            onClick={sincronizarAtribuicoes}
-            disabled={syncLoading}
-            style={{ background: syncLoading ? '#b2bec3' : '#00b894', color: '#fff', width: '100%' }}
-          >
-            {syncLoading ? 'Atualizando...' : 'Atualizar atribuicoes'}
-          </button>
-
-          {syncReport && (
-            <div style={{ marginTop: 14, padding: 12, borderRadius: 8, border: '1px solid #dfe6e9', background: '#f8fafb' }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Resultado da atualizacao</div>
-              <div style={{ display: 'grid', gap: 5, color: '#2d3436', fontSize: 14 }}>
-                <div>Projeto: {syncReport.projeto}</div>
-                <div>Novas atribuicoes: {syncReport.novasAtribuicoes}</div>
-                <div>Atribuicoes excluidas: {syncReport.atribuicoesExcluidas}</div>
-                <div>Ja existiam: {syncReport.jaExistiam}</div>
-                <div>Pendencias ignoradas: {syncReport.pendencias}</div>
-              </div>
-
-              {syncReport.novasAtribuicoes > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Criadas</div>
-                  {renderSyncItems(syncReport.novasAtribuicoesPreview)}
-                </div>
-              )}
-
-              {syncReport.atribuicoesExcluidas > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Excluidas</div>
-                  {renderSyncItems(syncReport.atribuicoesExcluidasPreview)}
-                </div>
-              )}
-            </div>
-          )}
         </section>
       </div>
     </div>

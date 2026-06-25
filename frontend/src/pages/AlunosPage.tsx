@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 
@@ -14,6 +14,7 @@ export default function AlunosPage() {
   const [professorNome, setProfessorNome] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [cronogramaPreenchido, setCronogramaPreenchido] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -24,20 +25,32 @@ export default function AlunosPage() {
       setError(null)
 
       try {
-        const [alunosRes, turmasRes, meRes] = await Promise.all([
-          api.get(`/turmas/${turmaId}/alunos`),
+        const [cronogramaRes, turmasRes, meRes] = await Promise.all([
+          api.get(`/cronogramas/${turmaId}`),
           api.get('/turmas'),
           api.get('/auth/me').catch(() => ({ data: null })),
         ])
         if (!active) return
-        setAlunos(Array.isArray(alunosRes.data) ? alunosRes.data : [])
+        const preenchido = Boolean(cronogramaRes.data?.preenchido)
+        setCronogramaPreenchido(preenchido)
         setTurma((Array.isArray(turmasRes.data) ? turmasRes.data : []).find((item: Turma) => item.id === turmaId) || null)
         setProfessorNome(meRes.data?.professor?.nome || JSON.parse(localStorage.getItem('professor') || '{}').nome || '')
 
+        if (!preenchido) {
+          setAlunos([])
+          setSubmissoes([])
+          return
+        }
+
         try {
-          const subRes = await api.get(`/submissoes?turmaId=${turmaId}`)
+          const [alunosRes, subRes] = await Promise.all([
+            api.get(`/turmas/${turmaId}/alunos`),
+            api.get(`/submissoes?turmaId=${turmaId}`),
+          ])
+          if (active) setAlunos(Array.isArray(alunosRes.data) ? alunosRes.data : [])
           if (active) setSubmissoes(Array.isArray(subRes.data) ? subRes.data : [])
         } catch {
+          if (active) setAlunos([])
           if (active) setSubmissoes([])
         }
       } catch (err: any) {
@@ -80,7 +93,7 @@ export default function AlunosPage() {
               <span>Prefeitura Municipal de Rondonópolis</span>
             </div>
           </div>
-          <button onClick={() => navigate('/turmas')} className="secondary-btn">Voltar</button>
+          <button onClick={() => navigate(`/turmas/${turmaId}/cronograma`)} className="secondary-btn">Voltar ao cronograma</button>
         </div>
       </header>
 
@@ -100,7 +113,15 @@ export default function AlunosPage() {
 
         {loading && <p className="loading-text">Carregando...</p>}
         {!loading && error && <p className="error-text">{error}</p>}
-        {!loading && !error && alunos.length === 0 && <p className="empty-state">Nenhum aluno encontrado nesta turma.</p>}
+        {!loading && !error && !cronogramaPreenchido && (
+          <div className="section-card">
+            <p className="error-text">Preencha e salve o cronograma da turma antes de escolher um aluno.</p>
+            <button onClick={() => navigate(`/turmas/${turmaId}/cronograma`)} className="primary-btn">
+              Preencher cronograma
+            </button>
+          </div>
+        )}
+        {!loading && !error && cronogramaPreenchido && alunos.length === 0 && <p className="empty-state">Nenhum aluno encontrado nesta turma.</p>}
 
         <div className="card-list">
           {alunos.map(aluno => {

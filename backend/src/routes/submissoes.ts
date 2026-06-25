@@ -11,7 +11,7 @@ const STATUS_FINALIZADO = 'FINALIZADO'
 
 const salvarRespostaSchema = z.object({
   formularioId: z.string().min(1),
-  escolaId: z.string().min(1).optional(), // vindo do frontend, não usamos no PG agora
+  escolaId: z.string().min(1).optional(), // recebido do frontend; mantido para compatibilidade
   turmaId: z.string().min(1),
   alunoId: z.string().min(1),
   observacoes: z.string().optional(),

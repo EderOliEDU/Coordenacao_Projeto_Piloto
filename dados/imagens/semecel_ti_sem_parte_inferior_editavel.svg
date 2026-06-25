@@ -1,0 +1,46 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="420" viewBox="0 165 1600 420">
+  <defs>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity=".18"/>
+    </filter>
+    
+  </defs>
+  <rect x="0" y="0" width="1600" height="900" fill="#ffffff"/>
+  
+  
+    <g fill="none" stroke="#0079bd" stroke-width="3" opacity=".16" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M60 190 H220 L300 270 H500"/>
+      <path d="M1100 190 H1240 L1320 270 H1530"/>
+      <path d="M1060 360 H1230 L1300 300 H1430"/>
+      <path d="M1120 460 H1270 L1360 380 H1510"/>
+      <circle cx="220" cy="190" r="7"/><circle cx="500" cy="270" r="5"/>
+      <circle cx="1240" cy="190" r="7"/><circle cx="1430" cy="300" r="7"/>
+      <circle cx="1270" cy="460" r="7"/>
+    </g>
+    <g opacity="0.10" fill="#0079bd"><circle cx="1340" cy="225" r="3"/><circle cx="1362" cy="225" r="3"/><circle cx="1384" cy="225" r="3"/><circle cx="1406" cy="225" r="3"/><circle cx="1428" cy="225" r="3"/><circle cx="1450" cy="225" r="3"/><circle cx="1472" cy="225" r="3"/><circle cx="1494" cy="225" r="3"/><circle cx="1340" cy="247" r="3"/><circle cx="1362" cy="247" r="3"/><circle cx="1384" cy="247" r="3"/><circle cx="1406" cy="247" r="3"/><circle cx="1428" cy="247" r="3"/><circle cx="1450" cy="247" r="3"/><circle cx="1472" cy="247" r="3"/><circle cx="1494" cy="247" r="3"/><circle cx="1340" cy="269" r="3"/><circle cx="1362" cy="269" r="3"/><circle cx="1384" cy="269" r="3"/><circle cx="1406" cy="269" r="3"/><circle cx="1428" cy="269" r="3"/><circle cx="1450" cy="269" r="3"/><circle cx="1472" cy="269" r="3"/><circle cx="1494" cy="269" r="3"/><circle cx="1340" cy="291" r="3"/><circle cx="1362" cy="291" r="3"/><circle cx="1384" cy="291" r="3"/><circle cx="1406" cy="291" r="3"/><circle cx="1428" cy="291" r="3"/><circle cx="1450" cy="291" r="3"/><circle cx="1472" cy="291" r="3"/><circle cx="1494" cy="291" r="3"/><circle cx="35" cy="245" r="2.5"/><circle cx="55" cy="245" r="2.5"/><circle cx="75" cy="245" r="2.5"/><circle cx="95" cy="245" r="2.5"/><circle cx="115" cy="245" r="2.5"/><circle cx="135" cy="245" r="2.5"/><circle cx="155" cy="245" r="2.5"/><circle cx="35" cy="265" r="2.5"/><circle cx="55" cy="265" r="2.5"/><circle cx="75" cy="265" r="2.5"/><circle cx="95" cy="265" r="2.5"/><circle cx="115" cy="265" r="2.5"/><circle cx="135" cy="265" r="2.5"/><circle cx="155" cy="265" r="2.5"/><circle cx="35" cy="285" r="2.5"/><circle cx="55" cy="285" r="2.5"/><circle cx="75" cy="285" r="2.5"/><circle cx="95" cy="285" r="2.5"/><circle cx="115" cy="285" r="2.5"/><circle cx="135" cy="285" r="2.5"/><circle cx="155" cy="285" r="2.5"/><circle cx="35" cy="305" r="2.5"/><circle cx="55" cy="305" r="2.5"/><circle cx="75" cy="305" r="2.5"/><circle cx="95" cy="305" r="2.5"/><circle cx="115" cy="305" r="2.5"/><circle cx="135" cy="305" r="2.5"/><circle cx="155" cy="305" r="2.5"/></g>
+  <g filter="url(#softShadow)">
+    <rect x="115" y="230" width="1370" height="330" rx="55" fill="none" stroke="#0079bd" stroke-width="3" opacity=".75"/>
+    <path d="M1320 560 H1430 Q1485 560 1485 505" fill="none" stroke="#12d7c3" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+  </g>
+  
+    <g transform="translate(240,300) scale(1.28)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="0" width="170" height="118" rx="12" stroke="#0079bd" stroke-width="12"/>
+      <path d="M70 118 V145 M42 145 H128" stroke="#0079bd" stroke-width="10"/>
+      <circle cx="85" cy="58" r="30" stroke="#12d7c3" stroke-width="10"/>
+      <g stroke="#12d7c3" stroke-width="12">
+        <path d="M85 15 V0"/><path d="M85 116 V101"/><path d="M42 58 H25"/><path d="M145 58 H128"/>
+        <path d="M55 28 L44 17"/><path d="M126 99 L115 88"/><path d="M55 88 L44 99"/><path d="M126 17 L115 28"/>
+      </g>
+      <g stroke="#0079bd" stroke-width="5">
+        <path d="M-38 30 H35"/><path d="M-38 58 H20"/><path d="M-38 86 H35"/>
+        <circle cx="-38" cy="30" r="8"/><circle cx="-38" cy="58" r="8"/><circle cx="-38" cy="86" r="8"/>
+      </g>
+    </g>
+  <g font-family="DejaVu Sans, Arial, sans-serif" text-anchor="start">
+    <text x="620" y="315" font-size="30" font-weight="600" letter-spacing="16" fill="#0079bd">DESENVOLVIDO POR</text>
+    <line x1="520" y1="305" x2="590" y2="305" stroke="#12d7c3" stroke-width="3" opacity=".75"/>
+    <line x1="1030" y1="305" x2="1100" y2="305" stroke="#12d7c3" stroke-width="3" opacity=".75"/>
+    <text x="485" y="455" font-size="120" font-weight="800" letter-spacing="7" fill="#0079bd">SEMECEL</text>
+    <text x="490" y="515" font-size="38" font-weight="400" fill="#252b33">Superintendência de Tecnologia da Informação</text>
+  </g>
+</svg>

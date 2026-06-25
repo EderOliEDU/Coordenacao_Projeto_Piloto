@@ -1,0 +1,89 @@
+@startuml banco-postgresql-dbsemecel
+' Gerado automaticamente a partir de dbsemecel/public.
+' Fonte: catalogo PostgreSQL em information_schema.
+skinparam ClassBackgroundColor white
+skinparam ClassBorderColor #1a365d
+skinparam ClassHeaderBackgroundColor #edf2f7
+skinparam Shadowing false
+package "Necessidades Especificas" {
+  class "aluno_necessidades_contexto" as ANC {
+    id_aluno (PK)
+    id_turma (PK)
+    cpf_professor (PK)
+    --
+    paee
+    apoio_pedagogico
+    criada_em
+    atualizada_em
+  }
+  class "aluno_necessidades_especificas" as ANE {
+    id_aluno_necespecifica (PK)
+    --
+    id_aluno
+    id_turma
+    cpf_professor
+    id_necespecifica (FK)
+    tipo
+    descricao_outros
+    criada_em
+  }
+  class "necessidades_específicas" as NE {
+    id_necespecifica (PK)
+    --
+    descrição
+    paee
+  }
+}
+package "Nucleo Administrativo" {
+  class "alunos" as A {
+    id_aluno (PK)
+    --
+    escola
+    serie
+    turma
+    turno
+    inep
+    nome
+    cpf
+    situacao
+  }
+  class "atribuicao_professor" as AP {
+    id_atribuicao (PK)
+    --
+    cpf_professor
+    id_turma (FK)
+  }
+  class "enturmacao_aluno" as EA {
+    id_enturmacao (PK)
+    --
+    id_turma (FK)
+    id_aluno (FK)
+  }
+  class "escolas" as E {
+    id_escola (PK)
+    --
+    nome_escola
+    projeto
+  }
+  class "etapas" as E_2 {
+    id_etapa (PK)
+    --
+    descricao
+    projeto
+  }
+  class "multietapas" as M {
+    id_multi_etapa (PK)
+    --
+    descricao
+    id_etapa_1 (FK)
+    id_etapa_2 (FK)
+    id_etapa_3 (FK)
+    id_etapa_4 (FK)
+    id_etapa_5 (FK)
+  }
+  class "professores" as P {
+    profissional_cpf (PK)
+    --
+    profissional_nome
+    profissional_nome_social
+    profissional_dt_nascimento

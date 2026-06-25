@@ -4,7 +4,6 @@ import { getPgPool } from '../services/pgPool'
 
 const router = Router()
 router.use(authMiddleware)
-
 function ordenarOpcoesEscala(tipo: string, opcoes: any[]) {
   if (tipo !== 'PEA') return opcoes
 
@@ -35,13 +34,8 @@ router.get('/ativo', async (_req: Request, res: Response) => {
       pool.query(`SELECT id_grupo, nome_grupo FROM public.avaliacao_grupos ORDER BY id_grupo`),
       pool.query(`
         SELECT id_pergunta, id_grupo, texto_pergunta, tipo_escala
-        FROM public.avaliacao_perguntas p
-        WHERE NULLIF(BTRIM(p.tipo_escala::text), '') IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM public.avaliacao_opcoes o
-            WHERE BTRIM(o.tipo_escala::text) = BTRIM(p.tipo_escala::text)
-          )
+        FROM public.avaliacao_perguntas
+        WHERE NULLIF(BTRIM(tipo_escala::text), '') IS NOT NULL
         ORDER BY id_grupo, id_pergunta
       `),
       pool.query(`SELECT id_opcao, tipo_escala, sigla, descricao, cor_hex, simbolo FROM public.avaliacao_opcoes ORDER BY tipo_escala, id_opcao`),
@@ -54,7 +48,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
       arr.push({
         id: String(o.id_opcao),
         chave: o.sigla ?? '',
-        rotuloUI: o.simbolo ?? o.sigla ?? '',
+        rotuloUI: o.sigla ?? '',
         corHex: o.cor_hex ?? null,
         descricaoLegenda: o.descricao ?? '',
         ordem: Number(o.id_opcao),
@@ -95,7 +89,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
 
     const formulario = {
       id: 'PG_V1',
-      nome: 'Formulário Piloto EI',
+      nome: 'Enfoque de observação',
       versao: '1.0.0',
       secoes,
     }

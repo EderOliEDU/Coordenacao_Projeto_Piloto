@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -52,68 +52,80 @@ export default function PendenciasPage() {
   }, [turmaId])
 
   return (
-    <div style={{ maxWidth: 980, margin: '0 auto', padding: '32px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>← Voltar</button>
-        <h1 style={{ margin: 0, fontSize: 22 }}>Pendências do Questionário</h1>
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <select
-          value={turmaId}
-          onChange={(e) => setTurmaId(e.target.value)}
-          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #dfe6e9', minWidth: 260 }}
-        >
-          <option value="">Todas as turmas</option>
-          {turmas.map((turma) => (
-            <option key={turma.id} value={turma.id}>{turma.nome}</option>
-          ))}
-        </select>
-      </div>
-
-      {loading && <p>Carregando pendências...</p>}
-
-      {!loading && (
-        <>
-          <div style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 18, marginBottom: 10 }}>Alunos sem finalização ({semFinalizacao.length})</h2>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {semFinalizacao.map((item) => (
-                <div key={`${item.turmaId}-${item.alunoId}`} style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 10, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{item.alunoNome}</div>
-                    <div style={{ color: '#636e72', fontSize: 13 }}>{item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas</div>
-                  </div>
-                  <button onClick={() => navigate(`/turmas/${item.turmaId}/alunos/${item.alunoId}/formulario`)} style={{ background: '#0984e3', color: '#fff' }}>
-                    Abrir questionário
-                  </button>
-                </div>
-              ))}
-              {semFinalizacao.length === 0 && <p style={{ color: '#636e72' }}>Sem pendências de finalização.</p>}
+    <div className="app-shell">
+      <header className="app-topbar">
+        <div className="topbar-inner">
+          <div className="topbar-brand">
+            <img className="mini-mark" src="/semecel_logo_horizontal_editavel.svg" alt="Prefeitura de Rondonópolis e SEMECEL" />
+            <div>
+              <strong>Projeto Instrução Fônica</strong>
+              <span>Prefeitura Municipal de Rondonópolis</span>
             </div>
           </div>
+          <button onClick={() => navigate('/turmas')} className="secondary-btn">Voltar</button>
+        </div>
+      </header>
 
-          <div>
-            <h2 style={{ fontSize: 18, marginBottom: 10 }}>Rascunhos ({rascunhos.length})</h2>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {rascunhos.map((item) => (
-                <div key={item.submissaoId} style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 10, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{item.alunoNome}</div>
-                    <div style={{ color: '#636e72', fontSize: 13 }}>
-                      {item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas · atualizado em {formatarData(item.atualizadaEm)}
+      <main className="page">
+        <div className="page-header">
+          <div className="page-title">
+            <h1>Pendências do questionário</h1>
+            <p>Acompanhe formulários em rascunho e estudantes sem finalização.</p>
+          </div>
+          <div style={{ minWidth: 260 }}>
+            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)}>
+              <option value="">Todas as turmas</option>
+              {turmas.map((turma) => (
+                <option key={turma.id} value={turma.id}>{turma.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {loading && <p className="loading-text">Carregando pendências...</p>}
+
+        {!loading && (
+          <>
+            <section className="section-card">
+              <h2>Alunos sem finalização ({semFinalizacao.length})</h2>
+              <div className="card-list">
+                {semFinalizacao.map((item) => (
+                  <div key={`${item.turmaId}-${item.alunoId}`} className="data-card split-card">
+                    <div>
+                      <div className="card-title">{item.alunoNome}</div>
+                      <div className="card-meta">{item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas</div>
                     </div>
+                    <button onClick={() => navigate(`/turmas/${item.turmaId}/alunos/${item.alunoId}/formulario`)} className="primary-btn">
+                      Abrir questionário
+                    </button>
                   </div>
-                  <button onClick={() => navigate(`/turmas/${item.turmaId}/alunos/${item.alunoId}/formulario`)} style={{ background: '#fdcb6e', color: '#2d3436' }}>
-                    Retomar
-                  </button>
-                </div>
-              ))}
-              {rascunhos.length === 0 && <p style={{ color: '#636e72' }}>Nenhum rascunho encontrado.</p>}
-            </div>
-          </div>
-        </>
-      )}
+                ))}
+                {semFinalizacao.length === 0 && <p className="empty-state">Sem pendências de finalização.</p>}
+              </div>
+            </section>
+
+            <section className="section-card">
+              <h2>Rascunhos ({rascunhos.length})</h2>
+              <div className="card-list">
+                {rascunhos.map((item) => (
+                  <div key={item.submissaoId} className="data-card split-card">
+                    <div>
+                      <div className="card-title">{item.alunoNome}</div>
+                      <div className="card-meta">
+                        {item.turmaNome} · {item.totalRespondidas}/{item.totalPerguntas} respostas · atualizado em {formatarData(item.atualizadaEm)}
+                      </div>
+                    </div>
+                    <button onClick={() => navigate(`/turmas/${item.turmaId}/alunos/${item.alunoId}/formulario`)} className="warning-btn">
+                      Retomar
+                    </button>
+                  </div>
+                ))}
+                {rascunhos.length === 0 && <p className="empty-state">Nenhum rascunho encontrado.</p>}
+              </div>
+            </section>
+          </>
+        )}
+      </main>
     </div>
   )
 }

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" role="img" aria-labelledby="title desc">
+  <title id="title">Logomarca Instrução Fônica</title>
+  <desc id="desc">Logomarca em cartão retangular branco, borda azul, canto dobrado, ícone de livro aberto e balão sonoro colorido, com texto Instrução Fônica.</desc>
+
+  <defs>
+    <linearGradient id="blueText" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A2C8F"/>
+      <stop offset="55%" stop-color="#006BE6"/>
+      <stop offset="100%" stop-color="#008CFF"/>
+    </linearGradient>
+    <linearGradient id="cardBorder" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A2C8F"/>
+      <stop offset="100%" stop-color="#0078E8"/>
+    </linearGradient>
+    <clipPath id="cardClip">
+      <rect x="45" y="42" width="810" height="216" rx="36"/>
+    </clipPath>
+    <filter id="softShadow" x="-15%" y="-20%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#0B3B7A" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Cartão principal -->
+  <rect x="45" y="42" width="810" height="216" rx="36" fill="#FFFFFF" stroke="url(#cardBorder)" stroke-width="8" filter="url(#softShadow)"/>
+
+  <!-- Canto dobrado sem ponta externa, recortado dentro do cartão -->
+  <g clip-path="url(#cardClip)">
+    <path d="M742 42 H855 V155 Z" fill="#006AD6" opacity="0.95"/>
+    <path d="M742 42 L855 155 V42 Z" fill="#0A63C7"/>
+    <path d="M742 42 L855 155 L817 155 L742 80 Z" fill="#1E8BEA" opacity="0.28"/>
+  </g>
+
+
+  <!-- Livro aberto -->
+  <g transform="translate(88 91)">
+    <path d="M30 118 C68 92, 111 92, 152 116 V132 C108 108, 68 108, 30 128 Z" fill="#006BDB"/>
+    <path d="M154 116 C195 92, 238 92, 276 118 V128 C238 108, 198 108, 154 132 Z" fill="#0084F0"/>
+    <path d="M30 136 C78 121, 113 123, 152 143" fill="none" stroke="#0A2C8F" stroke-width="12" stroke-linecap="round"/>
+    <path d="M154 143 C193 123, 228 121, 276 136" fill="none" stroke="#0A2C8F" stroke-width="12" stroke-linecap="round"/>
+    <path d="M152 116 Q153 128 153 143" fill="none" stroke="#0A2C8F" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- Balão de fala com ondas sonoras -->
+  <g transform="translate(118 47)">
+    <path d="M103 34 C152 34, 191 66, 191 106 C191 144, 158 175, 115 178 L101 201 L87 176 C42 169, 9 139, 9 106 C9 66, 54 34, 103 34 Z" fill="#FFFFFF" stroke="#0A2C8F" stroke-width="9"/>
+    <rect x="51" y="100" width="13" height="42" rx="7" fill="#F04A24"/>
+    <rect x="77" y="77" width="13" height="88" rx="7" fill="#FFB300"/>
+    <rect x="103" y="93" width="13" height="58" rx="7" fill="#00A65A"/>
+    <rect x="129" y="106" width="13" height="32" rx="7" fill="#0078E8"/>
+  </g>
+
+  <!-- Texto -->
+  <g font-family="Montserrat, Poppins, Arial, Helvetica, sans-serif" font-weight="800" letter-spacing="2">
+    <text x="385" y="127" fill="#0A2C8F" font-size="52">INSTRUÇÃO</text>
+    <text x="382" y="208" fill="url(#blueText)" font-size="86">FÔNICA</text>
+  </g>
+
+  <!-- Linha decorativa inferior -->
+  <path d="M382 226 H763" stroke="#0A2C8F" stroke-width="5" stroke-linecap="round" opacity="0.16"/>
+</svg>
