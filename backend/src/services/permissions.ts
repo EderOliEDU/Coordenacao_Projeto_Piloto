@@ -1,4 +1,5 @@
 export interface UserPermissions {
+  administrador: boolean
   resultados: boolean
   superadmin: boolean
 }
@@ -25,9 +26,14 @@ export function isSuperadmin(cpf: string) {
   return [...defaultSuperadmins, ...envSuperadmins].includes(normalizarCpf(cpf))
 }
 
+export function isAdministrador(cpf: string) {
+  return canViewResultados(cpf) || isSuperadmin(cpf)
+}
+
 export function getUserPermissions(cpf: string): UserPermissions {
   return {
-    resultados: canViewResultados(cpf),
+    administrador: isAdministrador(cpf),
+    resultados: isAdministrador(cpf),
     superadmin: isSuperadmin(cpf),
   }
 }

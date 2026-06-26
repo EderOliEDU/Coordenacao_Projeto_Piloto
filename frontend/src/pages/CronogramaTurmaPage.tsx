@@ -24,6 +24,14 @@ interface CronogramaResponse {
 export default function CronogramaTurmaPage() {
   const { turmaId } = useParams<{ turmaId: string }>()
   const navigate = useNavigate()
+  const viewAs = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+    } catch {
+      return null
+    }
+  })()
+  const readOnly = Boolean(viewAs?.cpf)
   const [dados, setDados] = useState<CronogramaResponse | null>(null)
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -118,6 +126,12 @@ export default function CronogramaTurmaPage() {
       </header>
 
       <main className="page cronograma-page">
+        {readOnly && (
+          <div className="auth-alert" style={{ color: '#6d4c00', background: '#fff7d6', borderColor: '#f2c230' }}>
+            Modo conferência somente leitura: visualizando {viewAs.nome || viewAs.cpf}. Alterações estão bloqueadas.
+          </div>
+        )}
+
         <div className="page-header">
           <div className="page-title">
             <p className="eyebrow">Andamento da turma</p>
@@ -182,10 +196,10 @@ export default function CronogramaTurmaPage() {
             {mensagem && <p className="success-text">{mensagem}</p>}
 
             <div className="cronograma-actions">
-              <button onClick={() => salvar(false)} disabled={salvando} className="secondary-btn">
+              <button onClick={() => salvar(false)} disabled={salvando || readOnly} className="secondary-btn">
                 {salvando ? 'Salvando...' : 'Salvar alterações'}
               </button>
-              <button onClick={() => salvar(true)} disabled={salvando} className="primary-btn">
+              <button onClick={() => salvar(true)} disabled={salvando || readOnly} className="primary-btn">
                 {salvando ? 'Salvando...' : 'Salvar e escolher aluno'}
               </button>
             </div>

@@ -7,6 +7,14 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  let viewAs: any = null
+  try {
+    viewAs = JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+  } catch {
+    localStorage.removeItem('viewAsProfessor')
+  }
+  const viewAsCpf = String(viewAs?.cpf || '').replace(/\D/g, '')
+  if (viewAsCpf) config.headers['X-View-As-Cpf'] = viewAsCpf
   return config
 })
 
@@ -19,6 +27,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('token')
       localStorage.removeItem('professor')
+      localStorage.removeItem('viewAsProfessor')
       window.location.href = '/login'
     }
     return Promise.reject(error)

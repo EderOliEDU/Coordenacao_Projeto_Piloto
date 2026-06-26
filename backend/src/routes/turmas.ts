@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
+import { isAdministrador } from '../services/permissions'
 import { getPgPool } from '../services/pgPool'
 
 const router = Router()
@@ -15,8 +16,10 @@ router.use(authMiddleware)
  */
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = (req.professor?.login ?? '').replace(/\D/g, '')
+    const authenticatedCpf = getAuthenticatedCpf(req)
+    const cpf = getEffectiveProfessorCpf(req)
     if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
+    const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
 
     const pool = getPgPool()
 
@@ -38,18 +41,18 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         e.nome_escola::text                                AS escola_nome,
         et.descricao::text                                 AS etapa_descricao,
         COUNT(DISTINCT ea.id_aluno)::text                  AS alunos_count
-      FROM public.atribuicao_professor ap
-      JOIN public.turmas t ON t.id_turma = ap.id_turma
+      FROM public.turmas t
       JOIN public.escolas e ON e.id_escola = t.id_escola
       JOIN public.etapas et ON et.id_etapa = t.id_etapa
+      LEFT JOIN public.atribuicao_professor ap ON ap.id_turma = t.id_turma
       LEFT JOIN public.enturmacao_aluno ea ON ea.id_turma = t.id_turma
-      WHERE ap.cpf_professor = $1
+      WHERE ($2::boolean = true OR regexp_replace(ap.cpf_professor, '\\D', '', 'g') = $1)
         AND e.projeto = 'PJINSTFONI'
         AND et.projeto = 'PJINSTFONI'
       GROUP BY t.id_turma, t.letra_turma, t.turno, e.id_escola, e.nome_escola, et.descricao
       ORDER BY e.nome_escola NULLS LAST, et.descricao NULLS LAST, t.letra_turma NULLS LAST, t.id_turma;
       `,
-      [cpf]
+      [cpf, canViewAll]
     )
 
     const turmas = rows.map((r) => ({
@@ -73,8 +76,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
   try {
     const turmaId = req.params.id
-    const cpf = (req.professor?.login ?? '').replace(/\D/g, '')
+    const authenticatedCpf = getAuthenticatedCpf(req)
+    const cpf = getEffectiveProfessorCpf(req)
     if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
+    const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
 
     const pool = getPgPool()
 
@@ -86,13 +91,13 @@ router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
       JOIN public.turmas t ON t.id_turma = ap.id_turma
       JOIN public.escolas e ON e.id_escola = t.id_escola
       JOIN public.etapas et ON et.id_etapa = t.id_etapa
-      WHERE ap.cpf_professor = $1
+      WHERE ($3::boolean = true OR regexp_replace(ap.cpf_professor, '\\D', '', 'g') = $1)
         AND ap.id_turma::text = $2
         AND e.projeto = 'PJINSTFONI'
         AND et.projeto = 'PJINSTFONI'
       LIMIT 1
       `,
-      [cpf, turmaId]
+      [cpf, turmaId, canViewAll]
     )
     if (check.rowCount === 0) {
       return res.status(403).json({ error: 'Acesso negado a esta turma' })

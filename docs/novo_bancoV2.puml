@@ -1,0 +1,312 @@
+@startuml banco-postgresql-dbsemecel
+' Gerado automaticamente a partir de dbsemecel/public.
+' Fonte: catalogo PostgreSQL em information_schema.
+skinparam ClassBackgroundColor white
+skinparam ClassBorderColor #1a365d
+skinparam ClassHeaderBackgroundColor #edf2f7
+skinparam Shadowing false
+
+package "Necessidades Especificas" {
+  class "aluno_necessidades_contexto" as ANC {
+    id_aluno (PK)
+    id_turma (PK)
+    cpf_professor (PK)
+    --
+    paee
+    apoio_pedagogico
+    criada_em
+    atualizada_em
+  }
+
+  class "aluno_necessidades_especificas" as ANE {
+    id_aluno_necespecifica (PK)
+    --
+    id_necespecifica (FK)
+    id_aluno
+    id_turma
+    cpf_professor
+    tipo
+    descricao_outros
+    criada_em
+  }
+
+  class "necessidades_específicas" as NE {
+    id_necespecifica (PK)
+    --
+    descrição
+    paee
+  }
+
+}
+
+package "Nucleo Administrativo" {
+  class "alunos" as A {
+    id_aluno (PK)
+    --
+    escola
+    serie
+    turma
+    turno
+    inep
+    nome
+    cpf
+    situacao
+  }
+
+  class "atribuicao_professor" as AP {
+    id_atribuicao (PK)
+    --
+    id_turma (FK)
+    cpf_professor
+  }
+
+  class "enturmacao_aluno" as EA {
+    id_enturmacao (PK)
+    --
+    id_turma (FK)
+    id_aluno (FK)
+  }
+
+  class "escolas" as E {
+    id_escola (PK)
+    --
+    nome_escola
+    projeto
+    codigo_inep
+    uf
+    municipio
+    restricao_atendimento
+    localizacao
+    localidade_diferenciada
+    categoria_administrativa
+    endereco
+    telefone
+    dependencia_administrativa
+    categoria_escola_privada
+    demais_campos_adicionais_8
+  }
+
+  class "etapas" as E_2 {
+    id_etapa (PK)
+    --
+    descricao
+    projeto
+  }
+
+  class "multietapas" as M {
+    id_multi_etapa (PK)
+    --
+    id_etapa_1 (FK)
+    id_etapa_2 (FK)
+    id_etapa_3 (FK)
+    id_etapa_4 (FK)
+    id_etapa_5 (FK)
+    descricao
+  }
+
+  class "professores" as P {
+    profissional_cpf (PK)
+    --
+    profissional_nome
+    profissional_dt_nascimento
+    profissional_e_mail
+    senha
+    senha_temporaria
+    senha_cadastro_token
+    senha_cadastro_expira_em
+    profissional_nome_social
+    profissional_ds_logradouro_res
+    profissional_bairro_res
+    profissional_nu_endereco_res
+    profissional_cep_res
+    profissional_co_municipio_res
+    demais_campos_adicionais_37
+  }
+
+  class "turmas" as T {
+    id_turma (PK)
+    --
+    id_escola (FK)
+    id_etapa (FK)
+    id_multi_etapa (FK)
+    letra_turma
+    turno
+  }
+
+}
+
+package "Outras Tabelas" {
+  class "alunos_temp" as AT {
+    dados
+  }
+
+  class "cronograma_aplicacao" as CA {
+    id_cronograma_aplicacao
+    tema
+    id_etapa
+    ordem
+  }
+
+  class "temp_de_para_work" as TDPW {
+    id_row (PK)
+    --
+    turma_original
+    id_multi_etapas
+    id_etapas
+    turma_corrigida
+    obs
+  }
+
+  class "turma_cronograma_aplicacao" as TCA {
+    id_turma (PK/FK)
+    id_cronograma_aplicacao (PK)
+    --
+    cpf_professor
+    atualizado_em
+  }
+
+}
+
+package "Avaliacao" {
+  class "avaliacao_grupos" as AG {
+    id_grupo (PK)
+    --
+    nome_grupo
+  }
+
+  class "avaliacao_opcoes" as AO {
+    id_opcao (PK)
+    --
+    tipo_escala
+    sigla
+    descricao
+    cor_hex
+    simbolo
+  }
+
+  class "avaliacao_perguntas" as AP_2 {
+    id_pergunta (PK)
+    --
+    id_grupo (FK)
+    texto_pergunta
+    tipo_escala
+  }
+
+  class "avaliacao_respostas" as AR {
+    id_resposta (PK)
+    --
+    id_aluno (FK)
+    cpf_professor (FK)
+    id_pergunta (FK)
+    id_opcao (FK)
+    data_avaliacao
+    status
+    observacao
+  }
+
+}
+
+package "Importacao e De-Para" {
+  class "de_para_escolas" as DPE {
+    escola_original (PK)
+    --
+    id_escola
+    escola_corrigida
+    obs
+  }
+
+  class "de_para_turmas" as DPT {
+    turma_original
+    id_multi_etapas
+    id_etapas
+    turma_corrigida
+    obs
+  }
+
+  class "designacoes" as D {
+    id_designacao (PK)
+    --
+    escola_nome_bruto
+    nome_do_professor
+    turma_original
+  }
+
+  class "import_alunos_csv_staging" as IACS {
+    id_import (PK)
+    --
+    escola_original
+    serie_original
+    turma_original
+    turno_original
+    nome
+    cpf
+    id_escola
+    id_etapa
+    id_turma
+    id_aluno
+    status_importacao
+    inep
+    situacao
+    demais_campos_adicionais_6
+  }
+
+}
+
+package "Submissoes" {
+  class "submissoes_pg" as SP {
+    id (PK)
+    --
+    cpf_professor (FK)
+    id_turma (FK)
+    id_aluno (FK)
+    formulario_id
+    status
+    observacoes
+    criada_em
+    atualizada_em
+  }
+
+}
+
+' Relacionamentos
+ANE --> NE : "id_necespecifica -> id_necespecifica"
+AP --> T : "id_turma -> id_turma"
+AP_2 --> AG : "id_grupo -> id_grupo"
+AR --> P : "cpf_professor -> profissional_cpf"
+AR --> A : "id_aluno -> id_aluno"
+AR --> AO : "id_opcao -> id_opcao"
+AR --> AP_2 : "id_pergunta -> id_pergunta"
+EA --> A : "id_aluno -> id_aluno"
+EA --> T : "id_turma -> id_turma"
+M --> E_2 : "id_etapa_1 -> id_etapa"
+M --> E_2 : "id_etapa_2 -> id_etapa"
+M --> E_2 : "id_etapa_3 -> id_etapa"
+M --> E_2 : "id_etapa_4 -> id_etapa"
+M --> E_2 : "id_etapa_5 -> id_etapa"
+SP --> P : "cpf_professor -> profissional_cpf"
+SP --> A : "id_aluno -> id_aluno"
+SP --> T : "id_turma -> id_turma"
+TCA --> T : "id_turma -> id_turma"
+T --> E : "id_escola -> id_escola"
+T --> E_2 : "id_etapa -> id_etapa"
+T --> M : "id_multi_etapa -> id_multi_etapa"
+
+' Relacionamentos inferidos pelo uso no sistema
+AP ..> P : "cpf_professor -> profissional_cpf"
+ANC ..> A : "id_aluno -> id_aluno"
+ANC ..> T : "id_turma -> id_turma"
+ANC ..> P : "cpf_professor -> profissional_cpf"
+ANE ..> A : "id_aluno -> id_aluno"
+ANE ..> T : "id_turma -> id_turma"
+ANE ..> P : "cpf_professor -> profissional_cpf"
+DPE ..> E : "id_escola -> id_escola"
+DPT ..> E_2 : "id_etapas -> id_etapa"
+DPT ..> M : "id_multi_etapas -> id_multi_etapa"
+CA ..> E_2 : "id_etapa -> id_etapa"
+TCA ..> CA : "id_cronograma_aplicacao -> id_cronograma_aplicacao"
+IACS ..> E : "id_escola -> id_escola"
+IACS ..> E_2 : "id_etapa -> id_etapa"
+IACS ..> T : "id_turma -> id_turma"
+IACS ..> A : "id_aluno -> id_aluno"
+
+@enduml

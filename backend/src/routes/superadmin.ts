@@ -2,10 +2,11 @@ import { Router, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
-import { isSuperadmin, normalizarCpf } from '../services/permissions'
+import { isAdministrador, isSuperadmin, normalizarCpf } from '../services/permissions'
 
 const router = Router()
 const pool = getPgPool()
+const EMAIL_CORPORATIVO_DOMINIO = '@edu.rondonopolis.mt.gov.br'
 
 interface ProfessorAdmin {
   cpf: string
@@ -24,8 +25,22 @@ function requireSuperadmin(req: AuthRequest, res: Response, next: NextFunction) 
   next()
 }
 
+function requireAdministrador(req: AuthRequest, res: Response, next: NextFunction) {
+  const cpf = req.professor?.cpf || req.professor?.login || ''
+  if (!isAdministrador(cpf)) {
+    return res.status(403).json({ error: 'Acesso restrito ao administrador' })
+  }
+  next()
+}
+
 function normalizeSearchTerm(value: unknown) {
   return String(value || '').trim()
+}
+
+function normalizeEmailAccount(value: unknown) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
 }
 
 async function getProfessorEmailColumns() {
@@ -45,9 +60,9 @@ async function getProfessorEmailColumns() {
   }
 }
 
-router.use(authMiddleware, requireSuperadmin)
+router.use(authMiddleware)
 
-router.get('/professores', async (req: AuthRequest, res: Response) => {
+router.get('/professores', requireAdministrador, async (req: AuthRequest, res: Response) => {
   const termo = normalizeSearchTerm(req.query.q)
   if (termo.length < 2) {
     return res.json([])
@@ -86,7 +101,7 @@ router.get('/professores', async (req: AuthRequest, res: Response) => {
   res.json(result.rows)
 })
 
-router.post('/professores/resetar-senha', async (req: AuthRequest, res: Response) => {
+router.post('/professores/resetar-senha', requireSuperadmin, async (req: AuthRequest, res: Response) => {
   const cpf = normalizarCpf(req.body?.cpf)
   if (cpf.length !== 11) {
     return res.status(400).json({ error: 'Informe um CPF válido' })
@@ -107,7 +122,7 @@ router.post('/professores/resetar-senha', async (req: AuthRequest, res: Response
   res.json({ ok: true, cpf })
 })
 
-router.post('/professores/alterar-senha', async (req: AuthRequest, res: Response) => {
+router.post('/professores/alterar-senha', requireSuperadmin, async (req: AuthRequest, res: Response) => {
   const cpf = normalizarCpf(req.body?.cpf)
   const senha = String(req.body?.senha || '')
   if (cpf.length !== 11) {
@@ -131,6 +146,38 @@ router.post('/professores/alterar-senha', async (req: AuthRequest, res: Response
   }
 
   res.json({ ok: true, cpf })
+})
+
+router.post('/professores/alterar-email-corporativo', requireSuperadmin, async (req: AuthRequest, res: Response) => {
+  const cpf = normalizarCpf(req.body?.cpf)
+  const conta = normalizeEmailAccount(req.body?.conta)
+
+  if (cpf.length !== 11) {
+    return res.status(400).json({ error: 'Informe um CPF valido' })
+  }
+  if (!conta || conta.includes('@') || !/^[a-z0-9._-]+$/.test(conta)) {
+    return res.status(400).json({ error: 'Informe apenas a conta corporativa, sem dominio' })
+  }
+
+  const emails = await getProfessorEmailColumns()
+  if (!emails.corporativoEmail) {
+    return res.status(500).json({ error: 'Coluna de e-mail corporativo nao encontrada' })
+  }
+
+  const email = `${conta}${EMAIL_CORPORATIVO_DOMINIO}`
+  const result = await pool.query(
+    `UPDATE public.professores
+        SET ${emails.corporativoEmail} = $2
+      WHERE regexp_replace(profissional_cpf::text, '\\D', '', 'g') = $1
+      RETURNING regexp_replace(profissional_cpf::text, '\\D', '', 'g') AS cpf`,
+    [cpf, email]
+  )
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: 'Professor nao encontrado' })
+  }
+
+  res.json({ ok: true, cpf, corporativoEmail: email })
 })
 
 export default router
