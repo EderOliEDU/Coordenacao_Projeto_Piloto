@@ -1,7 +1,8 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
+import { isAdministrador } from '../services/permissions'
 
 const router = Router()
 router.use(authMiddleware)
@@ -9,10 +10,6 @@ router.use(authMiddleware)
 const salvarCronogramaSchema = z.object({
   itensMarcados: z.array(z.coerce.number().int().positive()).min(1),
 })
-
-function normalizarCpf(value: string) {
-  return (value || '').replace(/\D/g, '')
-}
 
 async function garantirTabelaTurmaCronograma() {
   const pool = getPgPool()
@@ -36,7 +33,7 @@ async function garantirTabelaTurmaCronograma() {
   `)
 }
 
-async function buscarTurmaAtribuida(cpf: string, turmaId: number) {
+async function buscarTurmaAtribuida(cpf: string, turmaId: number, canViewAll = false) {
   const pool = getPgPool()
   const { rows } = await pool.query<{
     id: string
@@ -53,17 +50,17 @@ async function buscarTurmaAtribuida(cpf: string, turmaId: number) {
       e.nome_escola::text AS escola_nome,
       t.id_etapa AS etapa_id,
       et.descricao::text AS etapa_descricao
-    FROM public.atribuicao_professor ap
-    JOIN public.turmas t ON t.id_turma = ap.id_turma
+    FROM public.turmas t
     JOIN public.escolas e ON e.id_escola = t.id_escola
     JOIN public.etapas et ON et.id_etapa = t.id_etapa
-    WHERE regexp_replace(ap.cpf_professor, '\\D', '', 'g') = $1
+    LEFT JOIN public.atribuicao_professor ap ON ap.id_turma = t.id_turma
+    WHERE ($3::boolean = true OR regexp_replace(ap.cpf_professor, '\\D', '', 'g') = $1)
       AND t.id_turma = $2
       AND e.projeto = 'PJINSTFONI'
       AND et.projeto = 'PJINSTFONI'
     LIMIT 1
     `,
-    [cpf, turmaId]
+    [cpf, turmaId, canViewAll]
   )
 
   return rows[0] || null
@@ -71,11 +68,13 @@ async function buscarTurmaAtribuida(cpf: string, turmaId: number) {
 
 router.get('/:turmaId', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = normalizarCpf(req.professor?.login || req.professor?.cpf || '')
+    const authenticatedCpf = getAuthenticatedCpf(req)
+    const cpf = getEffectiveProfessorCpf(req)
     const turmaId = Number(req.params.turmaId)
     if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
+    const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
 
-    const turma = await buscarTurmaAtribuida(cpf, turmaId)
+    const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)
     if (!turma) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
     const pool = getPgPool()
@@ -121,18 +120,20 @@ router.get('/:turmaId', async (req: AuthRequest, res: Response) => {
   }
 })
 
-router.put('/:turmaId', async (req: AuthRequest, res: Response) => {
+router.put('/:turmaId', blockViewOnlyWrites, async (req: AuthRequest, res: Response) => {
   const parsed = salvarCronogramaSchema.safeParse(req.body)
   if (!parsed.success) {
     return res.status(400).json({ error: 'Marque ao menos um item do cronograma antes de salvar' })
   }
 
-  const cpf = normalizarCpf(req.professor?.login || req.professor?.cpf || '')
+  const authenticatedCpf = getAuthenticatedCpf(req)
+  const cpf = getEffectiveProfessorCpf(req)
   const turmaId = Number(req.params.turmaId)
   if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
+  const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
 
   try {
-    const turma = await buscarTurmaAtribuida(cpf, turmaId)
+    const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)
     if (!turma) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
     const itensMarcados = [...new Set(parsed.data.itensMarcados)]

@@ -56,6 +56,14 @@ type Notification = { type: 'success' | 'error'; message: string }
 export default function FormularioPage() {
   const { turmaId, alunoId } = useParams<{ turmaId: string; alunoId: string }>()
   const navigate = useNavigate()
+  const viewAs = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+    } catch {
+      return null
+    }
+  })()
+  const readOnly = Boolean(viewAs?.cpf)
 
   const [formulario, setFormulario] = useState<Formulario | null>(null)
   const [aluno, setAluno] = useState<any>(null)
@@ -194,6 +202,10 @@ export default function FormularioPage() {
 
   async function salvar(enviar = false) {
     if (!formulario || !turma) return
+    if (readOnly) {
+      showNotification('error', 'Modo conferência é somente leitura. Saia da visualização para alterar dados.')
+      return
+    }
     setSaving(true)
     try {
       const perguntaPublicoAlvo = formulario.secoes.flatMap(secao => secao.perguntas).find(isPerguntaPublicoAlvo) || null
@@ -305,7 +317,7 @@ export default function FormularioPage() {
             <input
               type="checkbox"
               checked={selected}
-              disabled={isEnviada}
+              disabled={isEnviada || readOnly}
               onChange={() => toggleNecessidade(opcao.id)}
               style={{ flex: '0 0 16px', width: 16, height: 16, minWidth: 16, margin: 0 }}
             />
@@ -334,7 +346,7 @@ export default function FormularioPage() {
             {perguntaEstudoCasoAtiva && (
             <button
               type="button"
-              disabled={isEnviada}
+              disabled={isEnviada || readOnly}
               onClick={() => selecionarCaminhoNaoPaee('ESTUDO_CASO')}
               style={{
                 background: caminhoNaoPaee === 'ESTUDO_CASO' ? '#0984e3' : '#fff',
@@ -351,7 +363,7 @@ export default function FormularioPage() {
             )}
             <button
               type="button"
-              disabled={isEnviada}
+              disabled={isEnviada || readOnly}
               onClick={() => selecionarCaminhoNaoPaee('APOIO')}
               style={{
                 background: caminhoNaoPaee === 'APOIO' ? '#0984e3' : '#fff',
@@ -382,7 +394,7 @@ export default function FormularioPage() {
               <button
                 key={opcao}
                 type="button"
-                disabled={isEnviada}
+                disabled={isEnviada || readOnly}
                 onClick={() => setApoioPedagogico(opcao)}
                 style={{
                   background: apoioPedagogico === opcao ? '#0984e3' : '#fff',
@@ -407,7 +419,7 @@ export default function FormularioPage() {
                     <input
                       value={descricaoOutros}
                       onChange={event => setDescricaoOutros(event.target.value)}
-                      disabled={isEnviada}
+                      disabled={isEnviada || readOnly}
                       style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid #dfe6e9', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
                       placeholder="Descreva outra necessidade de apoio"
                     />
@@ -516,6 +528,12 @@ export default function FormularioPage() {
         )}
       </div>
 
+      {readOnly && (
+        <div style={{ background: '#fff7d6', border: '1px solid #f2c230', borderRadius: 8, padding: '12px 14px', marginBottom: 16, color: '#6d4c00', fontWeight: 700 }}>
+          Modo conferência somente leitura: visualizando {viewAs.nome || viewAs.cpf}. Alterações estão bloqueadas.
+        </div>
+      )}
+
       {!isEnviada && (
         <div style={{ background: formularioCompleto ? '#e8f8f3' : '#fff8e1', border: `1px solid ${formularioCompleto ? '#b7eadb' : '#ffe3a3'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#2d3436', fontSize: 14 }}>
           {formularioCompleto
@@ -558,7 +576,7 @@ export default function FormularioPage() {
                       opcoes={pergunta.escala.opcoes}
                       value={respostas[pergunta.id] || null}
                       onChange={(opcaoId) => selecionarResposta(pergunta, opcaoId)}
-                      disabled={isEnviada}
+                      disabled={isEnviada || readOnly}
                       textOnly={isPerguntaFluxoInicial(pergunta)}
                     />
                   ) : (
@@ -576,7 +594,7 @@ export default function FormularioPage() {
             <textarea
               value={observacoes}
               onChange={e => setObservacoes(e.target.value)}
-              disabled={isEnviada}
+              disabled={isEnviada || readOnly}
               rows={4}
               style={{
                 width: '100%', border: '1px solid #dfe6e9', borderRadius: 6, padding: '10px 14px',
@@ -591,16 +609,16 @@ export default function FormularioPage() {
             <div style={{ display: 'flex', gap: 12 }}>
               <button
                 onClick={() => salvar(false)}
-                disabled={saving}
+                disabled={saving || readOnly}
                 style={{ background: '#dfe6e9', color: '#2d3436', padding: '10px 24px', flex: 1 }}
               >
                 {saving ? 'Salvando...' : 'Salvar Rascunho'}
               </button>
               <button
                 onClick={() => salvar(true)}
-                disabled={saving || !formularioCompleto}
-                title={!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined}
-                style={{ background: formularioCompleto ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto ? 'pointer' : 'not-allowed' }}
+                disabled={saving || readOnly || !formularioCompleto}
+                title={readOnly ? 'Modo conferência é somente leitura.' : (!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined)}
+                style={{ background: formularioCompleto && !readOnly ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto && !readOnly ? 'pointer' : 'not-allowed' }}
               >
                 {saving ? 'Finalizando...' : 'Finalizar Formulário'}
               </button>

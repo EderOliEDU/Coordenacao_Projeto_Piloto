@@ -38,6 +38,9 @@ SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 if [[ ! -f "$SOURCE_DIR/compose.yml" || ! -d "$SOURCE_DIR/backend" || ! -d "$SOURCE_DIR/frontend" ]]; then
   echo "ERRO: origem invalida: $SOURCE_DIR"
   echo "Esperado encontrar compose.yml, backend/ e frontend/."
+  echo
+  echo "Conteudo encontrado na origem:"
+  find "$SOURCE_DIR" -maxdepth 2 -mindepth 1 -printf "  %p\n" | head -n 40
   exit 1
 fi
 

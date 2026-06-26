@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -26,8 +26,6 @@ export default function SuperadminPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [professores, setProfessores] = useState<ProfessorAdmin[]>([])
-  const [cpf, setCpf] = useState('')
-  const [senha, setSenha] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -43,18 +41,12 @@ export default function SuperadminPage() {
       setError('')
       api.get('/superadmin/professores', { params: { q: trimmed } })
         .then((res) => setProfessores(res.data || []))
-        .catch((err) => setError(err.response?.data?.error || 'Não foi possível buscar professores'))
+        .catch((err) => setError(err.response?.data?.error || 'Nao foi possivel buscar professores'))
         .finally(() => setLoading(false))
     }, 300)
 
     return () => window.clearTimeout(timer)
   }, [query])
-
-  function selectProfessor(item: ProfessorAdmin) {
-    setCpf(item.cpf)
-    setMessage(`Professor selecionado: ${item.nome || formatarCpf(item.cpf)}`)
-    setError('')
-  }
 
   async function resetarSenha(targetCpf: string) {
     const cpfLimpo = onlyDigits(targetCpf)
@@ -67,23 +59,44 @@ export default function SuperadminPage() {
       setMessage(`Senha resetada para NULL: ${formatarCpf(cpfLimpo)}`)
       setProfessores((items) => items.map((item) => item.cpf === cpfLimpo ? { ...item, senhaConfigurada: false } : item))
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Não foi possível resetar a senha')
+      setError(err.response?.data?.error || 'Nao foi possivel resetar a senha')
     }
   }
 
-  async function alterarSenha(event: FormEvent) {
-    event.preventDefault()
-    const cpfLimpo = onlyDigits(cpf)
+  async function alterarSenha(targetCpf: string) {
+    const cpfLimpo = onlyDigits(targetCpf)
+    const novaSenha = window.prompt(`Nova senha para ${formatarCpf(cpfLimpo)}:`)
+    if (!novaSenha) return
 
     setMessage('')
     setError('')
     try {
-      await api.post('/superadmin/professores/alterar-senha', { cpf: cpfLimpo, senha })
+      await api.post('/superadmin/professores/alterar-senha', { cpf: cpfLimpo, senha: novaSenha })
       setMessage(`Senha alterada: ${formatarCpf(cpfLimpo)}`)
-      setSenha('')
       setProfessores((items) => items.map((item) => item.cpf === cpfLimpo ? { ...item, senhaConfigurada: true } : item))
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Não foi possível alterar a senha')
+      setError(err.response?.data?.error || 'Nao foi possivel alterar a senha')
+    }
+  }
+
+  async function alterarEmailCorporativo(item: ProfessorAdmin) {
+    const cpfLimpo = onlyDigits(item.cpf)
+    const emailAtual = item.corporativoEmail || ''
+    const contaAtual = emailAtual.replace(/@edu\.rondonopolis\.mt\.gov\.br$/i, '')
+    const conta = window.prompt('Conta corporativa sem dominio:', contaAtual)
+    if (!conta) return
+
+    setMessage('')
+    setError('')
+    try {
+      const res = await api.post('/superadmin/professores/alterar-email-corporativo', { cpf: cpfLimpo, conta })
+      const corporativoEmail = res.data?.corporativoEmail || `${conta}@edu.rondonopolis.mt.gov.br`
+      setMessage(`E-mail corporativo atualizado: ${corporativoEmail}`)
+      setProfessores((items) => items.map((professorItem) => (
+        professorItem.cpf === cpfLimpo ? { ...professorItem, corporativoEmail } : professorItem
+      )))
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Nao foi possivel alterar o e-mail corporativo')
     }
   }
 
@@ -91,8 +104,8 @@ export default function SuperadminPage() {
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '32px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, color: '#0984e3', fontSize: 24 }}>Superadministração</h1>
-          <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Olá, {professor.nome || 'superadministrador'}</p>
+          <h1 style={{ margin: 0, color: '#0984e3', fontSize: 24 }}>Superadministracao</h1>
+          <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Ola, {professor.nome || 'superadministrador'}</p>
         </div>
         <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436' }}>Voltar</button>
       </div>
@@ -113,84 +126,63 @@ export default function SuperadminPage() {
         </div>
       )}
 
-      <div className="superadmin-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: 16, alignItems: 'start' }}>
-        <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Buscar professores</h2>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Nome, CPF ou e-mail corporativo"
-            autoFocus
-          />
+      <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Buscar professores</h2>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Nome, CPF ou e-mail corporativo"
+          autoFocus
+        />
 
-          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-            {loading && <p style={{ margin: 0, color: '#636e72' }}>Buscando...</p>}
-            {!loading && query.trim().length >= 2 && professores.length === 0 && (
-              <p style={{ margin: 0, color: '#636e72' }}>Nenhum professor encontrado.</p>
-            )}
+        <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+          {loading && <p style={{ margin: 0, color: '#636e72' }}>Buscando...</p>}
+          {!loading && query.trim().length >= 2 && professores.length === 0 && (
+            <p style={{ margin: 0, color: '#636e72' }}>Nenhum professor encontrado.</p>
+          )}
 
-            {professores.map((item) => (
-              <div
-                key={item.cpf}
-                style={{
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 8,
-                  padding: 14,
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) auto',
-                  gap: 12,
-                  alignItems: 'center',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 700 }}>{item.nomeSocial || item.nome || 'Nome não informado'}</div>
-                  <div style={{ color: '#636e72', fontSize: 13, marginTop: 3 }}>
-                    {formatarCpf(item.cpf)} · {item.corporativoEmail || item.email || 'e-mail não informado'}
-                  </div>
-                  <div style={{ color: item.senhaConfigurada ? '#00b894' : '#d63031', fontSize: 12, marginTop: 5, fontWeight: 700 }}>
-                    {item.senhaConfigurada ? 'Senha configurada' : 'Senha NULL'}
-                  </div>
+          {professores.map((item) => (
+            <div
+              key={item.cpf}
+              style={{
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                padding: 14,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', gap: 8, alignItems: 'center' }}>
+                <div style={{ fontWeight: 700 }}>Nome:</div>
+                <div>{item.nomeSocial || item.nome || 'Nome nao informado'}</div>
+
+                <div style={{ fontWeight: 700 }}>CPF:</div>
+                <div>{formatarCpf(item.cpf)}</div>
+
+                <div style={{ fontWeight: 700 }}>Senha:</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ color: item.senhaConfigurada ? '#00b894' : '#d63031', fontWeight: 700 }}>
+                    {item.senhaConfigurada ? 'OK' : 'NULL'}
+                  </span>
+                  {item.senhaConfigurada ? (
+                    <button onClick={() => resetarSenha(item.cpf)} style={{ background: '#ff7675', color: '#fff' }}>Resetar</button>
+                  ) : (
+                    <button onClick={() => alterarSenha(item.cpf)} style={{ background: '#0984e3', color: '#fff' }}>Alterar</button>
+                  )}
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button onClick={() => selectProfessor(item)} style={{ background: '#74b9ff', color: '#fff' }}>Selecionar</button>
-                  <button onClick={() => resetarSenha(item.cpf)} style={{ background: '#ff7675', color: '#fff' }}>Resetar</button>
+
+                <div style={{ fontWeight: 700 }}>E-mail:</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>{item.corporativoEmail || item.email || 'e-mail nao informado'}</span>
+                  <button onClick={() => alterarEmailCorporativo(item)} style={{ background: '#74b9ff', color: '#fff' }}>
+                    {item.corporativoEmail ? 'Alterar' : 'Inserir'}
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Alterar senha por CPF</h2>
-          <form onSubmit={alterarSenha} style={{ display: 'grid', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6, fontWeight: 700, fontSize: 13 }}>
-              CPF
-              <input
-                value={cpf}
-                onChange={(event) => setCpf(event.target.value)}
-                placeholder="00000000000"
-                inputMode="numeric"
-                required
-              />
-            </label>
-            <label style={{ display: 'grid', gap: 6, fontWeight: 700, fontSize: 13 }}>
-              Nova senha
-              <input
-                value={senha}
-                onChange={(event) => setSenha(event.target.value)}
-                type="password"
-                placeholder="Mínimo de 6 caracteres"
-                minLength={6}
-                required
-              />
-            </label>
-            <button type="submit" style={{ background: '#0984e3', color: '#fff', width: '100%' }}>Alterar senha</button>
-            <button type="button" onClick={() => resetarSenha(cpf)} style={{ background: '#ff7675', color: '#fff', width: '100%' }}>
-              Resetar senha para NULL
-            </button>
-          </form>
-        </section>
-      </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

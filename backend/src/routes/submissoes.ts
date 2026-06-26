@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, blockViewOnlyWrites, getEffectiveProfessorCpf } from '../middleware/auth'
 import { z } from 'zod'
 import { getPgPool } from '../services/pgPool'
 
@@ -57,7 +57,7 @@ async function assertTurmaAssignment(cpf: string, turmaId: number) {
 // GET /api/submissoes?turmaId=&alunoId=
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = normalizarCpf(req.professor?.login || '')
+    const cpf = getEffectiveProfessorCpf(req)
     const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
 
     const where: string[] = [
@@ -95,7 +95,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 // GET /api/submissoes/:id
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = normalizarCpf(req.professor?.login || '')
+    const cpf = getEffectiveProfessorCpf(req)
     const subId = Number(req.params.id)
     const pool = getPgPool()
 
@@ -140,14 +140,14 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/submissoes/respostas
-router.post('/respostas', async (req: AuthRequest, res: Response) => {
+router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Response) => {
   const parsed = salvarRespostaSchema.safeParse(req.body)
   if (!parsed.success) {
     return res.status(400).json({ error: 'Payload inválido', detalhes: parsed.error.flatten() })
   }
 
   try {
-    const cpf = normalizarCpf(req.professor?.login || '')
+    const cpf = getEffectiveProfessorCpf(req)
     const { formularioId, turmaId, alunoId, respostas, observacoes, status, necessidadesEspecificas } = parsed.data
     const turmaIdNum = Number(turmaId)
     const alunoIdNum = Number(alunoId)
