@@ -11,6 +11,14 @@ interface ProfessorAdmin {
   senhaConfigurada: boolean
 }
 
+interface AtribuicaoSyncReport {
+  projeto: string
+  novasAtribuicoes: number
+  atribuicoesExcluidas: number
+  jaExistiam: number
+  pendencias: number
+}
+
 function formatarCpf(cpf: string) {
   const digitos = (cpf || '').replace(/\D/g, '').padStart(11, '0')
   return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
@@ -28,6 +36,8 @@ export default function SuperadminPage() {
   const [professores, setProfessores] = useState<ProfessorAdmin[]>([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncReport, setSyncReport] = useState<AtribuicaoSyncReport | null>(null)
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -97,6 +107,26 @@ export default function SuperadminPage() {
       )))
     } catch (err: any) {
       setError(err.response?.data?.error || 'Nao foi possivel alterar o e-mail corporativo')
+    }
+  }
+
+  async function sincronizarAtribuicoes() {
+    if (!window.confirm('Atualizar as atribuicoes de professores a partir das designacoes?')) return
+
+    setSyncLoading(true)
+    setSyncReport(null)
+    setMessage('')
+    setError('')
+    try {
+      const res = await api.post<AtribuicaoSyncReport>('/superadmin/atribuicoes/sincronizar')
+      setSyncReport(res.data)
+      const novas = res.data.novasAtribuicoes
+      const excluidas = res.data.atribuicoesExcluidas
+      setMessage(`Atribuicoes atualizadas: ${novas} nova(s), ${excluidas} excluida(s).`)
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Nao foi possivel atualizar as atribuicoes')
+    } finally {
+      setSyncLoading(false)
     }
   }
 
@@ -182,6 +212,28 @@ export default function SuperadminPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginTop: 16 }}>
+        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Atribuicoes por designacoes</h2>
+        <button
+          type="button"
+          onClick={sincronizarAtribuicoes}
+          disabled={syncLoading}
+          style={{ background: syncLoading ? '#b2bec3' : '#00b894', color: '#fff' }}
+        >
+          {syncLoading ? 'Atualizando...' : 'Atualizar atribuicoes'}
+        </button>
+
+        {syncReport && (
+          <div style={{ marginTop: 12, padding: 12, borderRadius: 8, border: '1px solid #dfe6e9', background: '#f8fafb', color: '#2d3436' }}>
+            <div>Projeto: {syncReport.projeto}</div>
+            <div>Novas atribuicoes: {syncReport.novasAtribuicoes}</div>
+            <div>Atribuicoes excluidas: {syncReport.atribuicoesExcluidas}</div>
+            <div>Ja existiam: {syncReport.jaExistiam}</div>
+            <div>Pendencias ignoradas: {syncReport.pendencias}</div>
+          </div>
+        )}
       </section>
     </div>
   )

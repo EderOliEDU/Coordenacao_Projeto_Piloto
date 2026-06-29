@@ -4,7 +4,14 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/projeto_piloto_app/app}"
 DEV_IP="${DEV_IP:-172.17.2.42}"
 FRONT_PORT="${FRONT_PORT:-5173}"
-SOURCE_DIR="${1:-${SOURCE_DIR:-}}"
+SMB_SHARE="${SMB_SHARE:-//172.17.2.35/app}"
+SMB_MOUNT_POINT="${SMB_MOUNT_POINT:-/mnt/projeto_piloto_app_local}"
+SMB_USER="${SMB_USER:-eder.oliveira}"
+SMB_DOMAIN="${SMB_DOMAIN:-RONDONOPOLIS}"
+SMB_UID="${SMB_UID:-coordenacao}"
+SMB_GID="${SMB_GID:-coordenacao}"
+REMOUNT_SHARE="${REMOUNT_SHARE:-1}"
+SOURCE_DIR="${1:-${SOURCE_DIR:-$SMB_MOUNT_POINT}}"
 
 HOST_IP="$(hostname -I | awk '{print $1}')"
 if [[ "$HOST_IP" != "$DEV_IP" ]]; then
@@ -17,20 +24,57 @@ command -v rsync >/dev/null 2>&1 || {
   exit 1
 }
 
-if [[ -z "$SOURCE_DIR" ]]; then
-  cat <<'USAGE'
-ERRO: informe a pasta de origem que contem a copia local do projeto.
-
-Este script deve ser executado no servidor DEV Debian, mas a pasta do Windows
-precisa estar montada/compartilhada no Linux antes.
-
-Exemplo:
-  ./sync-dev-local.sh /mnt/projeto_piloto_app_local
-
-Ou:
-  SOURCE_DIR=/mnt/projeto_piloto_app_local ./sync-dev-local.sh
-USAGE
+command -v mountpoint >/dev/null 2>&1 || {
+  echo "ERRO: mountpoint nao encontrado."
   exit 1
+}
+
+run_as_root() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+mount_share() {
+  mkdir -p "$SMB_MOUNT_POINT"
+
+  if mountpoint -q "$SMB_MOUNT_POINT"; then
+    if [[ "$REMOUNT_SHARE" == "1" ]]; then
+      echo "==> Desmontando compartilhamento anterior: $SMB_MOUNT_POINT"
+      run_as_root umount "$SMB_MOUNT_POINT"
+    else
+      echo "==> Compartilhamento ja montado: $SMB_MOUNT_POINT"
+      return
+    fi
+  fi
+
+  echo "==> Montando compartilhamento: $SMB_SHARE -> $SMB_MOUNT_POINT"
+  echo "==> Usuario: ${SMB_DOMAIN}\\${SMB_USER}"
+  echo "==> Digite a senha do AD quando solicitado."
+
+  if run_as_root mount -t cifs "$SMB_SHARE" "$SMB_MOUNT_POINT" \
+    -o "username=${SMB_USER},domain=${SMB_DOMAIN},vers=3.0,sec=ntlmssp,iocharset=utf8,uid=${SMB_UID},gid=${SMB_GID},file_mode=0644,dir_mode=0755,noperm"; then
+    return
+  fi
+
+  echo "==> Primeira tentativa falhou. Tentando usuario no formato dominio\\usuario..."
+  run_as_root umount "$SMB_MOUNT_POINT" 2>/dev/null || true
+
+  if run_as_root mount -t cifs "$SMB_SHARE" "$SMB_MOUNT_POINT" \
+    -o "username=${SMB_DOMAIN}\\${SMB_USER},vers=3.0,sec=ntlmssp,iocharset=utf8,uid=${SMB_UID},gid=${SMB_GID},file_mode=0644,dir_mode=0755,noperm"; then
+    return
+  fi
+
+  echo "ERRO: nao foi possivel montar o compartilhamento."
+  echo "Ultimas mensagens do kernel:"
+  dmesg | tail -n 40 || true
+  exit 1
+}
+
+if [[ "$SOURCE_DIR" == "$SMB_MOUNT_POINT" ]]; then
+  mount_share
 fi
 
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"

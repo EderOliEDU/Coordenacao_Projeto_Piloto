@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { isAdministrador, isSuperadmin, normalizarCpf } from '../services/permissions'
+import { syncAtribuicoesFromDesignacoes } from '../services/syncAtribuicoesDesignacoes'
 
 const router = Router()
 const pool = getPgPool()
@@ -50,13 +51,19 @@ async function getProfessorEmailColumns() {
       WHERE table_schema = 'public'
         AND table_name = 'professores'
         AND column_name = ANY($1::text[])`,
-    [['profissional_e_mail', 'Corporativo_e_mail']]
+    [['profissional_e_mail', 'corporativo_e_mail', 'Corporativo_e_mail']]
   )
 
   const columns = new Set(result.rows.map((row) => row.column_name))
+  const corporativoEmail = columns.has('corporativo_e_mail')
+    ? 'corporativo_e_mail'
+    : columns.has('Corporativo_e_mail')
+      ? '"Corporativo_e_mail"'
+      : null
+
   return {
     profissionalEmail: columns.has('profissional_e_mail') ? 'profissional_e_mail' : null,
-    corporativoEmail: columns.has('Corporativo_e_mail') ? '"Corporativo_e_mail"' : null,
+    corporativoEmail,
   }
 }
 
@@ -178,6 +185,11 @@ router.post('/professores/alterar-email-corporativo', requireSuperadmin, async (
   }
 
   res.json({ ok: true, cpf, corporativoEmail: email })
+})
+
+router.post('/atribuicoes/sincronizar', requireSuperadmin, async (_req: AuthRequest, res: Response) => {
+  const report = await syncAtribuicoesFromDesignacoes(pool)
+  res.json(report)
 })
 
 export default router
