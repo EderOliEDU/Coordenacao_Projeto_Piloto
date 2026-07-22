@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getEffectiveProfessorCpf } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
+import { getFaseAtual } from '../services/avaliacaoFases'
 
 const router = Router()
 router.use(authMiddleware)
@@ -56,9 +57,11 @@ router.get('/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
   try {
     const cpf = getEffectiveProfessorCpf(req)
     const turmaId = Number(req.query.turmaId)
+    const faseId = Number(req.query.faseId)
     const alunoId = Number(req.params.alunoId)
     if (!turmaId || !alunoId) return res.status(400).json({ error: 'Turma ou aluno inválido' })
 
+    const faseAtual = faseId ? { id: faseId } : await getFaseAtual()
     const ok = await assertTurmaAssignment(cpf, turmaId)
     if (!ok) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
@@ -74,9 +77,10 @@ router.get('/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
         WHERE id_aluno = $1
           AND id_turma = $2
           AND regexp_replace(cpf_professor, '\\D', '', 'g') = $3
+          AND id_fase = $4
         ORDER BY id_aluno_necespecifica
         `,
-        [alunoId, turmaId, cpf]
+        [alunoId, turmaId, cpf, faseAtual.id]
       ),
       pool.query(
         `
@@ -88,9 +92,10 @@ router.get('/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
         WHERE id_aluno = $1
           AND id_turma = $2
           AND regexp_replace(cpf_professor, '\\D', '', 'g') = $3
+          AND id_fase = $4
         LIMIT 1
         `,
-        [alunoId, turmaId, cpf]
+        [alunoId, turmaId, cpf, faseAtual.id]
       ),
     ])
 

@@ -5,7 +5,7 @@ import api from '../api/client'
 interface Escola { id: string; nome: string; municipio?: string; uf?: string }
 interface Turma {
   id: string; nome: string; codigo?: string; anoLetivo: number; turno: string
-  escola: Escola; _count: { alunos: number }
+  escola: Escola; _count: { alunos: number; finalizados?: number }; percentualConcluido?: number
 }
 interface ProfessorBusca {
   cpf: string
@@ -33,9 +33,8 @@ export default function TurmasPage() {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const professor = JSON.parse(localStorage.getItem('professor') || '{}')
-  const [canViewResultados, setCanViewResultados] = useState(Boolean(professor.permissoes?.resultados))
   const [canViewSuperadmin, setCanViewSuperadmin] = useState(Boolean(professor.permissoes?.superadmin))
-  const [canAdministrar, setCanAdministrar] = useState(Boolean(professor.permissoes?.administrador || professor.permissoes?.resultados || professor.permissoes?.superadmin))
+  const [canAdministrar, setCanAdministrar] = useState(Boolean(professor.permissoes?.administrador || professor.permissoes?.superadmin))
   const [viewAs, setViewAs] = useState<ProfessorBusca | null>(() => getViewAsProfessor())
   const [buscaProfessor, setBuscaProfessor] = useState('')
   const [professoresBusca, setProfessoresBusca] = useState<ProfessorBusca[]>([])
@@ -49,14 +48,12 @@ export default function TurmasPage() {
       const refreshedProfessor = res.data?.professor
       if (refreshedProfessor) {
         localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
-        setCanViewResultados(Boolean(refreshedProfessor.permissoes?.resultados))
         setCanViewSuperadmin(Boolean(refreshedProfessor.permissoes?.superadmin))
-        setCanAdministrar(Boolean(refreshedProfessor.permissoes?.administrador || refreshedProfessor.permissoes?.resultados || refreshedProfessor.permissoes?.superadmin))
+        setCanAdministrar(Boolean(refreshedProfessor.permissoes?.administrador || refreshedProfessor.permissoes?.superadmin))
       }
     }).catch(() => {
-      setCanViewResultados(Boolean(professor.permissoes?.resultados))
       setCanViewSuperadmin(Boolean(professor.permissoes?.superadmin))
-      setCanAdministrar(Boolean(professor.permissoes?.administrador || professor.permissoes?.resultados || professor.permissoes?.superadmin))
+      setCanAdministrar(Boolean(professor.permissoes?.administrador || professor.permissoes?.superadmin))
     })
   }, [viewAs])
 
@@ -113,8 +110,7 @@ export default function TurmasPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button onClick={() => navigate('/pendencias')} style={{ background: '#74b9ff', color: '#fff' }}>Pendências</button>
-          {canViewResultados && <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>}
+          <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>
           {canViewSuperadmin && <button onClick={() => navigate('/superadmin')} style={{ background: '#6c5ce7', color: '#fff' }}>Superadmin</button>}
           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
         </div>
@@ -164,21 +160,33 @@ export default function TurmasPage() {
             style={{
               background: '#fff', borderRadius: 10, padding: '20px 24px', cursor: 'pointer',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap',
               transition: 'box-shadow 0.15s',
             }}
             onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(9,132,227,0.12)')}
             onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)')}
           >
-            <div>
+            <div style={{ minWidth: 220, flex: '1 1 260px' }}>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{turma.nome}</div>
               <div style={{ color: '#636e72', fontSize: 13, marginTop: 2 }}>
                 {turma.escola.nome} · {turnos[turma.turno] || turma.turno} · {turma.anoLetivo}
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 700, fontSize: 22, color: '#0984e3' }}>{turma._count.alunos}</div>
-              <div style={{ color: '#b2bec3', fontSize: 12 }}>alunos</div>
+            <div style={{ textAlign: 'right', minWidth: 230, flex: '0 1 260px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(42px, 1fr))', gap: 12, alignItems: 'end' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 22, color: '#0984e3' }}>{turma._count.alunos}</div>
+                  <div style={{ color: '#b2bec3', fontSize: 12 }}>alunos</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 22, color: '#00b894' }}>{turma._count.finalizados || 0}</div>
+                  <div style={{ color: '#b2bec3', fontSize: 12 }}>respondidos</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 22, color: '#6c5ce7' }}>{turma.percentualConcluido || 0}%</div>
+                  <div style={{ color: '#b2bec3', fontSize: 12 }}>concluido</div>
+                </div>
+              </div>
             </div>
           </div>
         ))}

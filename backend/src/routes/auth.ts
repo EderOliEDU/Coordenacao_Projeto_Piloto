@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { authenticate } from '../services/ldap';
 import { authenticateByCpf } from '../services/cpfAuth';
 import { getPgPool } from '../services/pgPool';
-import { getUserPermissions } from '../services/permissions';
+import { getUserPermissionsAsync } from '../services/permissions';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { sendPasswordSetupEmail } from '../services/mail';
 
@@ -146,7 +146,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
     }
 
     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
-    const permissoes = getUserPermissions(professor.profissional_cpf);
+    const permissoes = await getUserPermissionsAsync(professor.profissional_cpf);
     const token = jwt.sign(
       {
         cpf: professor.profissional_cpf,
@@ -212,7 +212,7 @@ router.post('/cadastrar-senha', async (req: Request, res: Response) => {
 
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   const cpf = req.professor?.cpf || req.professor?.login || '';
-  const permissoes = getUserPermissions(cpf);
+  const permissoes = await getUserPermissionsAsync(cpf);
   res.json({
     professor: {
       cpf,

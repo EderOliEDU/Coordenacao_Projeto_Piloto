@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { canViewResultados, getUserPermissions, isAdministrador, normalizarCpf } from '../services/permissions';
 
 export interface AuthRequest extends Request {
-  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { administrador?: boolean; resultados: boolean; superadmin?: boolean } };
+  professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { administrador?: boolean; resultados: boolean; superadmin?: boolean; coordenador?: boolean; diretor?: boolean } };
 }
 
 export function getAuthenticatedCpf(req: AuthRequest) {
@@ -14,7 +14,7 @@ export function getViewAsCpf(req: AuthRequest) {
   const authenticatedCpf = getAuthenticatedCpf(req)
   const viewAsCpf = normalizarCpf(String(req.headers['x-view-as-cpf'] || ''))
   if (!viewAsCpf || viewAsCpf.length !== 11) return ''
-  if (!isAdministrador(authenticatedCpf)) return ''
+  if (!req.professor?.permissoes?.administrador && !isAdministrador(authenticatedCpf)) return ''
   if (viewAsCpf === authenticatedCpf) return ''
   return viewAsCpf
 }
@@ -59,7 +59,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
 export function resultadosAccessMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const cpf = getAuthenticatedCpf(req)
-  if (!canViewResultados(cpf) && !req.professor?.permissoes?.superadmin) {
+  if (!req.professor?.permissoes?.resultados && !canViewResultados(cpf)) {
     return res.status(403).json({ error: 'Acesso negado aos resultados' })
   }
   next()

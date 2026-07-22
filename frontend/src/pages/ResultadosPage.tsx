@@ -3,14 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
 interface EscolaFiltro { id: string; nome: string }
+interface ProfessorFiltro { cpf: string; nome: string }
 interface TurmaFiltro { id: string; nome: string; escolaId: string; escolaNome: string; turno?: string }
+interface FaseFiltro { id: number; nome: string; dataInicio: string; dataFim: string; ativa: boolean; ordem: number }
 interface Resumo {
   totalAlunos: number
   totalTurmas: number
   totalEscolas: number
+  totalProfessores: number
+  avaliacoesEsperadas: number
   finalizados: number
   rascunhos: number
   submissoes: number
+  pendentes: number
   respostas: number
   percentualFinalizacao: number
 }
@@ -40,41 +45,113 @@ interface EixoResultado {
   percentualDificuldade: number
   perguntas: PerguntaResultado[]
 }
+interface StatusResumo { status: string; total: number; percentual: number }
+interface EscolaResumo {
+  id: string
+  nome: string
+  totalAlunos: number
+  totalTurmas: number
+  avaliacoesEsperadas: number
+  finalizados: number
+  percentualFinalizacao: number
+}
+interface ProfessorResumo {
+  cpf: string
+  nome: string
+  totalEscolas: number
+  totalTurmas: number
+  totalAlunos: number
+  avaliacoesEsperadas: number
+  finalizados: number
+  percentualFinalizacao: number
+}
+interface PendenciaResumo {
+  escolaId: string
+  escolaNome: string
+  turmaId: string
+  turmaNome: string
+  turno: string
+  avaliacoesEsperadas: number
+  submissoes: number
+  pendentes: number
+  percentualPendente: number
+}
 interface ResultadosResponse {
-  filtros: { escolas: EscolaFiltro[]; turmas: TurmaFiltro[]; status: string }
+  filtros: {
+    visao: string
+    status: string
+    escolas: EscolaFiltro[]
+    turmas: TurmaFiltro[]
+    professores: ProfessorFiltro[]
+    fases: FaseFiltro[]
+    faseAtual: FaseFiltro | null
+  }
   resumo: Resumo
+  statusResumo: StatusResumo[]
+  opcoesResumo: OpcaoResultado[]
   eixos: EixoResultado[]
   habilidadesCriticas: PerguntaResultado[]
+  escolasResumo: EscolaResumo[]
+  professoresResumo: ProfessorResumo[]
+  pendenciasResumo: PendenciaResumo[]
 }
 
 const emptyData: ResultadosResponse = {
-  filtros: { escolas: [], turmas: [], status: 'FINALIZADO' },
+  filtros: { visao: 'GERAL', status: 'TODOS', escolas: [], turmas: [], professores: [], fases: [], faseAtual: null },
   resumo: {
     totalAlunos: 0,
     totalTurmas: 0,
     totalEscolas: 0,
+    totalProfessores: 0,
+    avaliacoesEsperadas: 0,
     finalizados: 0,
     rascunhos: 0,
     submissoes: 0,
+    pendentes: 0,
     respostas: 0,
     percentualFinalizacao: 0,
   },
+  statusResumo: [],
+  opcoesResumo: [],
   eixos: [],
   habilidadesCriticas: [],
+  escolasResumo: [],
+  professoresResumo: [],
+  pendenciasResumo: [],
+}
+
+const statusLabels: Record<string, string> = {
+  FINALIZADO: 'Finalizados',
+  RASCUNHO: 'Rascunhos',
+  PENDENTE: 'Pendentes',
+  TODOS: 'Todos',
 }
 
 function pct(value: number) {
-  return `${Number.isFinite(value) ? value : 0}%`
+  return `${Number.isFinite(value) ? Math.max(0, Math.min(value, 100)) : 0}%`
 }
 
-function cardStyle() {
-  return {
-    background: '#fff',
-    border: '1px solid #e8edf1',
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: '0 2px 8px rgba(45,52,54,0.05)',
-  }
+function number(value: number) {
+  return new Intl.NumberFormat('pt-BR').format(value || 0)
+}
+
+function formatCpf(cpf: string) {
+  return (cpf || '').replace(/\D/g, '').padStart(11, '0').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+}
+
+const card = {
+  background: '#fff',
+  border: '1px solid var(--line)',
+  borderRadius: 8,
+  boxShadow: '0 5px 18px rgba(15, 42, 74, 0.06)',
+} as const
+
+function ProgressBar({ value, color = 'var(--pmr-green)' }: { value: number; color?: string }) {
+  return (
+    <div style={{ height: 8, background: '#edf2f7', borderRadius: 999, overflow: 'hidden' }}>
+      <div style={{ width: pct(value), height: '100%', background: color }} />
+    </div>
+  )
 }
 
 export default function ResultadosPage() {
@@ -82,155 +159,303 @@ export default function ResultadosPage() {
   const [data, setData] = useState<ResultadosResponse>(emptyData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [visao, setVisao] = useState('GERAL')
   const [escolaId, setEscolaId] = useState('')
   const [turmaId, setTurmaId] = useState('')
-  const [status, setStatus] = useState('FINALIZADO')
+  const [professorCpf, setProfessorCpf] = useState('')
+  const [status, setStatus] = useState('TODOS')
+  const [faseId, setFaseId] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams()
+    params.set('visao', visao)
+    params.set('status', status)
     if (escolaId) params.set('escolaId', escolaId)
     if (turmaId) params.set('turmaId', turmaId)
-    if (status) params.set('status', status)
+    if (professorCpf) params.set('professorCpf', professorCpf)
+    if (faseId) params.set('faseId', faseId)
 
     setLoading(true)
     setError(null)
     api.get(`/resultados?${params.toString()}`)
-      .then((res) => setData(res.data || emptyData))
+      .then((res) => {
+        const nextData = res.data || emptyData
+        setData(nextData)
+        if (!faseId && nextData.filtros?.faseAtual?.id) setFaseId(String(nextData.filtros.faseAtual.id))
+      })
       .catch((err) => setError(err.response?.data?.error || 'Erro ao carregar resultados.'))
       .finally(() => setLoading(false))
-  }, [escolaId, turmaId, status])
+  }, [visao, escolaId, turmaId, professorCpf, status, faseId])
 
   const turmasFiltradas = useMemo(() => {
     if (!escolaId) return data.filtros.turmas
     return data.filtros.turmas.filter((turma) => turma.escolaId === escolaId)
   }, [data.filtros.turmas, escolaId])
 
-  function onEscolaChange(value: string) {
+  function mudarVisao(value: string) {
+    setVisao(value)
+    setEscolaId('')
+    setTurmaId('')
+    setProfessorCpf('')
+  }
+
+  function mudarEscola(value: string) {
     setEscolaId(value)
     setTurmaId('')
   }
 
-  const resumoCards = [
+  const metricas = [
+    { label: 'Escolas', value: data.resumo.totalEscolas },
+    { label: 'Turmas', value: data.resumo.totalTurmas },
+    { label: 'Professores', value: data.resumo.totalProfessores },
     { label: 'Alunos', value: data.resumo.totalAlunos },
     { label: 'Finalizados', value: data.resumo.finalizados },
-    { label: 'Pendentes', value: Math.max(data.resumo.totalAlunos - data.resumo.finalizados, 0) },
-    { label: 'Finalizacao', value: pct(data.resumo.percentualFinalizacao) },
+    { label: 'Pendentes', value: data.resumo.pendentes },
+    { label: '% Concluido', value: pct(data.resumo.percentualFinalizacao) },
   ]
 
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '28px 16px 40px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, color: '#0984e3' }}>Resultados</h1>
-          <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Indicadores do Projeto Instrução Fônica</p>
+    <div className="page" style={{ maxWidth: 1280 }}>
+      <div className="page-header">
+        <div className="page-title">
+          <h1>Painel de resultados</h1>
+          <p>Gestao da aplicacao e dos indicadores pedagogicos do Projeto Instrucao Fonica.</p>
         </div>
-        <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436' }}>Voltar</button>
+        <div className="actions">
+          <button onClick={() => navigate('/turmas')} className="secondary-btn">Voltar</button>
+        </div>
       </div>
 
-      <div style={{ ...cardStyle(), marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
-            Escola
-            <select value={escolaId} onChange={(e) => onEscolaChange(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
+      <section style={{ ...card, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Fase</span>
+            <select value={faseId} onChange={(event) => setFaseId(event.target.value)}>
+              <option value="">Fase atual</option>
+              {data.filtros.fases.map((fase) => (
+                <option key={fase.id} value={fase.id}>{fase.nome} ({fase.dataInicio} a {fase.dataFim})</option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Visao</span>
+            <select value={visao} onChange={(event) => mudarVisao(event.target.value)}>
+              <option value="GERAL">Todas as escolas permitidas</option>
+              <option value="ESCOLA">Uma escola</option>
+              <option value="PROFESSOR">Um professor</option>
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Escola</span>
+            <select value={escolaId} onChange={(event) => mudarEscola(event.target.value)}>
               <option value="">Todas</option>
               {data.filtros.escolas.map((escola) => <option key={escola.id} value={escola.id}>{escola.nome}</option>)}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
-            Turma
-            <select value={turmaId} onChange={(e) => setTurmaId(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Turma</span>
+            <select value={turmaId} onChange={(event) => setTurmaId(event.target.value)}>
               <option value="">Todas</option>
               {turmasFiltradas.map((turma) => <option key={turma.id} value={turma.id}>{turma.escolaNome} - {turma.nome}</option>)}
             </select>
           </label>
-          <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#636e72', fontWeight: 700 }}>
-            Status
-            <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: '9px 10px', borderRadius: 6, border: '1px solid #dfe6e9' }}>
-              <option value="FINALIZADO">Finalizados</option>
-              <option value="RASCUNHO">Rascunhos</option>
-              <option value="TODOS">Todos com resposta</option>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Professor</span>
+            <select value={professorCpf} onChange={(event) => setProfessorCpf(event.target.value)}>
+              <option value="">Todos</option>
+              {data.filtros.professores.map((professor) => (
+                <option key={professor.cpf} value={professor.cpf}>{professor.nome} - {formatCpf(professor.cpf)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Respostas</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="TODOS">Todas as opcoes</option>
+              <option value="FINALIZADO">Somente finalizadas</option>
+              <option value="RASCUNHO">Somente rascunhos</option>
             </select>
           </label>
         </div>
-      </div>
+      </section>
 
-      {loading && <p>Carregando resultados...</p>}
-      {!loading && error && <p style={{ color: '#d63031' }}>{error}</p>}
+      {loading && <p className="loading-text">Carregando painel...</p>}
+      {!loading && error && <p className="error-text">{error}</p>}
 
       {!loading && !error && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
-            {resumoCards.map((item) => (
-              <div key={item.label} style={cardStyle()}>
-                <div style={{ color: '#636e72', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#2d3436', marginTop: 6 }}>{item.value}</div>
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 12, marginBottom: 16 }}>
+            {metricas.map((item) => (
+              <div key={item.label} style={{ ...card, padding: '16px 18px' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{item.label}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--ink)', marginTop: 6 }}>
+                  {typeof item.value === 'number' ? number(item.value) : item.value}
+                </div>
               </div>
             ))}
-          </div>
+          </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 16, alignItems: 'start' }}>
-            <section>
-              <h2 style={{ fontSize: 18, margin: '0 0 10px' }}>Resultados por eixo</h2>
+          <section style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start', marginBottom: 16 }}>
+            <div style={{ ...card, padding: 18 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Cobertura da aplicacao</h2>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {data.statusResumo.map((item) => (
+                  <div key={item.status}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, fontSize: 13 }}>
+                      <strong>{statusLabels[item.status] || item.status}</strong>
+                      <span>{number(item.total)} ({pct(item.percentual)})</span>
+                    </div>
+                    <ProgressBar value={item.percentual} color={item.status === 'FINALIZADO' ? 'var(--pmr-green)' : item.status === 'RASCUNHO' ? 'var(--pmr-yellow)' : 'var(--muted)'} />
+                  </div>
+                ))}
+                {data.statusResumo.length === 0 && <p className="empty-state" style={{ margin: 0 }}>Sem registros no escopo selecionado.</p>}
+              </div>
+            </div>
+          </section>
+
+          <section style={{ ...card, padding: 18, overflowX: 'auto', marginBottom: 16 }}>
+            <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Pendencias por escola e turma</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                  <th style={{ padding: '8px 6px' }}>Escola</th>
+                  <th style={{ padding: '8px 6px' }}>Turma</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Com registro</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>Pendentes</th>
+                  <th style={{ padding: '8px 6px', textAlign: 'right' }}>% pendente</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.pendenciasResumo.map((item) => (
+                  <tr key={`${item.escolaId}-${item.turmaId}`} style={{ borderTop: '1px solid #edf2f7' }}>
+                    <td style={{ padding: '10px 6px', fontWeight: 700 }}>{item.escolaNome}</td>
+                    <td style={{ padding: '10px 6px' }}>
+                      <strong>{item.turmaNome}</strong>
+                      {item.turno && <div style={{ color: 'var(--muted)', fontSize: 12 }}>{item.turno}</div>}
+                    </td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(item.avaliacoesEsperadas)}</td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(item.submissoes)}</td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--pmr-red)', fontWeight: 800 }}>{number(item.pendentes)}</td>
+                    <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(item.percentualPendente)}</td>
+                  </tr>
+                ))}
+                {data.pendenciasResumo.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '12px 6px', color: 'var(--muted)' }}>Nao ha pendencias no escopo selecionado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 16, alignItems: 'start', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 18, margin: '0 0 10px', color: 'var(--pmr-blue-dark)' }}>Resultados por eixo</h2>
               <div style={{ display: 'grid', gap: 12 }}>
                 {data.eixos.map((eixo) => (
-                  <div key={eixo.id} style={cardStyle()}>
+                  <article key={eixo.id} style={{ ...card, padding: 18 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
                       <div>
                         <h3 style={{ margin: 0, fontSize: 16 }}>{eixo.nome}</h3>
-                        <div style={{ color: '#636e72', fontSize: 13 }}>{eixo.total} respostas registradas</div>
+                        <div style={{ color: 'var(--muted)', fontSize: 13 }}>{number(eixo.total)} respostas registradas</div>
                       </div>
-                      <div style={{ textAlign: 'right', fontWeight: 800, color: '#00a383' }}>{pct(eixo.percentualDominio)}</div>
+                      <div style={{ textAlign: 'right' }}>
+                        <strong style={{ color: 'var(--pmr-green)' }}>{pct(eixo.percentualDominio)}</strong>
+                        <div style={{ color: 'var(--muted)', fontSize: 12 }}>dominio</div>
+                      </div>
                     </div>
-                    <div style={{ height: 10, background: '#edf2f4', borderRadius: 999, overflow: 'hidden', marginBottom: 12 }}>
-                      <div style={{ height: '100%', width: pct(eixo.percentualDominio), background: '#00b894' }} />
-                    </div>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {eixo.perguntas.slice(0, 5).map((pergunta) => (
-                        <div key={pergunta.perguntaId} style={{ borderTop: '1px solid #f0f2f4', paddingTop: 8 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13 }}>
+                    <ProgressBar value={eixo.percentualDominio} />
+                    <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                      {eixo.perguntas.slice(0, 6).map((pergunta) => (
+                        <div key={pergunta.perguntaId} style={{ borderTop: '1px solid #edf2f7', paddingTop: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 74px 74px', gap: 8, alignItems: 'center', fontSize: 13 }}>
                             <span>{pergunta.perguntaTexto}</span>
-                            <strong>{pct(pergunta.percentualDominio)}</strong>
+                            <strong style={{ color: 'var(--pmr-green)', textAlign: 'right' }}>{pct(pergunta.percentualDominio)}</strong>
+                            <strong style={{ color: 'var(--pmr-red)', textAlign: 'right' }}>{pct(pergunta.percentualDificuldade)}</strong>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </article>
                 ))}
-                {data.eixos.length === 0 && <p style={{ color: '#636e72' }}>Ainda não há respostas para os filtros selecionados.</p>}
+                {data.eixos.length === 0 && <p className="empty-state">Ainda nao ha respostas para os filtros selecionados.</p>}
               </div>
-            </section>
+            </div>
 
-            <section>
-              <h2 style={{ fontSize: 18, margin: '0 0 10px' }}>Habilidades críticas</h2>
-              <div style={{ ...cardStyle(), display: 'grid', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 18, margin: '0 0 10px', color: 'var(--pmr-blue-dark)' }}>Habilidades criticas</h2>
+              <div style={{ ...card, display: 'grid', gap: 12, padding: 18 }}>
                 {data.habilidadesCriticas.map((pergunta, index) => (
-                  <div key={pergunta.perguntaId} style={{ borderBottom: index === data.habilidadesCriticas.length - 1 ? 'none' : '1px solid #f0f2f4', paddingBottom: 12 }}>
-                    <div style={{ color: '#636e72', fontSize: 12, fontWeight: 700 }}>{pergunta.grupoNome}</div>
+                  <div key={pergunta.perguntaId} style={{ borderBottom: index === data.habilidadesCriticas.length - 1 ? 'none' : '1px solid #edf2f7', paddingBottom: 12 }}>
+                    <div style={{ color: 'var(--muted)', fontSize: 12, fontWeight: 800 }}>{pergunta.grupoNome}</div>
                     <div style={{ fontWeight: 700, margin: '3px 0 8px', lineHeight: 1.35 }}>{pergunta.perguntaTexto}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
-                      <span>{pergunta.dificuldade} com dificuldade</span>
-                      <strong style={{ color: '#d63031' }}>{pct(pergunta.percentualDificuldade)}</strong>
+                      <span>{number(pergunta.dificuldade)} respostas indicam dificuldade</span>
+                      <strong style={{ color: 'var(--pmr-red)' }}>{pct(pergunta.percentualDificuldade)}</strong>
                     </div>
-                    <div style={{ display: 'grid', gap: 5 }}>
-                      {pergunta.opcoes.map((opcao) => {
-                        const percentual = pergunta.total ? Math.round((opcao.total / pergunta.total) * 100) : 0
-                        return (
-                          <div key={opcao.id} title={opcao.descricao} style={{ display: 'grid', gridTemplateColumns: '58px 1fr 42px', gap: 8, alignItems: 'center', fontSize: 12 }}>
-                            <strong>{opcao.simbolo || opcao.sigla}</strong>
-                            <div style={{ height: 7, background: '#edf2f4', borderRadius: 999, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: pct(percentual), background: opcao.corHex || '#74b9ff' }} />
-                            </div>
-                            <span style={{ textAlign: 'right' }}>{opcao.total}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
+                    <ProgressBar value={pergunta.percentualDificuldade} color="var(--pmr-red)" />
                   </div>
                 ))}
-                {data.habilidadesCriticas.length === 0 && <p style={{ color: '#636e72', margin: 0 }}>Sem habilidades críticas para exibir.</p>}
+                {data.habilidadesCriticas.length === 0 && <p className="empty-state" style={{ margin: 0 }}>Sem habilidades criticas para exibir.</p>}
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
+
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
+            <div style={{ ...card, padding: 18, overflowX: 'auto' }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por escola</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                    <th style={{ padding: '8px 6px' }}>Escola</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.escolasResumo.map((escola) => (
+                    <tr key={escola.id} style={{ borderTop: '1px solid #edf2f7' }}>
+                      <td style={{ padding: '10px 6px', fontWeight: 700 }}>{escola.nome}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.totalTurmas)}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.avaliacoesEsperadas)}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(escola.percentualFinalizacao)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ ...card, padding: 18, overflowX: 'auto' }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por professor</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                    <th style={{ padding: '8px 6px' }}>Professor</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Finalizados</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.professoresResumo.map((professor) => (
+                    <tr key={professor.cpf} style={{ borderTop: '1px solid #edf2f7' }}>
+                      <td style={{ padding: '10px 6px' }}>
+                        <strong>{professor.nome}</strong>
+                        <div style={{ color: 'var(--muted)', fontSize: 12 }}>{formatCpf(professor.cpf)}</div>
+                      </td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.totalTurmas)}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.avaliacoesEsperadas)}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.finalizados)}</td>
+                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(professor.percentualFinalizacao)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
     </div>

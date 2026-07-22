@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getEffectiveProfessorCpf } from '../middleware/auth'
 import { z } from 'zod'
 import { getPgPool } from '../services/pgPool'
+import { getFaseAtual } from '../services/avaliacaoFases'
 
 const router = Router()
 router.use(authMiddleware)
@@ -58,15 +59,17 @@ async function assertTurmaAssignment(cpf: string, turmaId: number) {
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const cpf = getEffectiveProfessorCpf(req)
-    const { turmaId, alunoId } = req.query as { turmaId?: string; alunoId?: string }
+    const { turmaId, alunoId, faseId } = req.query as { turmaId?: string; alunoId?: string; faseId?: string }
+    const faseAtual = faseId ? { id: Number(faseId) } : await getFaseAtual()
 
     const where: string[] = [
       `s.cpf_professor = $1`,
       `e.projeto = 'PJINSTFONI'`,
       `et.projeto = 'PJINSTFONI'`,
+      `s.id_fase = $2`,
     ]
-    const params: any[] = [cpf]
-    let idx = 2
+    const params: any[] = [cpf, faseAtual.id]
+    let idx = 3
 
     if (turmaId) { where.push(`s.id_turma = $${idx++}`); params.push(Number(turmaId)) }
     if (alunoId) { where.push(`s.id_aluno = $${idx++}`); params.push(Number(alunoId)) }
@@ -74,7 +77,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const pool = getPgPool()
     const { rows } = await pool.query(
       `
-      SELECT s.id::text AS id, s.id_aluno::text AS "alunoId", s.status
+      SELECT s.id::text AS id, s.id_aluno::text AS "alunoId", s.status, s.id_fase::text AS "faseId"
       FROM public.submissoes_pg s
       JOIN public.turmas t ON t.id_turma = s.id_turma
       JOIN public.escolas e ON e.id_escola = t.id_escola
@@ -85,7 +88,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       params
     )
 
-    return res.json(rows.map(r => ({ id: r.id, alunoId: r.alunoId, status: r.status })))
+    return res.json(rows.map(r => ({ id: r.id, alunoId: r.alunoId, status: r.status, faseId: r.faseId })))
   } catch (err) {
     console.error(err)
     return res.status(500).json({ error: 'Erro ao buscar submissões' })
@@ -100,7 +103,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     const pool = getPgPool()
 
     const subRes = await pool.query(
-      `SELECT s.id, s.cpf_professor, s.id_turma, s.id_aluno, s.formulario_id, s.status, s.observacoes
+      `SELECT s.id, s.cpf_professor, s.id_turma, s.id_aluno, s.formulario_id, s.status, s.observacoes, s.id_fase
        FROM public.submissoes_pg s
        JOIN public.turmas t ON t.id_turma = s.id_turma
        JOIN public.escolas e ON e.id_escola = t.id_escola
@@ -121,16 +124,20 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
       `
       SELECT id_pergunta::text AS "perguntaId", id_opcao::text AS "opcaoEscalaId"
       FROM public.avaliacao_respostas
-      WHERE cpf_professor = $1 AND id_aluno = $2
+      WHERE cpf_professor = $1
+        AND id_aluno = $2
+        AND id_turma = $3
+        AND id_fase = $4
       ORDER BY id_pergunta
       `,
-      [cpf, Number(sub.id_aluno)]
+      [cpf, Number(sub.id_aluno), Number(sub.id_turma), Number(sub.id_fase)]
     )
 
     return res.json({
       id: String(sub.id),
       status: sub.status,
       observacoes: sub.observacoes || '',
+      faseId: String(sub.id_fase || ''),
       respostas: respRes.rows,
     })
   } catch (err) {
@@ -152,6 +159,7 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
     const turmaIdNum = Number(turmaId)
     const alunoIdNum = Number(alunoId)
     const targetStatus = status || STATUS_RASCUNHO
+    const faseAtual = await getFaseAtual()
 
     const ok = await assertTurmaAssignment(cpf, turmaIdNum)
     if (!ok) return res.status(403).json({ error: 'Acesso negado a esta turma' })
@@ -161,16 +169,16 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
     // upsert submissao metadata
     const upsert = await pool.query(
       `
-      INSERT INTO public.submissoes_pg (cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (cpf_professor, id_turma, id_aluno, formulario_id)
+      INSERT INTO public.submissoes_pg (cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes, id_fase)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (cpf_professor, id_turma, id_aluno, formulario_id, id_fase)
       DO UPDATE SET
         status = EXCLUDED.status,
         observacoes = EXCLUDED.observacoes,
         atualizada_em = CURRENT_TIMESTAMP
       RETURNING id::text AS id
       `,
-      [cpf, turmaIdNum, alunoIdNum, formularioId, targetStatus, observacoes || null]
+      [cpf, turmaIdNum, alunoIdNum, formularioId, targetStatus, observacoes || null, faseAtual.id]
     )
 
     const subId = upsert.rows[0].id as string
@@ -186,14 +194,18 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
           // apaga resposta anterior dessa pergunta
           await pool.query(
             `DELETE FROM public.avaliacao_respostas
-             WHERE cpf_professor = $1 AND id_aluno = $2 AND id_pergunta = $3`,
-            [cpf, alunoIdNum, perguntaId]
+             WHERE cpf_professor = $1
+               AND id_aluno = $2
+               AND id_turma = $3
+               AND id_pergunta = $4
+               AND id_fase = $5`,
+            [cpf, alunoIdNum, turmaIdNum, perguntaId, faseAtual.id]
           )
 
           await pool.query(
-            `INSERT INTO public.avaliacao_respostas (id_aluno, cpf_professor, id_pergunta, id_opcao, status, observacao)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [alunoIdNum, cpf, perguntaId, opcaoId, targetStatus, observacoes || null]
+            `INSERT INTO public.avaliacao_respostas (id_aluno, id_turma, cpf_professor, id_pergunta, id_opcao, status, observacao, id_fase)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [alunoIdNum, turmaIdNum, cpf, perguntaId, opcaoId, targetStatus, observacoes || null, faseAtual.id]
           )
         }
         await pool.query('COMMIT')
@@ -219,9 +231,10 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
             paee,
             estudo_caso,
             apoio_pedagogico
+            , id_fase
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (id_aluno, id_turma, cpf_professor)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT (id_aluno, id_turma, cpf_professor, id_fase)
           DO UPDATE SET
             paee = EXCLUDED.paee,
             estudo_caso = EXCLUDED.estudo_caso,
@@ -235,6 +248,7 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
             necessidadesEspecificas.paee ?? null,
             necessidadesEspecificas.estudoCaso ?? null,
             necessidadesEspecificas.apoioPedagogico ?? null,
+            faseAtual.id,
           ]
         )
 
@@ -244,8 +258,9 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
           WHERE id_aluno = $1
             AND id_turma = $2
             AND regexp_replace(cpf_professor, '\\D', '', 'g') = $3
+            AND id_fase = $4
           `,
-          [alunoIdNum, turmaIdNum, cpf]
+          [alunoIdNum, turmaIdNum, cpf, faseAtual.id]
         )
 
         for (const necessidadeId of selecionadas) {
@@ -256,11 +271,12 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
               id_turma,
               cpf_professor,
               id_necespecifica,
-              tipo
+              tipo,
+              id_fase
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             `,
-            [alunoIdNum, turmaIdNum, cpf, Number(necessidadeId), tipo]
+            [alunoIdNum, turmaIdNum, cpf, Number(necessidadeId), tipo, faseAtual.id]
           )
         }
 
@@ -273,11 +289,12 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
               cpf_professor,
               id_necespecifica,
               tipo,
-              descricao_outros
+              descricao_outros,
+              id_fase
             )
-            VALUES ($1, $2, $3, NULL, $4, $5)
+            VALUES ($1, $2, $3, NULL, $4, $5, $6)
             `,
-            [alunoIdNum, turmaIdNum, cpf, tipo, descricaoOutros]
+            [alunoIdNum, turmaIdNum, cpf, tipo, descricaoOutros, faseAtual.id]
           )
         }
 
