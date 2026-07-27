@@ -116,7 +116,7 @@ deploy() {
   echo "==> Backup criado em: $release_dir"
 
   echo "==> Rebuildando producao..."
-  "$APP_DIR/build-prod.sh"
+  "$APP_DIR/scripts/shell/build-prod.sh"
 
   cleanup_old_releases
 }
@@ -154,14 +154,14 @@ rollback() {
     "$release_dir/app/" "$APP_DIR/"
 
   echo "==> Rebuildando producao no commit restaurado..."
-  "$APP_DIR/build-prod.sh"
+  "$APP_DIR/scripts/shell/build-prod.sh"
 }
 
 usage() {
   cat <<USAGE
 Uso:
-  ./sync-prod-github.sh deploy
-  ./sync-prod-github.sh rollback [latest|/opt/projeto_piloto_app/releases/<pasta>]
+  ./scripts/shell/sync-prod-github.sh deploy
+  ./scripts/shell/sync-prod-github.sh rollback [latest|/opt/projeto_piloto_app/releases/<pasta>]
 
 Variaveis opcionais:
   BRANCH=main

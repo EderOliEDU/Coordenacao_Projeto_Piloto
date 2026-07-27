@@ -69,8 +69,8 @@ Adicione somente os arquivos que devem entrar nesta entrega. Exemplo:
 ```bash
 git add frontend/src/pages/SuperadminPage.tsx
 git add backend/src/routes/superadmin.ts
-git add sync-dev-local.sh
-git add build-dev.sh
+git add scripts/shell/sync-dev-local.sh
+git add scripts/shell/build-dev.sh
 ```
 
 Evite usar `git add .` quando houver muitas alteracoes pendentes no projeto. Use apenas se voce revisou o `git status` e tem certeza de que tudo deve ir para o GitHub.
@@ -126,11 +126,21 @@ Se a producao usa outra branch, troque `main` pelo nome correto.
 
 ### Atualizacao automatizada com backup do release atual
 
-Depois que o arquivo `sync-prod-github.sh` ja estiver no servidor de producao, prefira usar:
+Depois que o arquivo `scripts/shell/sync-prod-github.sh` ja estiver no servidor de producao, prefira usar:
 
 ```bash
 cd /opt/projeto_piloto_app/app
-BRANCH=main ./sync-prod-github.sh deploy
+BRANCH=main ./scripts/shell/sync-prod-github.sh deploy
+```
+
+Se a producao ainda estiver em um commit antigo e o script ainda nao existir nesse caminho, busque o script temporariamente do GitHub:
+
+```bash
+cd /opt/projeto_piloto_app/app
+git fetch origin main
+git show origin/main:scripts/shell/sync-prod-github.sh > /tmp/sync-prod-github.sh
+chmod +x /tmp/sync-prod-github.sh
+BRANCH=main APP_DIR=/opt/projeto_piloto_app/app /tmp/sync-prod-github.sh deploy
 ```
 
 Esse script:
@@ -139,26 +149,26 @@ Esse script:
 - cria uma copia do release atual em `/opt/projeto_piloto_app/releases`;
 - guarda o hash do commit que estava rodando;
 - baixa a branch configurada do GitHub com `git pull --ff-only`;
-- executa `./build-prod.sh`;
+- executa `./scripts/shell/build-prod.sh`;
 - mantem os ultimos backups de release para rollback.
 
 Se precisar voltar para o que estava funcionando antes:
 
 ```bash
 cd /opt/projeto_piloto_app/app
-./sync-prod-github.sh rollback
+./scripts/shell/sync-prod-github.sh rollback
 ```
 
 Para voltar para um backup especifico:
 
 ```bash
-./sync-prod-github.sh rollback /opt/projeto_piloto_app/releases/NOME-DA-PASTA
+./scripts/shell/sync-prod-github.sh rollback /opt/projeto_piloto_app/releases/NOME-DA-PASTA
 ```
 
 Depois de um rollback, a pasta do app fica no commit restaurado. No proximo deploy normal, rode novamente:
 
 ```bash
-BRANCH=main ./sync-prod-github.sh deploy
+BRANCH=main ./scripts/shell/sync-prod-github.sh deploy
 ```
 
 ## 5. Rebuildar producao
@@ -166,7 +176,7 @@ BRANCH=main ./sync-prod-github.sh deploy
 Na producao, rode:
 
 ```bash
-./build-prod.sh
+./scripts/shell/build-prod.sh
 ```
 
 O script deve:
@@ -262,7 +272,7 @@ Para voltar manualmente para o commit anterior:
 ```bash
 git log --oneline -5
 git checkout <hash-do-commit-anterior>
-./build-prod.sh
+./scripts/shell/build-prod.sh
 ```
 
 Depois, para voltar para a branch normal:
@@ -277,4 +287,4 @@ git checkout main
 - Sempre teste no DEV antes de atualizar producao.
 - Use `git diff --cached` antes do commit para evitar mandar arquivos indesejados.
 - Em producao, prefira `git pull --ff-only` para evitar merges acidentais no servidor.
-- O script `sync-dev-local.sh` e apenas para teste em DEV antes do GitHub; producao deve receber codigo via GitHub.
+- O script `scripts/shell/sync-dev-local.sh` e apenas para teste em DEV antes do GitHub; producao deve receber codigo via GitHub.

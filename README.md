@@ -25,7 +25,7 @@ Sistema de acompanhamento de aprendizagem da Educacao Infantil, utilizado por pr
 | Backend DEV | `http://172.17.2.42:3001` |
 | Branch de atualizacao | `codex/cronograma-turma-login` |
 
-Tudo que for feito para teste e validacao diaria deve ser tratado como **DEV**. Nao use comandos de producao, nem `build-prod.sh`, salvo pedido explicito.
+Tudo que for feito para teste e validacao diaria deve ser tratado como **DEV**. Nao use comandos de producao, nem `scripts/shell/build-prod.sh`, salvo pedido explicito.
 
 ### Producao
 
@@ -40,6 +40,7 @@ Tudo que for feito para teste e validacao diaria deve ser tratado como **DEV**. 
 backend/    API REST Express e acesso direto ao PostgreSQL
 frontend/   Interface web React/Vite
 docs/       Diagramas, documentos e migracoes
+scripts/    Scripts de apoio; arquivos shell ficam em scripts/shell/
 ```
 
 ## Configuracao do Backend
@@ -82,7 +83,7 @@ No servidor DEV:
 
 ```bash
 cd /opt/projeto_piloto_app/app
-./build-dev.sh
+./scripts/shell/build-dev.sh
 ```
 
 O script deve:
@@ -100,8 +101,8 @@ O script deve:
 Se os scripts `.sh` vierem com quebra de linha Windows:
 
 ```bash
-sed -i 's/\r$//' build-dev.sh stop-dev.sh start-dev.sh
-chmod +x build-dev.sh stop-dev.sh start-dev.sh
+sed -i 's/\r$//' scripts/shell/build-dev.sh scripts/shell/stop-dev.sh scripts/shell/start-dev.sh
+chmod +x scripts/shell/build-dev.sh scripts/shell/stop-dev.sh scripts/shell/start-dev.sh
 ```
 
 Se ainda aparecer erro de shebang como `#!/usr/bin/env: Arquivo ou diretorio inexistente`, remova BOM/caracter invisivel:
@@ -109,13 +110,13 @@ Se ainda aparecer erro de shebang como `#!/usr/bin/env: Arquivo ou diretorio ine
 ```bash
 python3 - <<'PY'
 from pathlib import Path
-for name in ["build-dev.sh", "stop-dev.sh", "start-dev.sh"]:
+for name in ["scripts/shell/build-dev.sh", "scripts/shell/stop-dev.sh", "scripts/shell/start-dev.sh"]:
     p = Path(name)
     data = p.read_bytes()
     data = data.replace(b"\xef\xbb\xbf", b"").replace(b"\r\n", b"\n")
     p.write_bytes(data)
 PY
-chmod +x build-dev.sh stop-dev.sh start-dev.sh
+chmod +x scripts/shell/build-dev.sh scripts/shell/stop-dev.sh scripts/shell/start-dev.sh
 ```
 
 ## Atualizacao Pelo GitHub
@@ -162,7 +163,7 @@ Depois do push no GitHub:
 cd /opt/projeto_piloto_app/app
 git fetch origin
 git reset --hard origin/codex/cronograma-turma-login
-./build-dev.sh
+./scripts/shell/build-dev.sh
 ```
 
 Se `backend/.env_dev` nao existir apos o `reset --hard`, restaure do backup ou recrie antes do build:

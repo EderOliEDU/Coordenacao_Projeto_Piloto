@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="/opt/projeto_piloto_app/app"
 DEV_IP="172.17.2.42"
 FRONT_PORT="5173"
@@ -14,7 +15,7 @@ if [[ "$HOST_IP" != "$DEV_IP" ]]; then
 fi
 
 echo "==> Build + Start DEV em $HOST_IP"
-./stop-dev.sh
+"$SCRIPT_DIR/stop-dev.sh"
 
 echo "==> Subindo DEV (build + remove-orphans)..."
 sudo docker compose --profile dev up -d --build --remove-orphans
