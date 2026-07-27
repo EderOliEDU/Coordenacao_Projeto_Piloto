@@ -124,6 +124,43 @@ git pull --ff-only origin main
 
 Se a producao usa outra branch, troque `main` pelo nome correto.
 
+### Atualizacao automatizada com backup do release atual
+
+Depois que o arquivo `sync-prod-github.sh` ja estiver no servidor de producao, prefira usar:
+
+```bash
+cd /opt/projeto_piloto_app/app
+BRANCH=main ./sync-prod-github.sh deploy
+```
+
+Esse script:
+
+- valida que esta no IP de producao `192.168.0.122`;
+- cria uma copia do release atual em `/opt/projeto_piloto_app/releases`;
+- guarda o hash do commit que estava rodando;
+- baixa a branch configurada do GitHub com `git pull --ff-only`;
+- executa `./build-prod.sh`;
+- mantem os ultimos backups de release para rollback.
+
+Se precisar voltar para o que estava funcionando antes:
+
+```bash
+cd /opt/projeto_piloto_app/app
+./sync-prod-github.sh rollback
+```
+
+Para voltar para um backup especifico:
+
+```bash
+./sync-prod-github.sh rollback /opt/projeto_piloto_app/releases/NOME-DA-PASTA
+```
+
+Depois de um rollback, a pasta do app fica no commit restaurado. No proximo deploy normal, rode novamente:
+
+```bash
+BRANCH=main ./sync-prod-github.sh deploy
+```
+
 ## 5. Rebuildar producao
 
 Na producao, rode:
@@ -141,7 +178,34 @@ O script deve:
 - subir os containers;
 - executar smoke tests locais e publicos.
 
-## 6. Conferir resultado
+## 6. Atualizar atribuicoes/designacoes em producao
+
+As atribuicoes geradas a partir de `public.designacoes` sao dados do banco. Elas nao sao copiadas pelo GitHub.
+
+Depois do deploy em producao, acesse:
+
+```text
+https://fonica.rondonopolis.mt.gov.br/
+```
+
+Entre com usuario superadministrador e abra a pagina **Superadmin**.
+
+Na area **Atribuicoes por designacoes**, clique em:
+
+```text
+Atualizar atribuicoes
+```
+
+O sistema vai comparar `public.designacoes` com `public.atribuicao_professor`, somente para o projeto `PJINSTFONI`, e mostrar:
+
+- novas atribuicoes;
+- atribuicoes excluidas;
+- atribuicoes que ja existiam;
+- pendencias ignoradas.
+
+Se a tela retornar `0 nova(s), 0 excluida(s)`, a producao ja esta sincronizada.
+
+## 7. Conferir resultado
 
 Verifique os containers:
 
@@ -173,7 +237,7 @@ Depois acesse no navegador:
 https://fonica.rondonopolis.mt.gov.br/
 ```
 
-## 7. Se algo der errado
+## 8. Se algo der errado
 
 Veja logs do backend:
 

@@ -26,12 +26,16 @@ interface OpcaoResultado {
   corHex: string | null
   simbolo: string
   total: number
+  percentual: number
+  ordem?: number
 }
 interface PerguntaResultado {
   perguntaId: string
   perguntaTexto: string
   grupoNome: string
+  tipoEscala: string
   total: number
+  totalValidas: number
   dificuldade: number
   percentualDificuldade: number
   percentualDominio: number
@@ -139,6 +143,55 @@ function formatCpf(cpf: string) {
   return (cpf || '').replace(/\D/g, '').padStart(11, '0').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
 }
 
+interface ColunaResposta {
+  key: string
+  siglas: string[]
+  label: string
+  color: string
+  ordem: number
+}
+
+const respostaColumns: ColunaResposta[] = [
+  { key: 'SIM', siglas: ['SIM', 'S'], label: 'SIM', color: '#2ECC71', ordem: 1 },
+  { key: 'NAO', siglas: ['NAO', 'NÃO', 'N'], label: 'NAO', color: '#F39C12', ordem: 2 },
+  { key: 'SF', siglas: ['SF'], label: 'SF', color: '#2ECC71', ordem: 10 },
+  { key: 'SFP', siglas: ['SFP'], label: 'SFP', color: '#3498DB', ordem: 11 },
+  { key: 'NSF', siglas: ['NSF'], label: 'NSF', color: '#F39C12', ordem: 12 },
+  { key: 'PEA-D', siglas: ['PEA-D', 'D'], label: 'Domina', color: '#2ECC71', ordem: 20 },
+  { key: 'PEA-PD', siglas: ['PEA-PD', 'PD'], label: 'Pouca dificuldade', color: '#3498DB', ordem: 21 },
+  { key: 'PEA-TD', siglas: ['PEA-TD', 'TD'], label: 'Tem dificuldade', color: '#F1C40F', ordem: 22 },
+  { key: 'PEA-NDA', siglas: ['PEA-NDA', 'NDA', 'ND'], label: 'Nao domina ainda', color: '#F39C12', ordem: 23 },
+]
+
+function corOpcao(opcao: OpcaoResultado | undefined, fallback: string) {
+  return opcao?.corHex || fallback
+}
+
+function opcaoPorSiglas(pergunta: PerguntaResultado, siglas: string[]) {
+  const aliases = new Set(siglas.map((sigla) => sigla.toUpperCase()))
+  return pergunta.opcoes.find((opcao) => aliases.has(String(opcao.sigla || '').toUpperCase()))
+}
+
+function colunasDaPergunta(pergunta: PerguntaResultado) {
+  const siglasDaPergunta = new Set(pergunta.opcoes.map((opcao) => String(opcao.sigla || '').toUpperCase()))
+  return respostaColumns
+    .filter((coluna) => coluna.siglas.some((sigla) => siglasDaPergunta.has(sigla.toUpperCase())))
+    .sort((a, b) => a.ordem - b.ordem)
+}
+
+function agruparPerguntasPorColunas(eixo: EixoResultado) {
+  const grupos = new Map<string, { colunas: ColunaResposta[]; perguntas: PerguntaResultado[] }>()
+
+  for (const pergunta of eixo.perguntas) {
+    const colunas = colunasDaPergunta(pergunta)
+    const key = colunas.map((coluna) => coluna.key).join('|') || `pergunta-${pergunta.perguntaId}`
+    if (!grupos.has(key)) grupos.set(key, { colunas, perguntas: [] })
+    grupos.get(key)!.perguntas.push(pergunta)
+  }
+
+  return Array.from(grupos.values())
+}
+
 const card = {
   background: '#fff',
   border: '1px solid var(--line)',
@@ -191,6 +244,8 @@ export default function ResultadosPage() {
     if (!escolaId) return data.filtros.turmas
     return data.filtros.turmas.filter((turma) => turma.escolaId === escolaId)
   }, [data.filtros.turmas, escolaId])
+
+  const professorDelimitado = Boolean(professorCpf) || data.filtros.professores.length === 1
 
   function mudarVisao(value: string) {
     setVisao(value)
@@ -349,39 +404,82 @@ export default function ResultadosPage() {
             </table>
           </section>
 
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 16, alignItems: 'start', marginBottom: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 18, margin: '0 0 10px', color: 'var(--pmr-blue-dark)' }}>Resultados por eixo</h2>
-              <div style={{ display: 'grid', gap: 12 }}>
+          <section style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start', marginBottom: 16 }}>
+            <div style={{ ...card, padding: 18, overflowX: 'auto' }}>
+              <h2 style={{ fontSize: 18, margin: '0 0 10px', color: 'var(--pmr-blue-dark)' }}>Habilidades por eixo</h2>
+              {data.eixos.map((eixo) => {
+                const gruposPerguntas = agruparPerguntasPorColunas(eixo)
+                return (
+                  <div key={eixo.id} style={{ marginBottom: 20 }}>
+                    <h3 style={{ margin: '0 0 10px', fontSize: 16 }}>{eixo.nome}</h3>
+                    {gruposPerguntas.map((grupoPerguntas, groupIndex) => (
+                      <table key={grupoPerguntas.colunas.map((coluna) => coluna.key).join('|') || groupIndex} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 760, marginBottom: 12 }}>
+                        <thead>
+                          <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                            <th style={{ padding: '8px 6px', width: '38%' }}>Pergunta</th>
+                            <th style={{ padding: '8px 6px', textAlign: 'right' }}>Validas</th>
+                            {grupoPerguntas.colunas.map((coluna) => (
+                              <th key={coluna.key} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ width: 10, height: 10, borderRadius: 3, background: coluna.color }} />
+                                  {coluna.label}
+                                </span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grupoPerguntas.perguntas.map((pergunta) => (
+                            <tr key={pergunta.perguntaId} style={{ borderTop: '1px solid #edf2f7' }}>
+                              <td style={{ padding: '10px 6px', fontWeight: 700, lineHeight: 1.35 }}>{pergunta.perguntaTexto}</td>
+                              <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(pergunta.totalValidas || 0)}</td>
+                              {grupoPerguntas.colunas.map((coluna) => {
+                                const opcao = opcaoPorSiglas(pergunta, coluna.siglas)
+                                return (
+                                  <td key={coluna.key} style={{ padding: '10px 6px', textAlign: 'right' }}>
+                                    <strong style={{ color: corOpcao(opcao, coluna.color) }}>{pct(opcao?.percentual || 0)}</strong>
+                                    <div style={{ color: 'var(--muted)', fontSize: 12 }}>{number(opcao?.total || 0)} alunos</div>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ))}
+                  </div>
+                )
+              })}
+              {data.eixos.length === 0 && <p className="empty-state">Ainda nao ha respostas para os filtros selecionados.</p>}
+            </div>
+
+            {professorDelimitado && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 430px), 1fr))', gap: 16 }}>
                 {data.eixos.map((eixo) => (
                   <article key={eixo.id} style={{ ...card, padding: 18 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: 16 }}>{eixo.nome}</h3>
-                        <div style={{ color: 'var(--muted)', fontSize: 13 }}>{number(eixo.total)} respostas registradas</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <strong style={{ color: 'var(--pmr-green)' }}>{pct(eixo.percentualDominio)}</strong>
-                        <div style={{ color: 'var(--muted)', fontSize: 12 }}>dominio</div>
-                      </div>
-                    </div>
-                    <ProgressBar value={eixo.percentualDominio} />
-                    <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-                      {eixo.perguntas.slice(0, 6).map((pergunta) => (
-                        <div key={pergunta.perguntaId} style={{ borderTop: '1px solid #edf2f7', paddingTop: 8 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 74px 74px', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                            <span>{pergunta.perguntaTexto}</span>
-                            <strong style={{ color: 'var(--pmr-green)', textAlign: 'right' }}>{pct(pergunta.percentualDominio)}</strong>
-                            <strong style={{ color: 'var(--pmr-red)', textAlign: 'right' }}>{pct(pergunta.percentualDificuldade)}</strong>
+                    <h3 style={{ margin: '0 0 12px', fontSize: 16, color: 'var(--pmr-blue-dark)' }}>{eixo.nome}</h3>
+                    <div style={{ display: 'grid', gap: 14 }}>
+                      {eixo.perguntas.map((pergunta) => (
+                        <div key={pergunta.perguntaId} style={{ borderTop: '1px solid #edf2f7', paddingTop: 10 }}>
+                          <div style={{ fontWeight: 700, lineHeight: 1.35, marginBottom: 8 }}>{pergunta.perguntaTexto}</div>
+                          <div style={{ display: 'grid', gap: 7 }}>
+                            {pergunta.opcoes.map((opcao) => (
+                              <div key={opcao.id}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, marginBottom: 4 }}>
+                                  <span>{opcao.descricao || opcao.sigla}</span>
+                                  <strong>{number(opcao.total)} ({pct(opcao.percentual)})</strong>
+                                </div>
+                                <ProgressBar value={opcao.percentual} color={opcao.corHex || '#3498DB'} />
+                              </div>
+                            ))}
                           </div>
                         </div>
                       ))}
                     </div>
                   </article>
                 ))}
-                {data.eixos.length === 0 && <p className="empty-state">Ainda nao ha respostas para os filtros selecionados.</p>}
               </div>
-            </div>
+            )}
 
             <div>
               <h2 style={{ fontSize: 18, margin: '0 0 10px', color: 'var(--pmr-blue-dark)' }}>Habilidades criticas</h2>
@@ -392,9 +490,9 @@ export default function ResultadosPage() {
                     <div style={{ fontWeight: 700, margin: '3px 0 8px', lineHeight: 1.35 }}>{pergunta.perguntaTexto}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
                       <span>{number(pergunta.dificuldade)} respostas indicam dificuldade</span>
-                      <strong style={{ color: 'var(--pmr-red)' }}>{pct(pergunta.percentualDificuldade)}</strong>
+                      <strong style={{ color: '#F39C12' }}>{pct(pergunta.percentualDificuldade)}</strong>
                     </div>
-                    <ProgressBar value={pergunta.percentualDificuldade} color="var(--pmr-red)" />
+                    <ProgressBar value={pergunta.percentualDificuldade} color="#F39C12" />
                   </div>
                 ))}
                 {data.habilidadesCriticas.length === 0 && <p className="empty-state" style={{ margin: 0 }}>Sem habilidades criticas para exibir.</p>}

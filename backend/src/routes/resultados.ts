@@ -24,6 +24,27 @@ function pct(parte: number, total: number) {
   return total ? Math.round((parte / total) * 100) : 0
 }
 
+function ordemOpcao(sigla: string) {
+  const ordem: Record<string, number> = {
+    'PEA-D': 1,
+    'D': 1,
+    'SIM': 1,
+    'SF': 1,
+    'PEA-PD': 2,
+    'PD': 2,
+    'SFP': 2,
+    'PEA-TD': 3,
+    'TD': 3,
+    'MD/ME': 3,
+    'PEA-NDA': 4,
+    'NDA': 4,
+    'ND': 4,
+    'NSF': 4,
+    'NAO': 4,
+  }
+  return ordem[(sigla || '').toUpperCase()] || 99
+}
+
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -223,22 +244,30 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           o.descricao::text AS "descricao",
           o.cor_hex::text AS "corHex",
           o.simbolo::text AS "simbolo",
-          COUNT(*)::int AS "total"
-        FROM scope sc
-        JOIN public.submissoes_pg s
+          COUNT(DISTINCT ar.id_aluno)::int AS "total",
+          COUNT(DISTINCT ar_validas.id_aluno)::int AS "totalValidas"
+        FROM public.avaliacao_perguntas p
+        JOIN public.avaliacao_grupos g ON g.id_grupo = p.id_grupo
+        JOIN public.avaliacao_opcoes o ON o.tipo_escala = p.tipo_escala
+        LEFT JOIN scope sc ON true
+        LEFT JOIN public.submissoes_pg s
           ON regexp_replace(s.cpf_professor::text, '\\D', '', 'g') = sc.cpf_professor
          AND s.id_turma::text = sc.turma_id
          AND s.id_fase = $${distribuicaoParams.length + 1}
-        JOIN public.avaliacao_respostas ar
+         ${statusWhere}
+        LEFT JOIN public.avaliacao_respostas ar
           ON regexp_replace(ar.cpf_professor::text, '\\D', '', 'g') = regexp_replace(s.cpf_professor::text, '\\D', '', 'g')
          AND ar.id_aluno = s.id_aluno
          AND ar.id_turma::text = sc.turma_id
          AND ar.id_fase = s.id_fase
-        JOIN public.avaliacao_perguntas p ON p.id_pergunta = ar.id_pergunta
-        JOIN public.avaliacao_grupos g ON g.id_grupo = p.id_grupo
-        JOIN public.avaliacao_opcoes o ON o.id_opcao = ar.id_opcao
-        WHERE 1 = 1
-          ${statusWhere}
+         AND ar.id_pergunta = p.id_pergunta
+         AND ar.id_opcao = o.id_opcao
+        LEFT JOIN public.avaliacao_respostas ar_validas
+          ON regexp_replace(ar_validas.cpf_professor::text, '\\D', '', 'g') = regexp_replace(s.cpf_professor::text, '\\D', '', 'g')
+         AND ar_validas.id_aluno = s.id_aluno
+         AND ar_validas.id_turma::text = sc.turma_id
+         AND ar_validas.id_fase = s.id_fase
+         AND ar_validas.id_pergunta = p.id_pergunta
         GROUP BY g.id_grupo, g.nome_grupo, p.id_pergunta, p.texto_pergunta, p.tipo_escala,
                  o.id_opcao, o.sigla, o.descricao, o.cor_hex, o.simbolo
         ORDER BY g.id_grupo, p.id_pergunta, o.id_opcao
@@ -334,6 +363,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           perguntaTexto: row.perguntaTexto,
           tipoEscala: row.tipoEscala,
           total: 0,
+          totalValidas: 0,
           dominio: 0,
           dificuldade: 0,
           opcoes: [],
@@ -341,7 +371,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       }
 
       const total = Number(row.total || 0)
+      const totalValidas = Number(row.totalValidas || 0)
       const pergunta = perguntas.get(perguntaKey)
+      pergunta.totalValidas = Math.max(pergunta.totalValidas || 0, totalValidas)
       pergunta.total += total
       if (opcaoIndicaDominio(row.sigla)) pergunta.dominio += total
       if (opcaoIndicaDificuldade(row.sigla)) pergunta.dificuldade += total
@@ -353,6 +385,8 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         corHex: row.corHex || null,
         simbolo: row.simbolo || row.sigla || '',
         total,
+        percentual: pct(total, totalValidas),
+        ordem: ordemOpcao(row.sigla),
       }
       pergunta.opcoes.push(opcao)
 
@@ -364,8 +398,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
 
     for (const pergunta of perguntas.values()) {
-      pergunta.percentualDominio = pct(pergunta.dominio, pergunta.total)
-      pergunta.percentualDificuldade = pct(pergunta.dificuldade, pergunta.total)
+      pergunta.opcoes.sort((a: any, b: any) => a.ordem - b.ordem || String(a.sigla).localeCompare(String(b.sigla), 'pt-BR'))
+      pergunta.percentualDominio = pct(pergunta.dominio, pergunta.totalValidas)
+      pergunta.percentualDificuldade = pct(pergunta.dificuldade, pergunta.totalValidas)
 
       const grupoKey = pergunta.grupoId
       if (!grupos.has(grupoKey)) {
@@ -380,7 +415,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       }
 
       const grupo = grupos.get(grupoKey)
-      grupo.total += pergunta.total
+      grupo.total += pergunta.totalValidas
       grupo.dominio += pergunta.dominio
       grupo.dificuldade += pergunta.dificuldade
       grupo.perguntas.push(pergunta)
@@ -430,10 +465,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       filtros: {
         visao: visaoAtual,
         status: statusFiltro,
-        escolas: Array.from(escolasMap.values()),
-        turmas: Array.from(turmasMap.values()),
-        professores: Array.from(professoresMap.values()),
-        fases,
+        escolas: Array.from(escolasMap.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+        turmas: Array.from(turmasMap.values()).sort((a, b) => String(a.escolaNome).localeCompare(String(b.escolaNome), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR')),
+        professores: Array.from(professoresMap.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+        fases: fases.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
         faseAtual,
       },
       resumo: {
