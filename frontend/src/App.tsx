@@ -4,6 +4,7 @@ import TurmasPage from './pages/TurmasPage'
 import AlunosPage from './pages/AlunosPage'
 import FormularioPage from './pages/FormularioPage'
 import ResultadosPage from './pages/ResultadosPage'
+import ResultadosGraficosPage from './pages/ResultadosGraficosPage'
 import CronogramaTurmaPage from './pages/CronogramaTurmaPage'
 import CadastrarSenhaPage from './pages/CadastrarSenhaPage'
 import SuperadminPage from './pages/SuperadminPage'
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/cadastrar-senha" element={<CadastrarSenhaPage />} />
         <Route path="/turmas" element={<RequireAuth><TurmasPage /></RequireAuth>} />
         <Route path="/resultados" element={<RequireAuth><ResultadosPage /></RequireAuth>} />
+        <Route path="/resultados/graficos" element={<RequireAuth><ResultadosGraficosPage /></RequireAuth>} />
         <Route path="/superadmin" element={<RequireAuth><SuperadminPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/cronograma" element={<RequireAuth><CronogramaTurmaPage /></RequireAuth>} />
         <Route path="/turmas/:turmaId/alunos" element={<RequireAuth><AlunosPage /></RequireAuth>} />

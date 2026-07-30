@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 
 interface EscolaFiltro { id: string; nome: string }
+interface EtapaFiltro { id: string; nome: string; escolaId: string; escolaNome: string }
 interface ProfessorFiltro { cpf: string; nome: string }
-interface TurmaFiltro { id: string; nome: string; escolaId: string; escolaNome: string; turno?: string }
+interface TurmaFiltro { id: string; nome: string; escolaId: string; escolaNome: string; etapaId?: string; etapaDescricao?: string; turno?: string }
 interface FaseFiltro { id: number; nome: string; dataInicio: string; dataFim: string; ativa: boolean; ordem: number }
 interface Resumo {
   totalAlunos: number
@@ -80,11 +81,19 @@ interface PendenciaResumo {
   pendentes: number
   percentualPendente: number
 }
+interface ObservacaoTurma {
+  alunoId: string
+  alunoNome: string
+  observacao: string
+  status: string
+  atualizadoEm: string | null
+}
 interface ResultadosResponse {
   filtros: {
     visao: string
     status: string
     escolas: EscolaFiltro[]
+    etapas: EtapaFiltro[]
     turmas: TurmaFiltro[]
     professores: ProfessorFiltro[]
     fases: FaseFiltro[]
@@ -98,10 +107,11 @@ interface ResultadosResponse {
   escolasResumo: EscolaResumo[]
   professoresResumo: ProfessorResumo[]
   pendenciasResumo: PendenciaResumo[]
+  observacoesTurma: ObservacaoTurma[]
 }
 
 const emptyData: ResultadosResponse = {
-  filtros: { visao: 'GERAL', status: 'TODOS', escolas: [], turmas: [], professores: [], fases: [], faseAtual: null },
+  filtros: { visao: 'GERAL', status: 'TODOS', escolas: [], etapas: [], turmas: [], professores: [], fases: [], faseAtual: null },
   resumo: {
     totalAlunos: 0,
     totalTurmas: 0,
@@ -122,6 +132,7 @@ const emptyData: ResultadosResponse = {
   escolasResumo: [],
   professoresResumo: [],
   pendenciasResumo: [],
+  observacoesTurma: [],
 }
 
 const statusLabels: Record<string, string> = {
@@ -209,21 +220,24 @@ function ProgressBar({ value, color = 'var(--pmr-green)' }: { value: number; col
 
 export default function ResultadosPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [data, setData] = useState<ResultadosResponse>(emptyData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [visao, setVisao] = useState('GERAL')
-  const [escolaId, setEscolaId] = useState('')
-  const [turmaId, setTurmaId] = useState('')
-  const [professorCpf, setProfessorCpf] = useState('')
-  const [status, setStatus] = useState('TODOS')
-  const [faseId, setFaseId] = useState('')
+  const [visao, setVisao] = useState(searchParams.get('visao') || 'GERAL')
+  const [escolaId, setEscolaId] = useState(searchParams.get('escolaId') || '')
+  const [etapaId, setEtapaId] = useState(searchParams.get('etapaId') || '')
+  const [turmaId, setTurmaId] = useState(searchParams.get('turmaId') || '')
+  const [professorCpf, setProfessorCpf] = useState(searchParams.get('professorCpf') || '')
+  const [status, setStatus] = useState(searchParams.get('status') || 'TODOS')
+  const [faseId, setFaseId] = useState(searchParams.get('faseId') || '')
 
   useEffect(() => {
     const params = new URLSearchParams()
     params.set('visao', visao)
     params.set('status', status)
     if (escolaId) params.set('escolaId', escolaId)
+    if (etapaId) params.set('etapaId', etapaId)
     if (turmaId) params.set('turmaId', turmaId)
     if (professorCpf) params.set('professorCpf', professorCpf)
     if (faseId) params.set('faseId', faseId)
@@ -238,25 +252,56 @@ export default function ResultadosPage() {
       })
       .catch((err) => setError(err.response?.data?.error || 'Erro ao carregar resultados.'))
       .finally(() => setLoading(false))
-  }, [visao, escolaId, turmaId, professorCpf, status, faseId])
+  }, [visao, escolaId, etapaId, turmaId, professorCpf, status, faseId])
+
+  const etapasFiltradas = useMemo(() => {
+    if (!escolaId) return []
+    return data.filtros.etapas.filter((etapa) => etapa.escolaId === escolaId)
+  }, [data.filtros.etapas, escolaId])
 
   const turmasFiltradas = useMemo(() => {
-    if (!escolaId) return data.filtros.turmas
-    return data.filtros.turmas.filter((turma) => turma.escolaId === escolaId)
-  }, [data.filtros.turmas, escolaId])
+    return data.filtros.turmas.filter((turma) => {
+      if (escolaId && turma.escolaId !== escolaId) return false
+      if (etapaId && String(turma.etapaId || '') !== etapaId) return false
+      return true
+    })
+  }, [data.filtros.turmas, escolaId, etapaId])
 
   const professorDelimitado = Boolean(professorCpf) || data.filtros.professores.length === 1
 
   function mudarVisao(value: string) {
     setVisao(value)
     setEscolaId('')
+    setEtapaId('')
     setTurmaId('')
     setProfessorCpf('')
   }
 
   function mudarEscola(value: string) {
     setEscolaId(value)
+    setEtapaId('')
     setTurmaId('')
+  }
+
+  function mudarEtapa(value: string) {
+    setEtapaId(value)
+    setTurmaId('')
+  }
+
+  function filtrosAtuaisParams() {
+    const params = new URLSearchParams()
+    params.set('visao', visao)
+    params.set('status', status)
+    if (escolaId) params.set('escolaId', escolaId)
+    if (etapaId) params.set('etapaId', etapaId)
+    if (turmaId) params.set('turmaId', turmaId)
+    if (professorCpf) params.set('professorCpf', professorCpf)
+    if (faseId) params.set('faseId', faseId)
+    return params
+  }
+
+  function abrirGraficos() {
+    navigate(`/resultados/graficos?${filtrosAtuaisParams().toString()}`)
   }
 
   const metricas = [
@@ -277,21 +322,22 @@ export default function ResultadosPage() {
           <p>Gestao da aplicacao e dos indicadores pedagogicos do Projeto Instrucao Fonica.</p>
         </div>
         <div className="actions">
+          <label className="field" style={{ margin: 0, minWidth: 220 }}>
+            <span>Fase</span>
+            <select value={faseId} onChange={(event) => setFaseId(event.target.value)}>
+              <option value="">Fase atual</option>
+              {data.filtros.fases.map((fase) => (
+                <option key={fase.id} value={fase.id}>{fase.nome}</option>
+              ))}
+            </select>
+          </label>
+          <button onClick={abrirGraficos} className="primary-btn">Ver graficos</button>
           <button onClick={() => navigate('/turmas')} className="secondary-btn">Voltar</button>
         </div>
       </div>
 
       <section style={{ ...card, padding: 16, marginBottom: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
-          <label className="field" style={{ margin: 0 }}>
-            <span>Fase</span>
-            <select value={faseId} onChange={(event) => setFaseId(event.target.value)}>
-              <option value="">Fase atual</option>
-              {data.filtros.fases.map((fase) => (
-                <option key={fase.id} value={fase.id}>{fase.nome} ({fase.dataInicio} a {fase.dataFim})</option>
-              ))}
-            </select>
-          </label>
           <label className="field" style={{ margin: 0 }}>
             <span>Visao</span>
             <select value={visao} onChange={(event) => mudarVisao(event.target.value)}>
@@ -305,6 +351,13 @@ export default function ResultadosPage() {
             <select value={escolaId} onChange={(event) => mudarEscola(event.target.value)}>
               <option value="">Todas</option>
               {data.filtros.escolas.map((escola) => <option key={escola.id} value={escola.id}>{escola.nome}</option>)}
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0 }}>
+            <span>Etapa</span>
+            <select value={etapaId} onChange={(event) => mudarEtapa(event.target.value)} disabled={!escolaId}>
+              <option value="">{escolaId ? 'Todas' : 'Selecione uma escola'}</option>
+              {etapasFiltradas.map((etapa) => <option key={`${etapa.escolaId}-${etapa.id}`} value={etapa.id}>{etapa.escolaNome} - {etapa.nome}</option>)}
             </select>
           </label>
           <label className="field" style={{ margin: 0 }}>
@@ -350,6 +403,65 @@ export default function ResultadosPage() {
             ))}
           </section>
 
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16, alignItems: 'stretch', marginBottom: 16 }}>
+            <div style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', minHeight: 360, maxHeight: 460 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por escola</h2>
+              <div style={{ overflow: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 520 }}>
+                  <thead>
+                    <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px' }}>Escola</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.escolasResumo.map((escola) => (
+                      <tr key={escola.id} style={{ borderTop: '1px solid #edf2f7' }}>
+                        <td style={{ padding: '10px 6px', fontWeight: 700 }}>{escola.nome}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.totalTurmas)}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.avaliacoesEsperadas)}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(escola.percentualFinalizacao)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', minHeight: 360, maxHeight: 460 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por professor</h2>
+              <div style={{ overflow: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 620 }}>
+                  <thead>
+                    <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px' }}>Professor</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>Finalizados</th>
+                      <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.professoresResumo.map((professor) => (
+                      <tr key={professor.cpf} style={{ borderTop: '1px solid #edf2f7' }}>
+                        <td style={{ padding: '10px 6px' }}>
+                          <strong>{professor.nome}</strong>
+                          <div style={{ color: 'var(--muted)', fontSize: 12 }}>{formatCpf(professor.cpf)}</div>
+                        </td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.totalTurmas)}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.avaliacoesEsperadas)}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.finalizados)}</td>
+                        <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(professor.percentualFinalizacao)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <section style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start', marginBottom: 16 }}>
             <div style={{ ...card, padding: 18 }}>
               <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Cobertura da aplicacao</h2>
@@ -367,6 +479,23 @@ export default function ResultadosPage() {
               </div>
             </div>
           </section>
+
+          {turmaId && (
+            <section style={{ ...card, padding: 18, marginBottom: 16 }}>
+              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Observacoes da turma</h2>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {data.observacoesTurma.map((item) => (
+                  <div key={item.alunoId} style={{ borderTop: '1px solid #edf2f7', paddingTop: 10 }}>
+                    <strong style={{ display: 'block', marginBottom: 4 }}>{item.alunoNome}</strong>
+                    <p style={{ margin: 0, color: '#475867', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{item.observacao}</p>
+                  </div>
+                ))}
+                {data.observacoesTurma.length === 0 && (
+                  <p className="empty-state" style={{ margin: 0 }}>Nao ha observacoes preenchidas para esta turma.</p>
+                )}
+              </div>
+            </section>
+          )}
 
           <section style={{ ...card, padding: 18, overflowX: 'auto', marginBottom: 16 }}>
             <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Pendencias por escola e turma</h2>
@@ -500,60 +629,6 @@ export default function ResultadosPage() {
             </div>
           </section>
 
-          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 16 }}>
-            <div style={{ ...card, padding: 18, overflowX: 'auto' }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por escola</h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
-                    <th style={{ padding: '8px 6px' }}>Escola</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.escolasResumo.map((escola) => (
-                    <tr key={escola.id} style={{ borderTop: '1px solid #edf2f7' }}>
-                      <td style={{ padding: '10px 6px', fontWeight: 700 }}>{escola.nome}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.totalTurmas)}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(escola.avaliacoesEsperadas)}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(escola.percentualFinalizacao)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ ...card, padding: 18, overflowX: 'auto' }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: 17, color: 'var(--pmr-blue-dark)' }}>Gestao por professor</h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
-                    <th style={{ padding: '8px 6px' }}>Professor</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Turmas</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Alunos</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>Finalizados</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'right' }}>% Concluido</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.professoresResumo.map((professor) => (
-                    <tr key={professor.cpf} style={{ borderTop: '1px solid #edf2f7' }}>
-                      <td style={{ padding: '10px 6px' }}>
-                        <strong>{professor.nome}</strong>
-                        <div style={{ color: 'var(--muted)', fontSize: 12 }}>{formatCpf(professor.cpf)}</div>
-                      </td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.totalTurmas)}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.avaliacoesEsperadas)}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{number(professor.finalizados)}</td>
-                      <td style={{ padding: '10px 6px', textAlign: 'right' }}>{pct(professor.percentualFinalizacao)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </>
       )}
     </div>

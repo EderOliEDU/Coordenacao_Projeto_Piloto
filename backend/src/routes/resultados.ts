@@ -50,6 +50,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const {
       turmaId,
       escolaId,
+      etapaId,
       professorCpf,
       faseId,
       status,
@@ -57,6 +58,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     } = req.query as {
       turmaId?: string
       escolaId?: string
+      etapaId?: string
       professorCpf?: string
       faseId?: string
       status?: string
@@ -90,6 +92,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     if (turmaId) {
       scopeWhere.push(`t.id_turma::text = ${addParam(turmaId)}`)
+    }
+
+    if (etapaId) {
+      scopeWhere.push(`t.id_etapa::text = ${addParam(etapaId)}`)
     }
 
     if (!isAdministradorResultados) {
@@ -132,10 +138,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           COALESCE(NULLIF(trim(p.profissional_nome_social::text), ''), NULLIF(trim(p.profissional_nome::text), ''), ap.cpf_professor::text) AS professor_nome,
           e.id_escola::text AS escola_id,
           e.nome_escola::text AS escola_nome,
+          et.id_etapa::text AS etapa_id,
+          et.descricao::text AS etapa_descricao,
           t.id_turma::text AS turma_id,
           ('Turma ' || COALESCE(NULLIF(et.descricao::text, ''), 'Etapa nao informada') || ' ' || COALESCE(NULLIF(t.letra_turma::text, ''), t.id_turma::text))::text AS turma_nome,
-          t.turno::text AS turno,
-          et.descricao::text AS etapa_descricao
+          t.turno::text AS turno
         FROM public.atribuicao_professor ap
         JOIN public.turmas t ON t.id_turma = ap.id_turma
         JOIN public.escolas e ON e.id_escola = t.id_escola
@@ -156,6 +163,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       escolasResumoRes,
       professoresResumoRes,
       pendenciasResumoRes,
+      observacoesTurmaRes,
     ] = await Promise.all([
       pool.query(
         `
@@ -163,6 +171,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         SELECT DISTINCT
           escola_id AS "escolaId",
           escola_nome AS "escolaNome",
+          etapa_id AS "etapaId",
           turma_id AS "turmaId",
           turma_nome AS "turmaNome",
           turno,
@@ -347,6 +356,29 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         `,
         [...scopeParams, faseAtual.id]
       ),
+      pool.query(
+        `
+        ${scopeCte}
+        SELECT DISTINCT
+          a.id_aluno::text AS "alunoId",
+          a.nome::text AS "alunoNome",
+          s.observacoes::text AS observacao,
+          s.status::text AS status,
+          s.atualizada_em AS "atualizadoEm"
+        FROM scope sc
+        JOIN public.enturmacao_aluno ea ON ea.id_turma::text = sc.turma_id
+        JOIN public.alunos a ON a.id_aluno = ea.id_aluno
+        JOIN public.submissoes_pg s
+          ON regexp_replace(s.cpf_professor::text, '\\D', '', 'g') = sc.cpf_professor
+         AND s.id_turma::text = sc.turma_id
+         AND s.id_aluno = ea.id_aluno
+         AND s.id_fase = $${scopeParams.length + 1}
+        WHERE $${scopeParams.length + 2}::text <> ''
+          AND NULLIF(trim(COALESCE(s.observacoes::text, '')), '') IS NOT NULL
+        ORDER BY a.nome::text NULLS LAST
+        `,
+        [...scopeParams, faseAtual.id, turmaId || '']
+      ),
     ])
 
     const perguntas = new Map<string, any>()
@@ -441,10 +473,19 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     const escolasMap = new Map<string, { id: string; nome: string }>()
     const turmasMap = new Map<string, any>()
+    const etapasMap = new Map<string, { id: string; nome: string; escolaId: string; escolaNome: string }>()
     const professoresMap = new Map<string, { cpf: string; nome: string }>()
     for (const row of filtrosRes.rows) {
       if (row.escolaId && !escolasMap.has(row.escolaId)) {
         escolasMap.set(row.escolaId, { id: row.escolaId, nome: row.escolaNome || 'Escola sem nome' })
+      }
+      if (row.etapaId && !etapasMap.has(`${row.escolaId}-${row.etapaId}`)) {
+        etapasMap.set(`${row.escolaId}-${row.etapaId}`, {
+          id: row.etapaId,
+          nome: row.etapaDescricao || 'Etapa sem nome',
+          escolaId: row.escolaId,
+          escolaNome: row.escolaNome || 'Escola sem nome',
+        })
       }
       if (row.turmaId && !turmasMap.has(row.turmaId)) {
         turmasMap.set(row.turmaId, {
@@ -452,6 +493,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           nome: row.turmaNome,
           escolaId: row.escolaId,
           escolaNome: row.escolaNome,
+          etapaId: row.etapaId,
           etapaDescricao: row.etapaDescricao,
           turno: row.turno,
         })
@@ -466,6 +508,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         visao: visaoAtual,
         status: statusFiltro,
         escolas: Array.from(escolasMap.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+        etapas: Array.from(etapasMap.values()).sort((a, b) => String(a.escolaNome).localeCompare(String(b.escolaNome), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR')),
         turmas: Array.from(turmasMap.values()).sort((a, b) => String(a.escolaNome).localeCompare(String(b.escolaNome), 'pt-BR') || String(a.nome).localeCompare(String(b.nome), 'pt-BR')),
         professores: Array.from(professoresMap.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
         fases: fases.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
@@ -522,6 +565,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         submissoes: Number(row.submissoes || 0),
         pendentes: Number(row.pendentes || 0),
         percentualPendente: pct(Number(row.pendentes || 0), Number(row.avaliacoesEsperadas || 0)),
+      })),
+      observacoesTurma: observacoesTurmaRes.rows.map((row) => ({
+        alunoId: row.alunoId,
+        alunoNome: row.alunoNome || 'Aluno sem nome',
+        observacao: row.observacao || '',
+        status: row.status || '',
+        atualizadoEm: row.atualizadoEm || null,
       })),
     })
   } catch (err) {
