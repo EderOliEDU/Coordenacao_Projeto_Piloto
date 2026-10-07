@@ -127,8 +127,8 @@ rsync -az --delete --info=progress2 --no-owner --no-group \
   "$SOURCE_DIR/" "$APP_DIR/"
 
 echo "==> Rebuildando DEV sem git pull..."
-chmod +x ./build-dev.sh ./stop-dev.sh
-SKIP_GIT_PULL=1 ./build-dev.sh
+chmod +x "$APP_DIR/scripts/shell/build-dev.sh" "$APP_DIR/scripts/shell/stop-dev.sh"
+SKIP_GIT_PULL=1 "$APP_DIR/scripts/shell/build-dev.sh"
 
 echo
 echo "==> Pronto. Acesse: http://$DEV_IP:$FRONT_PORT"

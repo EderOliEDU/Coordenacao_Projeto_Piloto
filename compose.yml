@@ -9,6 +9,9 @@
       - ./backend/.env_dev
     environment:
       - NODE_ENV=development
+      - AUDIO_STORAGE_PATH=/opt/projeto_piloto_app/data/audios
+    volumes:
+      - /opt/projeto_piloto_app/data/audios:/opt/projeto_piloto_app/data/audios
     ports:
       - "3001:3001"
     restart: always
@@ -18,10 +21,12 @@
     build:
       context: ./frontend
       args:
-        VITE_API_URL: "http://172.17.2.42:3001"
+        VITE_API_URL: ""
         NGINX_CONF: "nginx.dev.conf"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     ports:
-      - "5173:80"
+      - "5173:443"
     depends_on:
       - backend-dev
     restart: always
@@ -54,23 +59,15 @@
     depends_on:
       - backend-prod
     restart: always
-
-  caddy:
-    profiles: ["prod"]
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend-prod
-    restart: always
+    networks:
+      default:
+      web-proxy:
+        aliases:
+          - fonica-frontend
 
 volumes:
   pg_dev:
-  caddy_data:
-  caddy_config:
+
+networks:
+  web-proxy:
+    external: true

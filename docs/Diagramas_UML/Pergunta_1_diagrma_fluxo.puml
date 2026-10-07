@@ -1,0 +1,68 @@
+@startuml
+title Fluxo da Pergunta 1 - Público Alvo da Educação Especial?
+
+start
+
+:Professor abre formulário do aluno;
+:P1 - Público Alvo da Educação Especial?;
+
+if (Resposta P1?) then (SIM)
+  :Define paee = true;
+  :Limpa caminho de não-PAEE;
+  :Exibe lista de necessidades específicas PAEE;
+  :Professor marca uma ou mais necessidades PAEE;
+  :tipoNecessidade = PAEE;
+  :Salvar contexto:
+  - paee = true
+  - estudo_caso = false/null
+  - apoio_pedagogico = null;
+  :Salvar necessidades selecionadas
+  em aluno_necessidades_especificas;
+elseif (NÃO)
+  :Define paee = false;
+  :Exibe caminhos para aluno não-PAEE;
+
+  if (Caminho selecionado?) then (P2 - Em estudo de caso?)
+    :Define estudo_caso = true;
+    :Exibe lista de necessidades específicas PAEE;
+    :Professor marca uma ou mais necessidades PAEE;
+    :tipoNecessidade = PAEE;
+    :Salvar contexto:
+    - paee = false
+    - estudo_caso = true
+    - apoio_pedagogico = null;
+    :Salvar necessidades PAEE selecionadas;
+  else (Apoio pedagógico)
+    :Pergunta se precisa de apoio pedagógico;
+
+    if (Apoio pedagógico?) then (SIM)
+      :Define apoio_pedagogico = true;
+      :Exibe necessidades tipo APOIO;
+      :Professor marca necessidades APOIO
+      ou preenche descrição "Outros";
+      :tipoNecessidade = APOIO;
+      :Salvar contexto:
+      - paee = false
+      - estudo_caso = false/null
+      - apoio_pedagogico = true;
+      :Salvar necessidades APOIO selecionadas;
+    else (NÃO)
+      :Define apoio_pedagogico = false;
+      :tipoNecessidade = null;
+      :Salvar contexto:
+      - paee = false
+      - estudo_caso = false/null
+      - apoio_pedagogico = false;
+      :Não salva necessidades específicas;
+    endif
+  endif
+else (Sem resposta)
+  :P1 fica pendente;
+  :Formulário não fica completo para finalizar;
+endif
+
+:Salvar respostas do formulário;
+:Salvar submissão como RASCUNHO ou FINALIZADO;
+
+stop
+@enduml

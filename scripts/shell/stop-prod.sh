@@ -8,7 +8,7 @@ echo "==> Parando PROD (sem derrubar redes compartilhadas)..."
 sudo docker compose --profile prod stop || true
 
 echo "==> Removendo containers PROD..."
-sudo docker rm -f app-frontend-prod-1 app-backend-prod-1 2>/dev/null || true
+sudo docker rm -f app-frontend-prod-1 app-backend-prod-1 app-caddy-1 2>/dev/null || true
 
 echo "==> Containers restantes:"
 sudo docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

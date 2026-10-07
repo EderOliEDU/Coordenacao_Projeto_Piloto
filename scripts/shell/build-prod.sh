@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="/opt/projeto_piloto_app/app"
 PROD_IP="192.168.0.122"
 FRONT_PORT="5173"
@@ -39,7 +40,7 @@ trap restore_env_files EXIT
 restore_env_files
 
 echo "==> Build + Start PROD em $HOST_IP"
-./stop-prod.sh
+"$SCRIPT_DIR/stop-prod.sh"
 
 echo "==> Subindo PROD (build)..."
 sudo docker compose --profile prod up -d --build

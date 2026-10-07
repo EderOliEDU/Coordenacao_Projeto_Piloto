@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
-import { isAdministrador } from '../services/permissions'
+import { isAdministrador, usuarioTemPerfil } from '../services/permissions'
 
 const router = Router()
 router.use(authMiddleware)
@@ -72,7 +72,7 @@ router.get('/:turmaId', async (req: AuthRequest, res: Response) => {
     const cpf = getEffectiveProfessorCpf(req)
     const turmaId = Number(req.params.turmaId)
     if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
-    const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
+    const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
     const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)
     if (!turma) return res.status(403).json({ error: 'Acesso negado a esta turma' })
@@ -130,7 +130,7 @@ router.put('/:turmaId', blockViewOnlyWrites, async (req: AuthRequest, res: Respo
   const cpf = getEffectiveProfessorCpf(req)
   const turmaId = Number(req.params.turmaId)
   if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
-  const canViewAll = isAdministrador(authenticatedCpf) && !isViewOnlyMode(req)
+  const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
   try {
     const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)

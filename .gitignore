@@ -15,4 +15,17 @@ frontend/.env.*
 
 .codex-backups/
 backup_respostas_*.sql
-out/
+out/certs/
+data/audios/
+
+# Arquivos locais / segredos
+/certs/
+/data/audios/
+/out/
+/typescript
+
+# Arquivos locais / segredos
+/certs/
+/data/audios/
+/out/
+/typescript

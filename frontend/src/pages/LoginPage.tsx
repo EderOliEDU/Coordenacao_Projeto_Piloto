@@ -25,7 +25,7 @@ export default function LoginPage() {
 
       localStorage.setItem('token', data.token)
       localStorage.setItem('professor', JSON.stringify(data.professor))
-      navigate('/turmas')
+      navigate('/inicio')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Erro ao autenticar')
     } finally {

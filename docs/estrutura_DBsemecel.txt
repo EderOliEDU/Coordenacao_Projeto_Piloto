@@ -1,0 +1,1469 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict IekFNV6CLFzWzq6E5QfmeCctjFpaIHJqrcNHeWmWhGVTQuSkMTMAfqwBxZJKdc4
+
+-- Dumped from database version 17.10 (Debian 17.10-0+deb13u1)
+-- Dumped by pg_dump version 17.10 (Debian 17.10-0+deb13u1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
+--
+-- Name: unaccent; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION unaccent; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: aluno_necessidades_contexto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aluno_necessidades_contexto (
+    id_aluno integer NOT NULL,
+    id_turma integer NOT NULL,
+    cpf_professor text NOT NULL,
+    paee boolean,
+    apoio_pedagogico boolean,
+    criada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    atualizada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    estudo_caso boolean,
+    id_fase integer DEFAULT 1 NOT NULL
+);
+
+
+--
+-- Name: aluno_necessidades_especificas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aluno_necessidades_especificas (
+    id_aluno_necespecifica bigint NOT NULL,
+    id_aluno integer NOT NULL,
+    id_turma integer NOT NULL,
+    cpf_professor text NOT NULL,
+    id_necespecifica integer,
+    tipo text NOT NULL,
+    descricao_outros text,
+    criada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_fase integer DEFAULT 1,
+    CONSTRAINT aluno_necessidades_especificas_tipo_check CHECK ((tipo = ANY (ARRAY['PAEE'::text, 'APOIO'::text])))
+);
+
+
+--
+-- Name: aluno_necessidades_especificas_id_aluno_necespecifica_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.aluno_necessidades_especificas_id_aluno_necespecifica_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: aluno_necessidades_especificas_id_aluno_necespecifica_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.aluno_necessidades_especificas_id_aluno_necespecifica_seq OWNED BY public.aluno_necessidades_especificas.id_aluno_necespecifica;
+
+
+--
+-- Name: alunos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alunos (
+    id_aluno integer NOT NULL,
+    escola text,
+    serie text,
+    turma text,
+    turno text,
+    inep character varying(20),
+    nome text,
+    cpf character varying(15),
+    situacao text
+);
+
+
+--
+-- Name: alunos_id_aluno_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.alunos_id_aluno_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: alunos_id_aluno_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.alunos_id_aluno_seq OWNED BY public.alunos.id_aluno;
+
+
+--
+-- Name: alunos_temp; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alunos_temp (
+    dados text
+);
+
+
+--
+-- Name: atribuicao_professor; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.atribuicao_professor (
+    id_atribuicao integer NOT NULL,
+    cpf_professor character varying(11),
+    id_turma integer
+);
+
+
+--
+-- Name: atribuicao_professor_id_atribuicao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.atribuicao_professor_id_atribuicao_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: atribuicao_professor_id_atribuicao_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.atribuicao_professor_id_atribuicao_seq OWNED BY public.atribuicao_professor.id_atribuicao;
+
+
+--
+-- Name: avaliacao_fases; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.avaliacao_fases (
+    id_fase integer NOT NULL,
+    nome text NOT NULL,
+    data_inicio date NOT NULL,
+    data_fim date NOT NULL,
+    ativo boolean DEFAULT true NOT NULL,
+    ordem integer DEFAULT 1 NOT NULL,
+    descricao text,
+    criada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    atualizada_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT avaliacao_fases_periodo_check CHECK ((data_fim >= data_inicio))
+);
+
+
+--
+-- Name: avaliacao_fases_id_fase_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.avaliacao_fases_id_fase_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: avaliacao_fases_id_fase_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.avaliacao_fases_id_fase_seq OWNED BY public.avaliacao_fases.id_fase;
+
+
+--
+-- Name: avaliacao_grupos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.avaliacao_grupos (
+    id_grupo integer NOT NULL,
+    nome_grupo text NOT NULL
+);
+
+
+--
+-- Name: avaliacao_grupos_id_grupo_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.avaliacao_grupos_id_grupo_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: avaliacao_grupos_id_grupo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.avaliacao_grupos_id_grupo_seq OWNED BY public.avaliacao_grupos.id_grupo;
+
+
+--
+-- Name: avaliacao_opcoes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.avaliacao_opcoes (
+    id_opcao integer NOT NULL,
+    tipo_escala text,
+    sigla text,
+    descricao text,
+    cor_hex text,
+    simbolo text
+);
+
+
+--
+-- Name: avaliacao_opcoes_id_opcao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.avaliacao_opcoes_id_opcao_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: avaliacao_opcoes_id_opcao_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.avaliacao_opcoes_id_opcao_seq OWNED BY public.avaliacao_opcoes.id_opcao;
+
+
+--
+-- Name: avaliacao_perguntas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.avaliacao_perguntas (
+    id_pergunta integer NOT NULL,
+    id_grupo integer,
+    texto_pergunta text NOT NULL,
+    tipo_escala text
+);
+
+
+--
+-- Name: avaliacao_perguntas_id_pergunta_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.avaliacao_perguntas_id_pergunta_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: avaliacao_perguntas_id_pergunta_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.avaliacao_perguntas_id_pergunta_seq OWNED BY public.avaliacao_perguntas.id_pergunta;
+
+
+--
+-- Name: avaliacao_respostas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.avaliacao_respostas (
+    id_resposta integer NOT NULL,
+    id_aluno integer,
+    cpf_professor text,
+    id_pergunta integer,
+    id_opcao integer,
+    data_avaliacao timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    status text DEFAULT 'RASCUNHO'::text,
+    observacao text,
+    id_fase integer DEFAULT 1,
+    id_turma integer
+);
+
+
+--
+-- Name: avaliacao_respostas_id_resposta_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.avaliacao_respostas_id_resposta_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: avaliacao_respostas_id_resposta_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.avaliacao_respostas_id_resposta_seq OWNED BY public.avaliacao_respostas.id_resposta;
+
+
+--
+-- Name: cronograma_aplicacao; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cronograma_aplicacao (
+    id_cronograma_aplicacao integer NOT NULL,
+    tema character varying NOT NULL,
+    id_etapa integer NOT NULL,
+    ordem character varying
+);
+
+
+--
+-- Name: TABLE cronograma_aplicacao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.cronograma_aplicacao IS 'Cadastro dos conteúdos previstos no cronograma de aplicação por etapa.';
+
+
+--
+-- Name: COLUMN cronograma_aplicacao.id_etapa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.cronograma_aplicacao.id_etapa IS 'Etapa/agrupamento ao qual o conteúdo se aplica.';
+
+
+--
+-- Name: COLUMN cronograma_aplicacao.ordem; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.cronograma_aplicacao.ordem IS 'Ordem de exibição do conteúdo no checklist.';
+
+
+--
+-- Name: cronograma_aplicacao_backup_20260617; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cronograma_aplicacao_backup_20260617 (
+    id_cronograma_aplicacao integer,
+    tema text,
+    id_etapa integer,
+    ordem integer
+);
+
+
+--
+-- Name: cronograma_aplicacao_id_cronograma_aplicacao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cronograma_aplicacao_id_cronograma_aplicacao_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cronograma_aplicacao_id_cronograma_aplicacao_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cronograma_aplicacao_id_cronograma_aplicacao_seq OWNED BY public.cronograma_aplicacao.id_cronograma_aplicacao;
+
+
+--
+-- Name: de_para_escolas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.de_para_escolas (
+    escola_original text NOT NULL,
+    id_escola integer,
+    escola_corrigida text,
+    obs text
+);
+
+
+--
+-- Name: de_para_turmas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.de_para_turmas (
+    turma_original text,
+    id_multi_etapas integer,
+    id_etapas integer,
+    turma_corrigida text,
+    obs text
+);
+
+
+--
+-- Name: designacoes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.designacoes (
+    id_designacao integer NOT NULL,
+    escola_nome_bruto text,
+    nome_do_professor text,
+    turma_original text
+);
+
+
+--
+-- Name: designacoes_id_designacao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.designacoes_id_designacao_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: designacoes_id_designacao_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.designacoes_id_designacao_seq OWNED BY public.designacoes.id_designacao;
+
+
+--
+-- Name: enturmacao_aluno; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.enturmacao_aluno (
+    id_enturmacao integer NOT NULL,
+    id_turma integer,
+    id_aluno integer
+);
+
+
+--
+-- Name: enturmacao_aluno_id_enturmacao_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.enturmacao_aluno_id_enturmacao_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: enturmacao_aluno_id_enturmacao_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.enturmacao_aluno_id_enturmacao_seq OWNED BY public.enturmacao_aluno.id_enturmacao;
+
+
+--
+-- Name: escolas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.escolas (
+    id_escola integer NOT NULL,
+    nome_escola text NOT NULL,
+    projeto character varying(10)
+);
+
+
+--
+-- Name: escolas_id_escola_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.escolas_id_escola_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: escolas_id_escola_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.escolas_id_escola_seq OWNED BY public.escolas.id_escola;
+
+
+--
+-- Name: etapas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.etapas (
+    id_etapa integer NOT NULL,
+    descricao text,
+    projeto character varying
+);
+
+
+--
+-- Name: import_alunos_csv_staging; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.import_alunos_csv_staging (
+    id_import bigint NOT NULL,
+    escola_original text,
+    serie_original text,
+    turma_original text,
+    turno_original text,
+    inep text,
+    nome text,
+    cpf text,
+    situacao text,
+    escola_norm text,
+    turma_norm text,
+    id_escola integer,
+    id_etapa integer,
+    id_turma integer,
+    turma_corrigida text,
+    id_aluno integer,
+    status_importacao text,
+    observacao text,
+    criado_em timestamp with time zone DEFAULT now(),
+    id_multi_etapa integer
+);
+
+
+--
+-- Name: import_alunos_csv_staging_id_import_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.import_alunos_csv_staging_id_import_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: import_alunos_csv_staging_id_import_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.import_alunos_csv_staging_id_import_seq OWNED BY public.import_alunos_csv_staging.id_import;
+
+
+--
+-- Name: multietapas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.multietapas (
+    id_multi_etapa integer NOT NULL,
+    descricao text,
+    id_etapa_1 integer,
+    id_etapa_2 integer,
+    id_etapa_3 integer,
+    id_etapa_4 integer,
+    id_etapa_5 integer
+);
+
+
+--
+-- Name: necessidades_específicas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."necessidades_específicas" (
+    id_necespecifica integer NOT NULL,
+    "descrição" character varying,
+    paee character varying(5)
+);
+
+
+--
+-- Name: professores; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.professores (
+    profissional_cpf text NOT NULL,
+    profissional_nome text,
+    profissional_nome_social text,
+    profissional_dt_nascimento text,
+    profissional_e_mail text,
+    profissional_ds_logradouro_res text,
+    profissional_bairro_res text,
+    profissional_nu_endereco_res text,
+    profissional_cep_res text,
+    profissional_co_municipio_res text,
+    profissional_co_uf_res text,
+    profissional_genero text,
+    profissional_sexo text,
+    profissional_raca_cor text,
+    def_baixa_visao text,
+    def_cegueira text,
+    def_auditiva text,
+    def_fisica text,
+    def_intelectual text,
+    def_surdez text,
+    def_surdocegueira text,
+    def_multipla text,
+    tea text,
+    altas_habilidades text,
+    co_nivel_escolaridade text,
+    co_tipo_ensino_medio text,
+    co_formacao_1 text,
+    co_area_1 text,
+    no_inst_1 text,
+    ano_ini_1 text,
+    ano_fim_1 text,
+    co_formacao_2 text,
+    co_area_2 text,
+    no_inst_2 text,
+    ano_ini_2 text,
+    ano_fim_2 text,
+    co_entidade text,
+    no_entidade text,
+    co_matricula_rede text,
+    co_tipo_vinculo text,
+    co_funcao text,
+    data_ingresso text,
+    data_fim text,
+    carga_horaria_semanal text,
+    extras_ignore text,
+    senha text,
+    corporativo_e_mail text,
+    senha_temporaria boolean DEFAULT false NOT NULL,
+    senha_temporaria_criada_em timestamp with time zone,
+    senha_cadastro_token text,
+    senha_cadastro_expira_em timestamp with time zone
+);
+
+
+--
+-- Name: submissoes_pg; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submissoes_pg (
+    id bigint NOT NULL,
+    cpf_professor character varying(11) NOT NULL,
+    id_turma integer NOT NULL,
+    id_aluno integer NOT NULL,
+    formulario_id text NOT NULL,
+    status text DEFAULT 'RASCUNHO'::text NOT NULL,
+    observacoes text,
+    criada_em timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    atualizada_em timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id_fase integer DEFAULT 1
+);
+
+
+--
+-- Name: submissoes_pg_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.submissoes_pg_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: submissoes_pg_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.submissoes_pg_id_seq OWNED BY public.submissoes_pg.id;
+
+
+--
+-- Name: temp_de_para_work; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.temp_de_para_work (
+    id_row integer NOT NULL,
+    turma_original text,
+    id_multi_etapas integer,
+    id_etapas integer,
+    turma_corrigida text,
+    obs text
+);
+
+
+--
+-- Name: temp_de_para_work_id_row_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.temp_de_para_work_id_row_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: temp_de_para_work_id_row_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.temp_de_para_work_id_row_seq OWNED BY public.temp_de_para_work.id_row;
+
+
+--
+-- Name: turma_cronograma_aplicacao; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.turma_cronograma_aplicacao (
+    id_turma integer NOT NULL,
+    id_cronograma_aplicacao integer NOT NULL,
+    cpf_professor text NOT NULL,
+    atualizado_em timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE turma_cronograma_aplicacao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.turma_cronograma_aplicacao IS 'Itens do cronograma de aplicação apresentados a cada turma.';
+
+
+--
+-- Name: COLUMN turma_cronograma_aplicacao.id_turma; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.turma_cronograma_aplicacao.id_turma IS 'Turma para a qual o conteúdo foi apresentado.';
+
+
+--
+-- Name: COLUMN turma_cronograma_aplicacao.id_cronograma_aplicacao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.turma_cronograma_aplicacao.id_cronograma_aplicacao IS 'Item correspondente em public.cronograma_aplicacao.';
+
+
+--
+-- Name: COLUMN turma_cronograma_aplicacao.cpf_professor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.turma_cronograma_aplicacao.cpf_professor IS 'CPF da professora que realizou a última atualização.';
+
+
+--
+-- Name: COLUMN turma_cronograma_aplicacao.atualizado_em; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.turma_cronograma_aplicacao.atualizado_em IS 'Data e hora da última atualização do registro.';
+
+
+--
+-- Name: turmas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.turmas (
+    id_turma integer NOT NULL,
+    id_escola integer,
+    id_etapa integer,
+    id_multi_etapa integer,
+    letra_turma character varying(10),
+    turno text
+);
+
+
+--
+-- Name: turmas_id_turma_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.turmas_id_turma_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: turmas_id_turma_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.turmas_id_turma_seq OWNED BY public.turmas.id_turma;
+
+
+--
+-- Name: usuarios_acessos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.usuarios_acessos (
+    id_usuario_acesso bigint NOT NULL,
+    cpf_usuario text NOT NULL,
+    perfil text NOT NULL,
+    id_escola integer,
+    ativo boolean DEFAULT true NOT NULL,
+    criado_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    atualizado_em timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT usuarios_acessos_cpf_check CHECK ((cpf_usuario ~ '^[0-9]{11}$'::text)),
+    CONSTRAINT usuarios_acessos_escopo_check CHECK ((((perfil = ANY (ARRAY['SUPERADMIN'::text, 'ADMINISTRADOR'::text])) AND (id_escola IS NULL)) OR ((perfil = ANY (ARRAY['COORDENADOR'::text, 'DIRETOR'::text])) AND (id_escola IS NOT NULL)))),
+    CONSTRAINT usuarios_acessos_perfil_check CHECK ((perfil = ANY (ARRAY['SUPERADMIN'::text, 'ADMINISTRADOR'::text, 'COORDENADOR'::text, 'DIRETOR'::text])))
+);
+
+
+--
+-- Name: TABLE usuarios_acessos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.usuarios_acessos IS 'Define perfis de acesso ao sistema e escopos por escola quando aplicavel.';
+
+
+--
+-- Name: COLUMN usuarios_acessos.cpf_usuario; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.usuarios_acessos.cpf_usuario IS 'CPF normalizado, somente numeros, com 11 digitos.';
+
+
+--
+-- Name: COLUMN usuarios_acessos.perfil; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.usuarios_acessos.perfil IS 'Perfil de acesso: SUPERADMIN, ADMINISTRADOR, COORDENADOR ou DIRETOR.';
+
+
+--
+-- Name: COLUMN usuarios_acessos.id_escola; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.usuarios_acessos.id_escola IS 'Obrigatorio para COORDENADOR e DIRETOR; nulo para SUPERADMIN e ADMINISTRADOR.';
+
+
+--
+-- Name: COLUMN usuarios_acessos.ativo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.usuarios_acessos.ativo IS 'Quando false, remove o acesso sem apagar o historico do vinculo.';
+
+
+--
+-- Name: usuarios_acessos_id_usuario_acesso_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.usuarios_acessos_id_usuario_acesso_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: usuarios_acessos_id_usuario_acesso_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.usuarios_acessos_id_usuario_acesso_seq OWNED BY public.usuarios_acessos.id_usuario_acesso;
+
+
+--
+-- Name: aluno_necessidades_especificas id_aluno_necespecifica; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aluno_necessidades_especificas ALTER COLUMN id_aluno_necespecifica SET DEFAULT nextval('public.aluno_necessidades_especificas_id_aluno_necespecifica_seq'::regclass);
+
+
+--
+-- Name: alunos id_aluno; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alunos ALTER COLUMN id_aluno SET DEFAULT nextval('public.alunos_id_aluno_seq'::regclass);
+
+
+--
+-- Name: atribuicao_professor id_atribuicao; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.atribuicao_professor ALTER COLUMN id_atribuicao SET DEFAULT nextval('public.atribuicao_professor_id_atribuicao_seq'::regclass);
+
+
+--
+-- Name: avaliacao_fases id_fase; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_fases ALTER COLUMN id_fase SET DEFAULT nextval('public.avaliacao_fases_id_fase_seq'::regclass);
+
+
+--
+-- Name: avaliacao_grupos id_grupo; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_grupos ALTER COLUMN id_grupo SET DEFAULT nextval('public.avaliacao_grupos_id_grupo_seq'::regclass);
+
+
+--
+-- Name: avaliacao_opcoes id_opcao; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_opcoes ALTER COLUMN id_opcao SET DEFAULT nextval('public.avaliacao_opcoes_id_opcao_seq'::regclass);
+
+
+--
+-- Name: avaliacao_perguntas id_pergunta; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_perguntas ALTER COLUMN id_pergunta SET DEFAULT nextval('public.avaliacao_perguntas_id_pergunta_seq'::regclass);
+
+
+--
+-- Name: avaliacao_respostas id_resposta; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas ALTER COLUMN id_resposta SET DEFAULT nextval('public.avaliacao_respostas_id_resposta_seq'::regclass);
+
+
+--
+-- Name: cronograma_aplicacao id_cronograma_aplicacao; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cronograma_aplicacao ALTER COLUMN id_cronograma_aplicacao SET DEFAULT nextval('public.cronograma_aplicacao_id_cronograma_aplicacao_seq'::regclass);
+
+
+--
+-- Name: designacoes id_designacao; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.designacoes ALTER COLUMN id_designacao SET DEFAULT nextval('public.designacoes_id_designacao_seq'::regclass);
+
+
+--
+-- Name: enturmacao_aluno id_enturmacao; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.enturmacao_aluno ALTER COLUMN id_enturmacao SET DEFAULT nextval('public.enturmacao_aluno_id_enturmacao_seq'::regclass);
+
+
+--
+-- Name: escolas id_escola; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escolas ALTER COLUMN id_escola SET DEFAULT nextval('public.escolas_id_escola_seq'::regclass);
+
+
+--
+-- Name: import_alunos_csv_staging id_import; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.import_alunos_csv_staging ALTER COLUMN id_import SET DEFAULT nextval('public.import_alunos_csv_staging_id_import_seq'::regclass);
+
+
+--
+-- Name: submissoes_pg id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissoes_pg ALTER COLUMN id SET DEFAULT nextval('public.submissoes_pg_id_seq'::regclass);
+
+
+--
+-- Name: temp_de_para_work id_row; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.temp_de_para_work ALTER COLUMN id_row SET DEFAULT nextval('public.temp_de_para_work_id_row_seq'::regclass);
+
+
+--
+-- Name: turmas id_turma; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turmas ALTER COLUMN id_turma SET DEFAULT nextval('public.turmas_id_turma_seq'::regclass);
+
+
+--
+-- Name: usuarios_acessos id_usuario_acesso; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuarios_acessos ALTER COLUMN id_usuario_acesso SET DEFAULT nextval('public.usuarios_acessos_id_usuario_acesso_seq'::regclass);
+
+
+--
+-- Name: aluno_necessidades_contexto aluno_necessidades_contexto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aluno_necessidades_contexto
+    ADD CONSTRAINT aluno_necessidades_contexto_pkey PRIMARY KEY (id_aluno, id_turma, cpf_professor, id_fase);
+
+
+--
+-- Name: aluno_necessidades_especificas aluno_necessidades_especificas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aluno_necessidades_especificas
+    ADD CONSTRAINT aluno_necessidades_especificas_pkey PRIMARY KEY (id_aluno_necespecifica);
+
+
+--
+-- Name: alunos alunos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alunos
+    ADD CONSTRAINT alunos_pkey PRIMARY KEY (id_aluno);
+
+
+--
+-- Name: atribuicao_professor atribuicao_professor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.atribuicao_professor
+    ADD CONSTRAINT atribuicao_professor_pkey PRIMARY KEY (id_atribuicao);
+
+
+--
+-- Name: avaliacao_fases avaliacao_fases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_fases
+    ADD CONSTRAINT avaliacao_fases_pkey PRIMARY KEY (id_fase);
+
+
+--
+-- Name: avaliacao_grupos avaliacao_grupos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_grupos
+    ADD CONSTRAINT avaliacao_grupos_pkey PRIMARY KEY (id_grupo);
+
+
+--
+-- Name: avaliacao_opcoes avaliacao_opcoes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_opcoes
+    ADD CONSTRAINT avaliacao_opcoes_pkey PRIMARY KEY (id_opcao);
+
+
+--
+-- Name: avaliacao_perguntas avaliacao_perguntas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_perguntas
+    ADD CONSTRAINT avaliacao_perguntas_pkey PRIMARY KEY (id_pergunta);
+
+
+--
+-- Name: avaliacao_respostas avaliacao_respostas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas
+    ADD CONSTRAINT avaliacao_respostas_pkey PRIMARY KEY (id_resposta);
+
+
+--
+-- Name: de_para_escolas de_para_escolas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.de_para_escolas
+    ADD CONSTRAINT de_para_escolas_pkey PRIMARY KEY (escola_original);
+
+
+--
+-- Name: designacoes designacoes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.designacoes
+    ADD CONSTRAINT designacoes_pkey PRIMARY KEY (id_designacao);
+
+
+--
+-- Name: enturmacao_aluno enturmacao_aluno_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.enturmacao_aluno
+    ADD CONSTRAINT enturmacao_aluno_pkey PRIMARY KEY (id_enturmacao);
+
+
+--
+-- Name: escolas escolas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escolas
+    ADD CONSTRAINT escolas_pkey PRIMARY KEY (id_escola);
+
+
+--
+-- Name: etapas etapas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.etapas
+    ADD CONSTRAINT etapas_pkey PRIMARY KEY (id_etapa);
+
+
+--
+-- Name: necessidades_específicas id_necespecifica; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."necessidades_específicas"
+    ADD CONSTRAINT id_necespecifica PRIMARY KEY (id_necespecifica);
+
+
+--
+-- Name: import_alunos_csv_staging import_alunos_csv_staging_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.import_alunos_csv_staging
+    ADD CONSTRAINT import_alunos_csv_staging_pkey PRIMARY KEY (id_import);
+
+
+--
+-- Name: multietapas multietapas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_pkey PRIMARY KEY (id_multi_etapa);
+
+
+--
+-- Name: professores professores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.professores
+    ADD CONSTRAINT professores_pkey PRIMARY KEY (profissional_cpf);
+
+
+--
+-- Name: submissoes_pg submissoes_pg_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissoes_pg
+    ADD CONSTRAINT submissoes_pg_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: temp_de_para_work temp_de_para_work_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.temp_de_para_work
+    ADD CONSTRAINT temp_de_para_work_pkey PRIMARY KEY (id_row);
+
+
+--
+-- Name: turma_cronograma_aplicacao turma_cronograma_aplicacao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turma_cronograma_aplicacao
+    ADD CONSTRAINT turma_cronograma_aplicacao_pkey PRIMARY KEY (id_turma, id_cronograma_aplicacao);
+
+
+--
+-- Name: turmas turmas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turmas
+    ADD CONSTRAINT turmas_pkey PRIMARY KEY (id_turma);
+
+
+--
+-- Name: escolas uq_nome_escola; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escolas
+    ADD CONSTRAINT uq_nome_escola UNIQUE (nome_escola);
+
+
+--
+-- Name: usuarios_acessos usuarios_acessos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuarios_acessos
+    ADD CONSTRAINT usuarios_acessos_pkey PRIMARY KEY (id_usuario_acesso);
+
+
+--
+-- Name: idx_aluno_necessidades_especificas_aluno_turma; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_aluno_necessidades_especificas_aluno_turma ON public.aluno_necessidades_especificas USING btree (id_aluno, id_turma);
+
+
+--
+-- Name: idx_aluno_necessidades_especificas_unica_fase; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_aluno_necessidades_especificas_unica_fase ON public.aluno_necessidades_especificas USING btree (id_aluno, id_turma, cpf_professor, id_fase, id_necespecifica) WHERE (id_necespecifica IS NOT NULL);
+
+
+--
+-- Name: idx_avaliacao_fases_periodo_ativo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_avaliacao_fases_periodo_ativo ON public.avaliacao_fases USING btree (ativo, data_inicio, data_fim);
+
+
+--
+-- Name: idx_avaliacao_respostas_fase_turma_aluno; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_avaliacao_respostas_fase_turma_aluno ON public.avaliacao_respostas USING btree (id_fase, id_turma, id_aluno, cpf_professor);
+
+
+--
+-- Name: idx_submissoes_pg_fase_turma_aluno; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_submissoes_pg_fase_turma_aluno ON public.submissoes_pg USING btree (id_fase, id_turma, id_aluno);
+
+
+--
+-- Name: idx_submissoes_pg_unica_fase; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_submissoes_pg_unica_fase ON public.submissoes_pg USING btree (cpf_professor, id_turma, id_aluno, formulario_id, id_fase);
+
+
+--
+-- Name: idx_usuarios_acessos_cpf_perfil_ativo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuarios_acessos_cpf_perfil_ativo ON public.usuarios_acessos USING btree (cpf_usuario, perfil, ativo);
+
+
+--
+-- Name: idx_usuarios_acessos_escola_perfil_ativo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuarios_acessos_escola_perfil_ativo ON public.usuarios_acessos USING btree (id_escola, perfil, ativo);
+
+
+--
+-- Name: idx_usuarios_acessos_unico; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_usuarios_acessos_unico ON public.usuarios_acessos USING btree (cpf_usuario, perfil, COALESCE(id_escola, '-1'::integer));
+
+
+--
+-- Name: turma_cronograma_aplicacao_item_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX turma_cronograma_aplicacao_item_idx ON public.turma_cronograma_aplicacao USING btree (id_cronograma_aplicacao);
+
+
+--
+-- Name: aluno_necessidades_especificas aluno_necessidades_especificas_necespecifica_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aluno_necessidades_especificas
+    ADD CONSTRAINT aluno_necessidades_especificas_necespecifica_fkey FOREIGN KEY (id_necespecifica) REFERENCES public."necessidades_específicas"(id_necespecifica);
+
+
+--
+-- Name: atribuicao_professor atribuicao_professor_id_turma_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.atribuicao_professor
+    ADD CONSTRAINT atribuicao_professor_id_turma_fkey FOREIGN KEY (id_turma) REFERENCES public.turmas(id_turma);
+
+
+--
+-- Name: avaliacao_perguntas avaliacao_perguntas_id_grupo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_perguntas
+    ADD CONSTRAINT avaliacao_perguntas_id_grupo_fkey FOREIGN KEY (id_grupo) REFERENCES public.avaliacao_grupos(id_grupo);
+
+
+--
+-- Name: avaliacao_respostas avaliacao_respostas_cpf_professor_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas
+    ADD CONSTRAINT avaliacao_respostas_cpf_professor_fkey FOREIGN KEY (cpf_professor) REFERENCES public.professores(profissional_cpf);
+
+
+--
+-- Name: avaliacao_respostas avaliacao_respostas_id_aluno_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas
+    ADD CONSTRAINT avaliacao_respostas_id_aluno_fkey FOREIGN KEY (id_aluno) REFERENCES public.alunos(id_aluno);
+
+
+--
+-- Name: avaliacao_respostas avaliacao_respostas_id_opcao_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas
+    ADD CONSTRAINT avaliacao_respostas_id_opcao_fkey FOREIGN KEY (id_opcao) REFERENCES public.avaliacao_opcoes(id_opcao);
+
+
+--
+-- Name: avaliacao_respostas avaliacao_respostas_id_pergunta_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.avaliacao_respostas
+    ADD CONSTRAINT avaliacao_respostas_id_pergunta_fkey FOREIGN KEY (id_pergunta) REFERENCES public.avaliacao_perguntas(id_pergunta);
+
+
+--
+-- Name: enturmacao_aluno enturmacao_aluno_id_aluno_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.enturmacao_aluno
+    ADD CONSTRAINT enturmacao_aluno_id_aluno_fkey FOREIGN KEY (id_aluno) REFERENCES public.alunos(id_aluno);
+
+
+--
+-- Name: enturmacao_aluno enturmacao_aluno_id_turma_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.enturmacao_aluno
+    ADD CONSTRAINT enturmacao_aluno_id_turma_fkey FOREIGN KEY (id_turma) REFERENCES public.turmas(id_turma);
+
+
+--
+-- Name: multietapas multietapas_id_etapa_1_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_id_etapa_1_fkey FOREIGN KEY (id_etapa_1) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: multietapas multietapas_id_etapa_2_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_id_etapa_2_fkey FOREIGN KEY (id_etapa_2) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: multietapas multietapas_id_etapa_3_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_id_etapa_3_fkey FOREIGN KEY (id_etapa_3) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: multietapas multietapas_id_etapa_4_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_id_etapa_4_fkey FOREIGN KEY (id_etapa_4) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: multietapas multietapas_id_etapa_5_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.multietapas
+    ADD CONSTRAINT multietapas_id_etapa_5_fkey FOREIGN KEY (id_etapa_5) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: submissoes_pg submissoes_pg_cpf_professor_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissoes_pg
+    ADD CONSTRAINT submissoes_pg_cpf_professor_fkey FOREIGN KEY (cpf_professor) REFERENCES public.professores(profissional_cpf);
+
+
+--
+-- Name: submissoes_pg submissoes_pg_id_aluno_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissoes_pg
+    ADD CONSTRAINT submissoes_pg_id_aluno_fkey FOREIGN KEY (id_aluno) REFERENCES public.alunos(id_aluno);
+
+
+--
+-- Name: submissoes_pg submissoes_pg_id_turma_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submissoes_pg
+    ADD CONSTRAINT submissoes_pg_id_turma_fkey FOREIGN KEY (id_turma) REFERENCES public.turmas(id_turma);
+
+
+--
+-- Name: turma_cronograma_aplicacao turma_cronograma_aplicacao_turma_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turma_cronograma_aplicacao
+    ADD CONSTRAINT turma_cronograma_aplicacao_turma_fkey FOREIGN KEY (id_turma) REFERENCES public.turmas(id_turma) ON DELETE CASCADE;
+
+
+--
+-- Name: turmas turmas_id_escola_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turmas
+    ADD CONSTRAINT turmas_id_escola_fkey FOREIGN KEY (id_escola) REFERENCES public.escolas(id_escola);
+
+
+--
+-- Name: turmas turmas_id_etapa_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turmas
+    ADD CONSTRAINT turmas_id_etapa_fkey FOREIGN KEY (id_etapa) REFERENCES public.etapas(id_etapa);
+
+
+--
+-- Name: turmas turmas_id_multi_etapa_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.turmas
+    ADD CONSTRAINT turmas_id_multi_etapa_fkey FOREIGN KEY (id_multi_etapa) REFERENCES public.multietapas(id_multi_etapa);
+
+
+--
+-- Name: usuarios_acessos usuarios_acessos_escola_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuarios_acessos
+    ADD CONSTRAINT usuarios_acessos_escola_fkey FOREIGN KEY (id_escola) REFERENCES public.escolas(id_escola);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict IekFNV6CLFzWzq6E5QfmeCctjFpaIHJqrcNHeWmWhGVTQuSkMTMAfqwBxZJKdc4
+

@@ -1,0 +1,181 @@
+@startuml
+title Estrutura de Banco - Pergunta 1 Público Alvo da Educação Especial
+
+skinparam classAttributeIconSize 0
+
+class "avaliacao_grupos" as Grupo {
+  + id_grupo : integer <<PK>>
+  --
+  nome_grupo : text
+}
+
+class "avaliacao_perguntas" as Pergunta {
+  + id_pergunta : integer <<PK>>
+  --
+  id_grupo : integer <<FK>>
+  texto_pergunta : text
+  tipo_escala : text
+}
+
+class "avaliacao_opcoes" as Opcao {
+  + id_opcao : integer <<PK>>
+  --
+  tipo_escala : text
+  sigla : text
+  descricao : text
+  cor_hex : text
+  simbolo : text
+}
+
+class "submissoes_pg" as Submissao {
+  + id : bigint <<PK>>
+  --
+  cpf_professor : text
+  id_turma : integer
+  id_aluno : integer
+  formulario_id : text
+  id_fase : integer
+  status : text
+  observacoes : text
+  criada_em : timestamp
+  atualizada_em : timestamp
+}
+
+class "avaliacao_respostas" as Resposta {
+  + id_resposta : bigint <<PK>>
+  --
+  id_aluno : integer <<FK>>
+  id_turma : integer
+  cpf_professor : text
+  id_pergunta : integer <<FK>>
+  id_opcao : integer <<FK>>
+  id_fase : integer
+  data_avaliacao : timestamp
+  status : text
+  observacao : text
+}
+
+class "avaliacao_fases" as Fase {
+  + id_fase : integer <<PK>>
+  --
+  nome : text
+  data_inicio : date
+  data_fim : date
+  ativo : boolean
+  ordem : integer
+}
+
+class "alunos" as Aluno {
+  + id_aluno : integer <<PK>>
+  --
+  nome : text
+  cpf : text
+  inep : text
+  situacao : text
+}
+
+class "turmas" as Turma {
+  + id_turma : integer <<PK>>
+  --
+  id_escola : integer
+  id_etapa : integer
+  letra_turma : text
+  turno : text
+}
+
+class "professores" as Professor {
+  + profissional_cpf : text <<PK>>
+  --
+  profissional_nome : text
+  profissional_nome_social : text
+}
+
+class "aluno_necessidades_contexto" as NecessidadeContexto {
+  + id_aluno : integer <<PK/FK>>
+  + id_turma : integer <<PK/FK>>
+  + cpf_professor : text <<PK/FK>>
+  + id_fase : integer <<PK/FK>>
+  --
+  paee : boolean
+  estudo_caso : boolean
+  apoio_pedagogico : boolean
+  criada_em : timestamp
+  atualizada_em : timestamp
+}
+
+class "aluno_necessidades_especificas" as NecessidadeAluno {
+  + id_aluno_necespecifica : bigint <<PK>>
+  --
+  id_aluno : integer <<FK>>
+  id_turma : integer
+  cpf_professor : text
+  id_fase : integer
+  id_necespecifica : integer <<FK>>
+  tipo : text
+  descricao_outros : text
+  criada_em : timestamp
+}
+
+class "necessidades_específicas" as NecessidadeCatalogo {
+  + id_necespecifica : integer <<PK>>
+  --
+  descrição : text
+  paee : text
+}
+
+Grupo "1" --> "N" Pergunta : possui
+Pergunta "1" --> "N" Resposta : é respondida em
+Opcao "1" --> "N" Resposta : opção marcada
+
+Aluno "1" --> "N" Submissao
+Turma "1" --> "N" Submissao
+Professor "1" --> "N" Submissao
+Fase "1" --> "N" Submissao
+
+Aluno "1" --> "N" Resposta
+Turma "1" --> "N" Resposta
+Professor "1" --> "N" Resposta
+Fase "1" --> "N" Resposta
+
+Aluno "1" --> "N" NecessidadeContexto
+Turma "1" --> "N" NecessidadeContexto
+Professor "1" --> "N" NecessidadeContexto
+Fase "1" --> "N" NecessidadeContexto
+
+Aluno "1" --> "N" NecessidadeAluno
+Turma "1" --> "N" NecessidadeAluno
+Professor "1" --> "N" NecessidadeAluno
+Fase "1" --> "N" NecessidadeAluno
+NecessidadeCatalogo "1" --> "N" NecessidadeAluno
+
+note right of Pergunta
+Pergunta 1:
+"Público Alvo da Educação Especial?"
+
+Identificada no frontend pelo texto:
+PUBLICO ALVO DA EDUCACAO ESPECIAL
+end note
+
+note right of Resposta
+A resposta da P1 fica aqui.
+
+id_pergunta = Pergunta 1
+id_opcao = SIM ou NAO
+id_fase = fase atual da avaliação
+end note
+
+note right of NecessidadeContexto
+Guarda o efeito lógico da P1:
+
+paee = true/false
+estudo_caso = true/false
+apoio_pedagogico = true/false
+end note
+
+note right of NecessidadeAluno
+Guarda as necessidades marcadas
+quando P1 = SIM, estudo de caso,
+ou apoio pedagógico.
+end note
+
+@enduml
