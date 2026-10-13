@@ -100,14 +100,14 @@ export default function AlunosPage() {
       <main className="page">
         <div className="page-header">
           <div className="page-title">
-            <h1>Alunos da turma</h1>
+            <h1>Alunos · Formulários do professor</h1>
             {(professorNome || turma) && (
               <p>
                 {professorNome && <>Professor: <strong>{professorNome}</strong></>}
                 {turma && <> · {turma.nome} · {turma.escola.nome}</>}
               </p>
             )}
-            <p>Selecione um estudante para preencher ou revisar o formulário de observação.</p>
+            <p>Selecione um aluno para preencher ou revisar o registro do professor, seguindo os critérios e as orientações do formulário.</p>
           </div>
         </div>
 

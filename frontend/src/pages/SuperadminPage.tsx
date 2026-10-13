@@ -502,11 +502,13 @@ export default function SuperadminPage() {
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '32px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, color: '#0984e3', fontSize: 24 }}>Superadministracao</h1>
+          <h1 style={{ margin: 0, color: '#0984e3', fontSize: 24 }}>Parametrização e cadastros do projeto</h1>
           <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>Ola, {professor.nome || 'superadministrador'}</p>
         </div>
         <button onClick={() => navigate('/turmas')} style={{ background: '#dfe6e9', color: '#2d3436' }}>Voltar</button>
       </div>
+
+      <p>Administre os cadastros, os perfis de acesso e os ciclos de coleta utilizados no registro pelo professor e na verificação posterior por aplicadores.</p>
 
       {(message || error) && (
         <div
@@ -525,7 +527,8 @@ export default function SuperadminPage() {
       )}
 
       <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Fases da avaliacao</h2>
+        <h2 id="fases" style={{ margin: '0 0 12px', fontSize: 18 }}>Fases e períodos de coleta</h2>
+        <p>As duas etapas do processo identificam quem coleta os dados. As fases abaixo definem os ciclos e os períodos de coleta do projeto.</p>
         {faseEmEdicaoId && (
           <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: '#fff8e1', border: '1px solid #ffe3a3', color: '#6d4c00', fontWeight: 700 }}>
             Editando fase. Salve ou cancele para cadastrar uma nova.
@@ -604,7 +607,7 @@ export default function SuperadminPage() {
       </section>
 
       <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Cadastrar professor</h2>
+        <h2 id="professores" style={{ margin: '0 0 12px', fontSize: 18 }}>Cadastrar professor</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: 6, fontWeight: 700, color: '#475867', fontSize: 13 }}>
             CPF
@@ -633,7 +636,7 @@ export default function SuperadminPage() {
       </section>
 
       <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginBottom: 16 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Cadastrar aluno</h2>
+        <h2 id="alunos" style={{ margin: '0 0 12px', fontSize: 18 }}>Cadastrar aluno</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: 6, fontWeight: 700, color: '#475867', fontSize: 13 }}>
             Nome
@@ -898,7 +901,7 @@ export default function SuperadminPage() {
       </section>
 
       <section style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginTop: 16 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>Perfis de acesso</h2>
+        <h2 id="permissoes" style={{ margin: '0 0 12px', fontSize: 18 }}>Perfis de acesso</h2>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: 6, fontWeight: 700, color: '#475867', fontSize: 13 }}>

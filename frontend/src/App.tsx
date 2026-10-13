@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from 'react-router-dom'
+import AppLayout, { EncerrarSessao } from './components/AppLayout'
+import AplicadorAcompanhamentoPage from './pages/AplicadorAcompanhamentoPage'
 import LoginPage from './pages/LoginPage'
 import InicioPage from './pages/InicioPage'
 import AdminPage from './pages/AdminPage'
@@ -96,10 +98,8 @@ function RequireSuperadmin({
   return children
 }
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
+const router = createBrowserRouter(createRoutesFromElements(
+  <>
 
         <Route
           path="/login"
@@ -111,6 +111,10 @@ export default function App() {
           element={<CadastrarSenhaPage />}
         />
 
+        <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+        <Route path="/logout" element={<EncerrarSessao />} />
+        <Route path="/admin/aplicador/acompanhamento" element={<RequireAdministrador><AplicadorAcompanhamentoPage /></RequireAdministrador>} />
+        <Route path="/superadmin/aplicador/acompanhamento" element={<Navigate to="/admin/aplicador/acompanhamento" replace />} />
         <Route
           path="/inicio"
           element={
@@ -239,7 +243,10 @@ export default function App() {
           }
         />
 
-      </Routes>
-    </BrowserRouter>
-  )
+        </Route>
+  </>
+))
+
+export default function App() {
+  return <RouterProvider router={router} />
 }

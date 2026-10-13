@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { VisaoDasEtapas } from '../components/EtapaContexto'
 
 interface Modulo {
   titulo: string
@@ -52,54 +53,40 @@ export default function InicioPage() {
 
   const modulos: Modulo[] = []
 
-  if (professorModulo) {
+  if (professorModulo || administrador) {
     modulos.push({
-      titulo: 'Professor',
+      titulo: '1. Registro pelo professor',
       descricao:
-        'Acesse suas turmas, alunos e avaliações.',
+        'Acesse as turmas, registre o cronograma e preencha o formulário de cada aluno.',
       destino: '/turmas'
     })
   }
 
   if (aplicador) {
     modulos.push({
-      titulo: 'Aplicador',
+      titulo: '2. Verificação por aplicadores',
       descricao:
-        'Acesse as avaliações atribuídas aos alunos.',
+        'Realize a coleta posterior nas turmas atribuídas pela administração, quando indicada.',
       destino: '/aplicador'
     })
   }
 
   if (administrador) {
     modulos.push({
-      titulo: 'Administrador da Avaliação',
+      titulo: 'Administração da coleta',
       descricao:
-        'Acesse as funções administrativas da avaliação.',
+        'Organize os acessos das duas etapas e as atribuições da verificação por aplicadores.',
       destino: '/admin'
     })
   }
 
   if (superadmin) {
     modulos.push({
-      titulo: 'Superadministrador',
+      titulo: 'Cadastros e parametrização',
       descricao:
-        'Acesse a administração geral do sistema.',
+        'Administre professores, alunos, permissões, fases e períodos de coleta.',
       destino: '/superadmin'
     })
-  }
-
-  /*
-   * Se houver exatamente um módulo,
-   * não há necessidade de mostrar
-   * uma tela de escolha.
-   */
-  if (modulos.length === 1) {
-    return (
-      <Navigate
-        to={modulos[0].destino}
-        replace
-      />
-    )
   }
 
   return (
@@ -115,10 +102,13 @@ export default function InicioPage() {
         </div>
 
         <p style={styles.texto}>
-          Selecione o módulo que deseja acessar.
+          A coleta está organizada em duas etapas. Acesse os módulos disponíveis para o seu perfil.
         </p>
       </div>
 
+      <VisaoDasEtapas />
+
+      <h2>Acessos disponíveis</h2>
       <div style={styles.modulos}>
 
         {modulos.map(modulo => (

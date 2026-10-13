@@ -11,7 +11,8 @@ import type {
 
 import {
   useNavigate,
-  useParams
+  useParams,
+  useBlocker
 } from 'react-router-dom'
 
 interface Opcao {
@@ -66,6 +67,7 @@ interface NecessidadeEspecificaAluno {
 }
 
 interface Aplicacao {
+  observacao: string | null
   idAplicacao: string
   idFase?: string | null
   status: string
@@ -96,6 +98,20 @@ interface Aplicacao {
 export default function AplicadorQuestionarioPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [observacao, setObservacao] = useState('')
+  const [observacaoSalva, setObservacaoSalva] = useState('')
+  const [salvandoObservacao, setSalvandoObservacao] = useState(false)
+
+  useEffect(() => {
+    if (observacao === observacaoSalva) return
+    const avisar = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [observacao, observacaoSalva])
+
+  function voltarAoPainel() {
+    navigate('/aplicador')
+  }
 
   const [aplicacao, setAplicacao] =
     useState<Aplicacao | null>(null)
@@ -144,6 +160,22 @@ export default function AplicadorQuestionarioPage() {
 
   const [tempoGravacao, setTempoGravacao] =
     useState(0)
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    currentLocation.pathname !== nextLocation.pathname &&
+    (observacao !== observacaoSalva || salvandoObservacao || finalizando)
+  )
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (salvandoObservacao || finalizando) {
+      window.alert('Aguarde o salvamento ou a finalização da avaliação antes de sair.')
+      blocker.reset()
+    } else if (window.confirm('A observação ainda não foi salva. Deseja sair sem salvar?')) {
+      blocker.proceed()
+    } else {
+      blocker.reset()
+    }
+  }, [blocker, salvandoObservacao, finalizando])
 
   const mediaRecorderRef =
     useRef<MediaRecorder | null>(null)
@@ -265,6 +297,8 @@ export default function AplicadorQuestionarioPage() {
         await respostaLeitura.json()
 
       setAplicacao(dadosAplicacao)
+      setObservacao(dadosAplicacao.observacao || '')
+      setObservacaoSalva(dadosAplicacao.observacao || '')
       setQuestionario(dadosQuestionario)
       setLeitura(dadosLeitura)
 
@@ -488,6 +522,7 @@ export default function AplicadorQuestionarioPage() {
     leituraCompleta
 
   const existeSalvamento =
+    salvandoObservacao ||
     salvando.size > 0 ||
     salvandoLeitura.size > 0 ||
     gravandoId !== null
@@ -1164,6 +1199,31 @@ export default function AplicadorQuestionarioPage() {
     }
   }
 
+  async function salvarObservacao(): Promise<boolean> {
+    if (!id || salvandoObservacao || !['PENDENTE', 'EM_ANDAMENTO'].includes(questionario?.status || '')) return false
+    setSalvandoObservacao(true)
+    setErro('')
+    setMensagem('')
+    try {
+      const response = await fetch(`/api/aplicador/aplicacoes/${id}/observacao`, {
+        method: 'PUT', headers: headersJson(), body: JSON.stringify({ observacao })
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível salvar a observação.')
+      const texto = data.observacao || ''
+      setObservacao(texto)
+      setObservacaoSalva(texto)
+      setAplicacao(anterior => anterior ? { ...anterior, observacao: data.observacao } : anterior)
+      setMensagem('Observação salva com sucesso.')
+      return true
+    } catch (error: any) {
+      setErro(error?.message || 'Não foi possível salvar a observação.')
+      return false
+    } finally {
+      setSalvandoObservacao(false)
+    }
+  }
+
   async function finalizar() {
     if (
       !todasRespondidas ||
@@ -1186,6 +1246,8 @@ export default function AplicadorQuestionarioPage() {
       setFinalizando(true)
       setErro('')
       setMensagem('')
+
+      if (observacao !== observacaoSalva && !(await salvarObservacao())) return
 
       const response = await fetch(
         `/api/aplicador/aplicacoes/${id}/finalizar`,
@@ -1256,9 +1318,7 @@ export default function AplicadorQuestionarioPage() {
 
         <button
           style={styles.voltar}
-          onClick={() =>
-            navigate('/aplicador')
-          }
+          onClick={voltarAoPainel}
         >
           ← Voltar
         </button>
@@ -1304,9 +1364,7 @@ export default function AplicadorQuestionarioPage() {
 
       <button
         style={styles.voltar}
-        onClick={() =>
-          navigate('/aplicador')
-        }
+        onClick={voltarAoPainel}
       >
         ← Voltar ao painel
       </button>
@@ -1314,7 +1372,7 @@ export default function AplicadorQuestionarioPage() {
       <div style={styles.cabecalho}>
 
         <h1 style={styles.titulo}>
-          Avaliação
+          Questionário de verificação · Aplicador
         </h1>
 
         <div style={styles.nomeAluno}>
@@ -2117,6 +2175,27 @@ export default function AplicadorQuestionarioPage() {
         </div>
       )}
 
+      <section style={{ ...styles.rodape, marginTop: 24, marginBottom: 24 }}>
+        <h2 style={{ marginTop: 0 }}>Observação sobre o aluno ou a aplicação</h2>
+        <label htmlFor="observacao-aplicacao">Observação (opcional)</label>
+        <textarea id="observacao-aplicacao" value={observacao} maxLength={2000} rows={5}
+          readOnly={!podeEditar} disabled={salvandoObservacao || finalizando}
+          onChange={event => setObservacao(event.target.value)}
+          placeholder="Registre informações relevantes sobre o aluno ou sobre a realização desta avaliação."
+          style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 8, padding: 12,
+            font: 'inherit', border: '1px solid #bbb', borderRadius: 8, resize: 'vertical' }} />
+        <div style={{ marginTop: 8, fontSize: 13 }} aria-live="polite">
+          {observacao.length}/2.000 caracteres
+          {podeEditar && (salvandoObservacao ? ' • Salvando...' : observacao !== observacaoSalva ? ' • Alterações não salvas' : ' • Sem alterações pendentes')}
+        </div>
+        {podeEditar && <button type="button" style={{ marginTop: 12, padding: '10px 18px' }}
+          disabled={salvandoObservacao || finalizando || observacao === observacaoSalva}
+          onClick={() => salvarObservacao()}>{salvandoObservacao ? 'Salvando...' : 'Salvar observação'}</button>}
+        <p style={{ fontSize: 13, color: '#666', marginBottom: 0 }}>
+          {podeEditar ? 'A observação também será salva ao finalizar a avaliação.' : 'Avaliação encerrada: observação disponível somente para consulta.'}
+        </p>
+      </section>
+
       {/* FINALIZAÇÃO */}
 
       {podeEditar && (
@@ -2188,7 +2267,7 @@ export default function AplicadorQuestionarioPage() {
           >
             {finalizando
               ? 'Finalizando...'
-              : 'Finalizar avaliação'}
+              : 'Finalizar verificação'}
           </button>
 
         </div>

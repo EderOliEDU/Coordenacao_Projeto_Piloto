@@ -103,18 +103,20 @@ export default function TurmasPage() {
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, color: '#0984e3' }}>Minhas Turmas</h1>
+          <h1 style={{ margin: 0, fontSize: 24, color: '#0984e3' }}>Turmas · Registro pelo professor</h1>
           <p style={{ margin: '4px 0 0', color: '#636e72', fontSize: 14 }}>
             Olá, {professor.nome}
             {viewAs && <> · visualizando {viewAs.nome} ({formatarCpf(viewAs.cpf)})</>}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados</button>
+          <button onClick={() => navigate('/resultados')} style={{ background: '#00b894', color: '#fff' }}>Resultados dos registros</button>
           {canViewSuperadmin && <button onClick={() => navigate('/superadmin')} style={{ background: '#6c5ce7', color: '#fff' }}>Superadmin</button>}
           <button onClick={logout} style={{ background: '#dfe6e9', color: '#2d3436' }}>Sair</button>
         </div>
       </div>
+
+      <p>Selecione a turma, registre os conteúdos trabalhados no cronograma e preencha o formulário de cada aluno, conforme as orientações do projeto.</p>
 
       {viewAs && (
         <div style={{ background: '#fff7d6', border: '1px solid #f2c230', borderRadius: 8, padding: '12px 14px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>

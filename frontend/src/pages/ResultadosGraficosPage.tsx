@@ -210,7 +210,7 @@ export default function ResultadosGraficosPage() {
     <div className="page resultados-graficos-page" style={{ maxWidth: 1320 }}>
       <div className="page-header no-print">
         <div className="page-title">
-          <h1>Graficos dos resultados</h1>
+          <h1>Gráficos dos registros dos professores</h1>
           <p>Visualizacao por grupo com os mesmos filtros do painel de resultados.</p>
         </div>
         <div className="actions">

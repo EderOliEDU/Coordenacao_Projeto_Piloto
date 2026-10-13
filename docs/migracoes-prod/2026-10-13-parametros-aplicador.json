@@ -1,0 +1,266 @@
+{
+  "perguntas": [
+    {
+      "codigo": "RIMAS",
+      "ordem": 1,
+      "habilidade": "Rimas",
+      "pergunta": "A criança identifica rimas?",
+      "ativo": true
+    },
+    {
+      "codigo": "ALITERACAO",
+      "ordem": 2,
+      "habilidade": "Aliteração",
+      "pergunta": "A criança identifica aliterações das vogais?",
+      "ativo": true
+    },
+    {
+      "codigo": "CONSCIENCIA_PALAVRAS",
+      "ordem": 3,
+      "habilidade": "Consciência de palavras",
+      "pergunta": "A criança consegue contar/separar oralmente as palavras de uma frase?",
+      "ativo": true
+    },
+    {
+      "codigo": "CONSCIENCIA_SILABICA",
+      "ordem": 4,
+      "habilidade": "Consciência silábica",
+      "pergunta": "A criança identifica a quantidade de sílabas de uma palavra?",
+      "ativo": true
+    },
+    {
+      "codigo": "RELACAO_LETRA_SOM",
+      "ordem": 5,
+      "habilidade": "Relação letra-som",
+      "pergunta": "A criança identifica o som da consoante?",
+      "ativo": true
+    },
+    {
+      "codigo": "LETRAS_NUMEROS",
+      "ordem": 6,
+      "habilidade": "Letras e números",
+      "pergunta": "A criança diferencia letras de números?",
+      "ativo": true
+    },
+    {
+      "codigo": "ESCRITA_NOME",
+      "ordem": 7,
+      "habilidade": "Nome",
+      "pergunta": "A criança escreve o próprio nome?",
+      "ativo": true
+    },
+    {
+      "codigo": "NIVEL_ESCRITA",
+      "ordem": 8,
+      "habilidade": "Escrita",
+      "pergunta": "A criança realiza a escrita utilizando seus conhecimentos sobre as letras e seus sons?",
+      "ativo": true
+    }
+  ],
+  "opcoes": [
+    {
+      "pergunta_codigo": "RIMAS",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "RIMAS",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "ALITERACAO",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "ALITERACAO",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "CONSCIENCIA_PALAVRAS",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "CONSCIENCIA_PALAVRAS",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "CONSCIENCIA_SILABICA",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "CONSCIENCIA_SILABICA",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "RELACAO_LETRA_SOM",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "RELACAO_LETRA_SOM",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "LETRAS_NUMEROS",
+      "codigo": "SIM",
+      "descricao": "Sim",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "LETRAS_NUMEROS",
+      "codigo": "NAO",
+      "descricao": "Não",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "ESCRITA_NOME",
+      "codigo": "COM_APOIO",
+      "descricao": "Com apoio",
+      "detalhamento": null,
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "ESCRITA_NOME",
+      "codigo": "SEM_APOIO",
+      "descricao": "Sem apoio",
+      "detalhamento": null,
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "ESCRITA_NOME",
+      "codigo": "NAO_ESCREVE",
+      "descricao": "Não escreve",
+      "detalhamento": null,
+      "ordem": 3,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "NIVEL_ESCRITA",
+      "codigo": "PRE_ALFABETICA",
+      "descricao": "Pré-alfabética",
+      "detalhamento": "Reconhecimento visual de palavras com base em pistas contextuais, como cor, forma e logos. Não compreende os sons das letras.",
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "NIVEL_ESCRITA",
+      "codigo": "ALFABETICA_PARCIAL",
+      "descricao": "Alfabética parcial",
+      "detalhamento": "Começa a perceber a relação entre letras e sons. Usa algumas letras, geralmente iniciais ou finais, para identificar palavras.",
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "NIVEL_ESCRITA",
+      "codigo": "ALFABETICA_COMPLETA",
+      "descricao": "Alfabética completa",
+      "detalhamento": "Reconhece correspondência sistemática entre grafemas e fonemas. Adquire habilidade de decodificar e codificar com autonomia. A leitura ainda é lenta.",
+      "ordem": 3,
+      "ativo": true
+    },
+    {
+      "pergunta_codigo": "NIVEL_ESCRITA",
+      "codigo": "ALFABETICA_CONSOLIDADA",
+      "descricao": "Alfabética consolidada",
+      "detalhamento": "Ocorre o processamento de unidades maiores, como sílabas e morfemas, permitindo ler mais rapidamente.",
+      "ordem": 4,
+      "ativo": true
+    }
+  ],
+  "palavras": [
+    {
+      "palavra": "UVA",
+      "ordem": 1,
+      "ativo": true
+    },
+    {
+      "palavra": "EMA",
+      "ordem": 2,
+      "ativo": true
+    },
+    {
+      "palavra": "FITA",
+      "ordem": 3,
+      "ativo": true
+    },
+    {
+      "palavra": "BULE",
+      "ordem": 4,
+      "ativo": true
+    },
+    {
+      "palavra": "GALO",
+      "ordem": 5,
+      "ativo": true
+    },
+    {
+      "palavra": "POTE",
+      "ordem": 6,
+      "ativo": true
+    },
+    {
+      "palavra": "JANELA",
+      "ordem": 7,
+      "ativo": true
+    },
+    {
+      "palavra": "SAPATO",
+      "ordem": 8,
+      "ativo": true
+    },
+    {
+      "palavra": "PAI",
+      "ordem": 9,
+      "ativo": true
+    },
+    {
+      "palavra": "BOI",
+      "ordem": 10,
+      "ativo": true
+    }
+  ]
+}

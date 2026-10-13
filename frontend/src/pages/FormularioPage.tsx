@@ -516,6 +516,7 @@ export default function FormularioPage() {
       <div style={{ position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, padding: '12px 0', background: '#f5f6fa', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
         <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>Voltar</button>
         <div>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>Etapa 1 · Formulário do professor</p>
           <h1 style={{ margin: 0, fontSize: 20 }}>{formulario.nome}</h1>
           <p style={{ margin: '2px 0 0', color: '#636e72', fontSize: 13 }}>
             {professorNome && <>Professor: <strong>{professorNome}</strong> · </>}

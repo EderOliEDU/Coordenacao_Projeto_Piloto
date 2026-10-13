@@ -31,11 +31,14 @@ interface TurmaPendente {
 }
 
 interface AlunoPendente {
-  idAplicacao: string
+  idAplicacao: string | null
   idAluno: string
   nomeAluno: string
   inep: string | null
-  status: string
+  status: string | null
+  idFase: string
+  situacao: 'DISPONIVEL' | 'MINHA_APLICACAO' | 'JA_APLICADO'
+  minhaAplicacao: boolean
 }
 
 interface AplicacaoAndamento {
@@ -346,27 +349,74 @@ export default function AplicadorPage() {
   }
 
   async function iniciarAplicacao(
-    idAplicacao: string
+    aluno: AlunoPendente
   ) {
+    if (loading || aluno.situacao === 'JA_APLICADO') {
+      return
+    }
+
+    if (aluno.situacao === 'MINHA_APLICACAO') {
+      if (!aluno.minhaAplicacao || !aluno.idAplicacao) {
+        setErro('Não foi possível abrir a sua avaliação.')
+        return
+      }
+
+      setErro('')
+      navigate(`/aplicador/aplicacoes/${aluno.idAplicacao}`)
+      return
+    }
+
+    if (aluno.situacao !== 'DISPONIVEL' || !turmaSelecionada) {
+      return
+    }
+
     try {
       setLoading(true)
       setErro('')
 
       const response = await fetch(
-        `/api/aplicador/aplicacoes/${idAplicacao}/iniciar`,
+        '/api/aplicador/aplicacoes/iniciar',
         {
           method: 'POST',
-          headers: headers()
+          headers: {
+            ...headers(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            idFase: aluno.idFase,
+            idTurma: turmaSelecionada.idTurma,
+            idAluno: aluno.idAluno
+          })
         }
       )
 
       const data = await response.json()
 
       if (!response.ok) {
+        if (response.status === 409) {
+          setAlunos(atuais => atuais.map(item =>
+            item.idAluno === aluno.idAluno
+              ? {
+                  ...item,
+                  idAplicacao: null,
+                  status: null,
+                  situacao: 'JA_APLICADO',
+                  minhaAplicacao: false
+                }
+              : item
+          ))
+        }
+
         throw new Error(
           data?.error ||
           'Não foi possível iniciar a avaliação'
         )
+      }
+
+      const idAplicacao = data?.aplicacao?.idAplicacao
+
+      if (!idAplicacao) {
+        throw new Error('O servidor não retornou o ID da aplicação.')
       }
 
       await carregarResumo()
@@ -496,7 +546,7 @@ export default function AplicadorPage() {
     <div style={styles.pagina}>
 
       <h1 style={{ marginBottom: 4 }}>
-        Painel do Aplicador
+        Minhas verificações · Aplicador
       </h1>
 
       <div style={styles.usuario}>
@@ -710,7 +760,7 @@ export default function AplicadorPage() {
               <div style={styles.lista}>
                 {alunos.map(aluno => (
                   <div
-                    key={aluno.idAplicacao}
+                    key={aluno.idAluno}
                     style={styles.aluno}
                   >
                     <div>
@@ -727,17 +777,24 @@ export default function AplicadorPage() {
 
                     <button
                       type="button"
-                      style={styles.botaoAcao}
+                      style={aluno.situacao === 'JA_APLICADO'
+                        ? { ...styles.botaoAcao, cursor: 'not-allowed', opacity: 0.6 }
+                        : styles.botaoAcao}
+                      disabled={loading || aluno.situacao === 'JA_APLICADO' ||
+                        (aluno.situacao === 'MINHA_APLICACAO' &&
+                          (!aluno.minhaAplicacao || !aluno.idAplicacao))}
                       onClick={(event) => {
                         event.preventDefault()
                         event.stopPropagation()
 
-                        iniciarAplicacao(
-                          aluno.idAplicacao
-                        )
+                        iniciarAplicacao(aluno)
                       }}
                     >
-                      Abrir avaliação
+                      {aluno.situacao === 'JA_APLICADO'
+                        ? 'Já avaliado / em avaliação por outro aplicador'
+                        : aluno.situacao === 'MINHA_APLICACAO'
+                          ? 'Continuar verificação'
+                          : 'Iniciar verificação'}
                     </button>
                   </div>
                 ))}
@@ -757,7 +814,7 @@ export default function AplicadorPage() {
           <div>
 
             <h2>
-              Avaliações em andamento
+              Verificações em andamento
             </h2>
 
             {emAndamento.length === 0 && (
@@ -812,7 +869,7 @@ export default function AplicadorPage() {
                       )
                     }}
                   >
-                  Continuar avaliação
+                  Continuar verificação
                   </button>
                 </div>
               ))}
@@ -849,7 +906,7 @@ function RelatorioConcluidas({
     return (
       <div>
         <h2>
-          Avaliações concluídas
+          Verificações concluídas
         </h2>
 
         <p>
@@ -878,7 +935,7 @@ function RelatorioConcluidas({
   return (
     <div>
       <h2>
-        Avaliações concluídas
+        Verificações concluídas
       </h2>
 
       {[...escolas.entries()].map(

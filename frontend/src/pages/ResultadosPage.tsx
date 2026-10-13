@@ -318,7 +318,7 @@ export default function ResultadosPage() {
     <div className="page" style={{ maxWidth: 1280 }}>
       <div className="page-header">
         <div className="page-title">
-          <h1>Painel de resultados</h1>
+          <h1>Resultados dos registros dos professores</h1>
           <p>Gestao da aplicacao e dos indicadores pedagogicos do Projeto Instrucao Fonica.</p>
         </div>
         <div className="actions">

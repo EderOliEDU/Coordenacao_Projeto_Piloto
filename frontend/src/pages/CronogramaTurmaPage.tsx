@@ -135,11 +135,11 @@ export default function CronogramaTurmaPage() {
         <div className="page-header">
           <div className="page-title">
             <p className="eyebrow">Andamento da turma</p>
-            <h1>Cronograma de aplicação</h1>
+            <h1>Cronograma do professor</h1>
             {dados && (
               <p>
                 <strong>{dados.turma.nome}</strong> · {dados.turma.escolaNome}<br />
-                Marque os conteúdos que já foram apresentados à turma até esta avaliação.
+                Marque os conteúdos que já foram apresentados à turma antes de preencher os formulários dos alunos.
               </p>
             )}
           </div>

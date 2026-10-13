@@ -1365,15 +1365,13 @@ router.post(
   requireAdministrador,
   async (
     req: AuthRequest,
-    res: Response 
+    res: Response
   ) => {
-
     const cpfAdministrador = normalizarCpf(
       req.professor?.cpf ||
       req.professor?.login ||
       ''
     )
-
 
     const client =
       await getPgPool().connect()
@@ -1389,23 +1387,6 @@ router.post(
         String(
           req.body?.cpfAplicador || ''
         ).replace(/\D/g, '')
-
-      const alunos =
-        Array.isArray(req.body?.alunos)
-          ? [
-              ...new Set(
-                req.body.alunos
-                  .map((id: any) =>
-                    Number(id)
-                  )
-                  .filter(
-                    (id: number) =>
-                      Number.isInteger(id)
-                      && id > 0
-                  )
-              )
-            ]
-          : []
 
       if (
         !Number.isInteger(idFase)
@@ -1432,13 +1413,6 @@ router.post(
       ) {
         return res.status(400).json({
           error: 'Aplicador inválido'
-        })
-      }
-
-      if (alunos.length === 0) {
-        return res.status(400).json({
-          error:
-            'Selecione pelo menos um aluno'
         })
       }
 
@@ -1477,21 +1451,16 @@ router.post(
         await client.query(
           `
             SELECT 1
-
             FROM public.usuarios_acessos
-
             WHERE cpf_usuario = $1
               AND perfil = 'APLICADOR'
               AND ativo = true
-
             LIMIT 1
           `,
           [cpfAplicador]
         )
 
-      if (
-        aplicador.rowCount === 0
-      ) {
+      if (aplicador.rowCount === 0) {
         await client.query('ROLLBACK')
 
         return res.status(400).json({
@@ -1508,16 +1477,13 @@ router.post(
         await client.query(
           `
             SELECT t.id_turma
-
             FROM public.turmas t
 
             INNER JOIN public.escolas e
-              ON e.id_escola =
-                 t.id_escola
+              ON e.id_escola = t.id_escola
 
             WHERE t.id_turma = $1
-              AND e.projeto =
-                  'PJINSTFONI'
+              AND e.projeto = 'PJINSTFONI'
 
             LIMIT 1
           `,
@@ -1534,133 +1500,118 @@ router.post(
       }
 
       // ----------------------------------
-      // VALIDA ALUNOS DA TURMA
+      // VERIFICA ATRIBUIÇÃO EXISTENTE
       // ----------------------------------
 
-      const alunosValidos =
+      const existente =
         await client.query(
           `
-            SELECT DISTINCT
-              ea.id_aluno
+            SELECT
+              id_atribuicao,
+              ativo
 
-            FROM public.enturmacao_aluno ea
+            FROM public.avaliacao_aplicador_atribuicoes
 
-            WHERE ea.id_turma = $1
-              AND ea.id_aluno =
-                  ANY($2::int[])
+            WHERE id_fase = $1
+              AND id_turma = $2
+              AND cpf_aplicador = $3
+
+            LIMIT 1
           `,
           [
+            idFase,
             idTurma,
-            alunos
+            cpfAplicador
           ]
         )
 
-      const idsValidos =
-        new Set<number>(
-          alunosValidos.rows.map(
-            linha =>
-              Number(linha.id_aluno)
-          )
-        )
+      let criada = false
+      let reativada = false
 
-      const alunosInvalidos =
-        alunos.filter(
-          id =>
-            !idsValidos.has(
-              Number(id)
+      if (existente.rowCount === 0) {
+
+        // ----------------------------------
+        // NOVA ATRIBUIÇÃO
+        // ----------------------------------
+
+        await client.query(
+          `
+            INSERT INTO public.avaliacao_aplicador_atribuicoes
+            (
+              id_fase,
+              id_turma,
+              cpf_aplicador,
+              ativo,
+              criado_por,
+              criado_em,
+              atualizado_em
             )
+            VALUES
+            (
+              $1,
+              $2,
+              $3,
+              true,
+              $4,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            )
+          `,
+          [
+            idFase,
+            idTurma,
+            cpfAplicador,
+            cpfAdministrador
+          ]
         )
 
-      if (
-        alunosInvalidos.length > 0
+        criada = true
+
+      } else if (
+        existente.rows[0].ativo === false
       ) {
-        await client.query('ROLLBACK')
 
-        return res.status(400).json({
-          error:
-            'Existem alunos que não pertencem à turma informada',
-          alunosInvalidos
-        })
-      }
+        // ----------------------------------
+        // REATIVA ATRIBUIÇÃO
+        // ----------------------------------
 
-      // ----------------------------------
-      // INSERE ATRIBUIÇÕES
-      // ----------------------------------
+        await client.query(
+          `
+            UPDATE public.avaliacao_aplicador_atribuicoes
 
-      let criadas = 0
-      let jaExistentes = 0
-
-      for (
-        const idAluno of alunos
-      ) {
-        const result =
-          await client.query(
-            `
-              INSERT INTO public.avaliacao_aplicador_aplicacoes
-              (
-                id_fase,
-                id_aluno,
-                id_turma,
-                cpf_aplicador,
-                criado_por,
-                status,
-                criado_em,
-                atualizado_em
-              )
-
-              VALUES
-              (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                'PENDENTE',
-                CURRENT_TIMESTAMP,
+            SET
+              ativo = true,
+              atualizado_em =
                 CURRENT_TIMESTAMP
-              )
 
-              ON CONFLICT
-              (
-                id_fase,
-                id_aluno,
-                id_turma
-              )
-              WHERE
-                status <> 'CANCELADA'
-                AND id_fase IS NOT NULL
+            WHERE id_atribuicao = $1
+          `,
+          [
+            existente.rows[0]
+              .id_atribuicao
+          ]
+        )
 
-              DO NOTHING
-
-              RETURNING id_aplicacao
-            `,
-            [
-              idFase,
-              idAluno,
-              idTurma,
-              cpfAplicador,
-              cpfAdministrador
-            ]
-          )
-
-        if (
-          result.rowCount &&
-          result.rowCount > 0
-        ) {
-          criadas++
-        } else {
-          jaExistentes++
-        }
+        reativada = true
       }
 
       await client.query('COMMIT')
 
-      return res.status(201).json({
+      return res.status(
+        criada ? 201 : 200
+      ).json({
         ok: true,
-        solicitadas:
-          alunos.length,
-        criadas,
-        jaExistentes
+        criada,
+        reativada,
+        jaExistente:
+          !criada && !reativada,
+        atribuicao: {
+          idFase:
+            String(idFase),
+          idTurma:
+            String(idTurma),
+          cpfAplicador
+        }
       })
 
     } catch (error) {
@@ -1669,13 +1620,13 @@ router.post(
       )
 
       console.error(
-        'Erro ao criar atribuições:',
+        'Erro ao criar atribuição de turma:',
         error
       )
 
       return res.status(500).json({
         error:
-          'Erro ao criar atribuições'
+          'Erro ao criar atribuição de turma'
       })
 
     } finally {
@@ -1694,6 +1645,65 @@ router.post(
  * Query:
  *   ?idFase=2
  */
+
+// Atribuições de turmas e aplicações dos alunos são registros distintos.
+router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: AuthRequest, res: Response) => {
+  const idFase = Number(req.query.idFase)
+  if (!Number.isSafeInteger(idFase) || idFase <= 0) {
+    return res.status(400).json({ error: 'Fase inválida' })
+  }
+  try {
+    const fase = await pool.query('SELECT id_fase FROM public.avaliacao_fases WHERE id_fase = $1', [idFase])
+    if (!fase.rowCount) return res.status(404).json({ error: 'Fase não encontrada' })
+    const result = await pool.query(`
+      SELECT t.id_turma::text AS "idTurma", e.id_escola::text AS "idEscola",
+        e.nome_escola AS "nomeEscola", et.descricao AS etapa,
+        t.letra_turma AS "letraTurma", t.turno,
+        COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'cpf', atr.cpf_aplicador,
+            'nome', COALESCE((SELECT COALESCE(NULLIF(trim(p.profissional_nome_social::text), ''),
+              NULLIF(trim(p.profissional_nome::text), '')) FROM public.professores p
+              WHERE regexp_replace(p.profissional_cpf::text, '\\D', '', 'g') = atr.cpf_aplicador
+              ORDER BY p.profissional_nome LIMIT 1), atr.cpf_aplicador),
+            'atribuidoEm', atr.criado_em
+          ) ORDER BY atr.cpf_aplicador)
+          FROM public.avaliacao_aplicador_atribuicoes atr
+          WHERE atr.id_turma = t.id_turma AND atr.id_fase = $1 AND atr.ativo = true
+        ), '[]'::jsonb) AS aplicadores,
+        COALESCE((
+          SELECT jsonb_agg(jsonb_build_object(
+            'idAluno', aluno.id_aluno::text, 'nomeAluno', aluno.nome,
+            'cpfAplicador', app.cpf_aplicador, 'status', app.status, 'observacao', app.observacao,
+            'nomeAplicador', COALESCE((SELECT COALESCE(NULLIF(trim(p.profissional_nome_social::text), ''),
+              NULLIF(trim(p.profissional_nome::text), '')) FROM public.professores p
+              WHERE regexp_replace(p.profissional_cpf::text, '\\D', '', 'g') = app.cpf_aplicador
+              ORDER BY p.profissional_nome LIMIT 1), app.cpf_aplicador)
+          ) ORDER BY aluno.nome, aluno.id_aluno)
+          FROM public.alunos aluno
+          LEFT JOIN LATERAL (
+            SELECT ap.cpf_aplicador, ap.status, ap.observacao FROM public.avaliacao_aplicador_aplicacoes ap
+            WHERE ap.id_aluno = aluno.id_aluno AND ap.id_turma = t.id_turma
+              AND ap.id_fase = $1 AND ap.status <> 'CANCELADA'
+            ORDER BY ap.id_aplicacao DESC LIMIT 1
+          ) app ON true
+          WHERE EXISTS (SELECT 1 FROM public.enturmacao_aluno ea
+            WHERE ea.id_turma = t.id_turma AND ea.id_aluno = aluno.id_aluno)
+        ), '[]'::jsonb) AS alunos
+      FROM public.turmas t
+      JOIN public.escolas e ON e.id_escola = t.id_escola
+      LEFT JOIN public.etapas et ON et.id_etapa = t.id_etapa
+      WHERE e.projeto = 'PJINSTFONI'
+        AND EXISTS (SELECT 1 FROM public.enturmacao_aluno ea WHERE ea.id_turma = t.id_turma)
+      ORDER BY e.nome_escola, et.descricao, t.letra_turma, t.turno, t.id_turma
+    `, [idFase])
+    return res.json(result.rows)
+  } catch (error) {
+    console.error('Erro ao consultar atribuições:', error)
+    return res.status(500).json({ error: 'Não foi possível carregar o acompanhamento das atribuições.' })
+  }
+})
+
 router.get(
   '/aplicador/acompanhamento',
   requireAdministrador,

@@ -1,0 +1,13 @@
+.pif-etapa-professor { --etapa-cor: #005baa; --etapa-fundo: #e8f2fb; }
+.pif-etapa-aplicador { --etapa-cor: #176b3d; --etapa-fundo: #edf9f2; }
+.pif-etapa-banner { display: flex; align-items: flex-start; gap: 14px; border-left: 4px solid var(--etapa-cor); background: var(--etapa-fundo); padding: 16px 20px; margin: 24px auto 0; max-width: 1180px; width: calc(100% - 48px); border-radius: 8px; }
+.pif-etapa-numero { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--etapa-cor); color: white; font-size: 17px; font-weight: 800; }
+.pif-etapa-banner strong { color: var(--etapa-cor); }
+.pif-etapa-banner p { margin: 5px 0 0; font-size: 14px; line-height: 1.5; }
+.pif-etapas-visao { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 18px; margin: 24px 0 30px; }
+.pif-etapa-card { background: white; border: 1px solid var(--line); border-top: 4px solid var(--etapa-cor); border-radius: 10px; padding: 20px; }
+.pif-etapa-card h2 { color: var(--etapa-cor); margin: 12px 0 8px; font-size: 19px; }
+.pif-etapa-card p { line-height: 1.5; font-size: 14px; margin: 0 0 12px; }
+.pif-etapa-card small { color: var(--muted); line-height: 1.5; }
+.pif-grupo-titulo { text-align: left; gap: 8px; line-height: 1.4; }
+@media (max-width: 600px) { .pif-etapa-banner { width: calc(100% - 32px); margin-top: 16px; padding: 14px; } }

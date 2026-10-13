@@ -55,9 +55,9 @@ interface Aluno {
 
 interface ResultadoAtribuicao {
   ok: boolean
-  solicitadas: number
-  criadas: number
-  jaExistentes: number
+  criada: boolean
+  reativada: boolean
+  jaExistente: boolean
 }
 
 export default function AplicadorAtribuicoesPage() {
@@ -394,65 +394,12 @@ export default function AplicadorAtribuicoesPage() {
     }
   }
 
-  function alternarAluno(
-    idAluno: string
-  ) {
-    setSelecionados(anterior => {
-      const novo =
-        new Set(anterior)
-
-      if (
-        novo.has(idAluno)
-      ) {
-        novo.delete(idAluno)
-      } else {
-        novo.add(idAluno)
-      }
-
-      return novo
-    })
-
-    setResultado(null)
-  }
-
-  function alternarTodos() {
-    if (
-      selecionados.size ===
-      alunos.length
-    ) {
-      setSelecionados(
-        new Set()
-      )
-
-      return
-    }
-
-    setSelecionados(
-      new Set(
-        alunos.map(
-          aluno =>
-            aluno.idAluno
-        )
-      )
-    )
-
-    setResultado(null)
-  }
-
-  const todosSelecionados =
-    alunos.length > 0 &&
-    selecionados.size ===
-      alunos.length
-
-  const quantidadeSelecionada =
-    selecionados.size
-
   const podeAtribuir =
     Boolean(
       faseId &&
       cpfAplicador &&
       turmaId &&
-      quantidadeSelecionada > 0
+      alunos.length > 0
     )
 
   const faseSelecionada =
@@ -479,7 +426,7 @@ export default function AplicadorAtribuicoesPage() {
 
     const confirmar =
       window.confirm(
-        `Deseja atribuir ${quantidadeSelecionada} aluno(s) ao Aplicador selecionado?`
+        'Deseja atribuir a turma inteira ao Aplicador selecionado?'
       )
 
     if (!confirmar) {
@@ -508,10 +455,6 @@ export default function AplicadorAtribuicoesPage() {
             idTurma:
               Number(turmaId),
 
-            alunos:
-              Array.from(
-                selecionados
-              ).map(Number)
           })
         }
       )
@@ -565,7 +508,7 @@ export default function AplicadorAtribuicoesPage() {
 
       <div style={styles.cabecalho}>
         <h1 style={styles.titulo}>
-          Atribuição de Avaliações
+          Atribuição de turmas · Verificação por aplicadores
         </h1>
 
         <p style={styles.subtitulo}>
@@ -585,23 +528,12 @@ export default function AplicadorAtribuicoesPage() {
             Atribuição concluída.
           </strong>
 
-          <div>
-            Solicitadas:{' '}
-            {resultado.solicitadas}
-          </div>
-
-          <div>
-            Novas atribuições:{' '}
-            {resultado.criadas}
-          </div>
-
-          <div>
-            Já existentes:{' '}
-            {resultado.jaExistentes}
-          </div>
+          <div>{resultado.criada ? 'Nova atribuição de turma criada.' : resultado.reativada ? 'Atribuição de turma reativada.' : 'Esta turma já estava atribuída ao aplicador.'}</div>
         </div>
       )}
 
+      <h2>Organizar a coleta posterior</h2>
+      <p>Quando a administração indicar a verificação, atribua a turma aos aplicadores designados. A atribuição inclui todos os alunos da turma e pode ser compartilhada entre aplicadores.</p>
       <div style={styles.formulario}>
 
         {/* FASE */}
@@ -742,7 +674,7 @@ export default function AplicadorAtribuicoesPage() {
         {/* ETAPA */}
 
         <Campo
-          titulo="4. Etapa"
+          titulo="4. Etapa de ensino"
         >
           <select
             style={styles.select}
@@ -755,7 +687,7 @@ export default function AplicadorAtribuicoesPage() {
             }
           >
             <option value="">
-              Selecione a etapa
+              Selecione a etapa de ensino
             </option>
 
             {etapas.map(
@@ -834,6 +766,10 @@ export default function AplicadorAtribuicoesPage() {
 
       </div>
 
+      <button type="button" style={{ marginTop: 20 }} onClick={() => navigate('/admin/aplicador/acompanhamento')}>
+        Consultar acompanhamento das atribuições →
+      </button>
+
       {loading && (
         <div style={styles.loading}>
           Carregando...
@@ -852,32 +788,18 @@ export default function AplicadorAtribuicoesPage() {
                 <h2 style={{
                   margin: 0
                 }}>
-                  6. Alunos
+                  Alunos da turma
                 </h2>
 
                 <div style={styles.contador}>
                   {
-                    quantidadeSelecionada
+                    alunos.length
                   }
-                  {' de '}
-                  {alunos.length}
-                  {' selecionado(s)'}
+                  {' aluno(s) incluído(s) na atribuição da turma'}
                 </div>
               </div>
 
-              <button
-                type="button"
-                style={
-                  styles.botaoSecundario
-                }
-                onClick={
-                  alternarTodos
-                }
-              >
-                {todosSelecionados
-                  ? 'Desmarcar todos'
-                  : 'Selecionar todos'}
-              </button>
+
 
             </div>
 
@@ -892,36 +814,15 @@ export default function AplicadorAtribuicoesPage() {
               {alunos.map(
                 aluno => {
 
-                  const marcado =
-                    selecionados.has(
-                      aluno.idAluno
-                    )
-
                   return (
                     <label
                       key={
                         aluno.idAluno
                       }
                       style={{
-                        ...styles.aluno,
-
-                        ...(marcado
-                          ? styles.alunoSelecionado
-                          : {})
+                        ...styles.aluno
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={
-                          marcado
-                        }
-                        onChange={() =>
-                          alternarAluno(
-                            aluno.idAluno
-                          )
-                        }
-                      />
-
                       <div style={{
                         minWidth: 0
                       }}>
@@ -966,10 +867,10 @@ export default function AplicadorAtribuicoesPage() {
               <div style={styles.resumoSelecao}>
                 <strong>
                   {
-                    quantidadeSelecionada
+                    alunos.length
                   }
                 </strong>
-                {' aluno(s) selecionado(s)'}
+                {' aluno(s) da turma'}
               </div>
 
               <button
@@ -992,7 +893,7 @@ export default function AplicadorAtribuicoesPage() {
               >
                 {salvando
                   ? 'Atribuindo...'
-                  : `Atribuir ${quantidadeSelecionada} aluno(s)`}
+                  : 'Atribuir turma'}
               </button>
 
             </div>
@@ -1132,7 +1033,7 @@ const styles:
 
   aluno: {
     display: 'grid',
-    gridTemplateColumns: '24px minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(0, 1fr)',
     alignItems: 'center',
     gap: 12,
     padding: 13,

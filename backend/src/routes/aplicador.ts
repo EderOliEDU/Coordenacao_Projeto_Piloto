@@ -353,6 +353,7 @@ router.get('/aplicacoes/:id', async (
         SELECT
           aa.id_aplicacao::text AS "idAplicacao",
           aa.status,
+          aa.observacao,
 
           aa.criado_em AS "criadoEm",
           aa.iniciado_em AS "iniciadoEm",
@@ -414,6 +415,273 @@ router.get('/aplicacoes/:id', async (
     return res.status(500).json({
       error: 'Erro ao carregar aplicação'
     })
+  }
+})
+
+/**
+ * POST /api/aplicador/aplicacoes/iniciar
+ *
+ * Cria a aplicação quando o aplicador
+ * realmente seleciona o aluno.
+ */
+router.post('/aplicacoes/iniciar', async (
+  req: AuthRequest,
+  res: Response
+) => {
+
+  const cpf =
+    getAuthenticatedCpf(req)
+
+  const idFase =
+    Number(req.body?.idFase)
+
+  const idTurma =
+    Number(req.body?.idTurma)
+
+  const idAluno =
+    Number(req.body?.idAluno)
+
+  if (
+    !Number.isInteger(idFase)
+    || idFase <= 0
+    || !Number.isInteger(idTurma)
+    || idTurma <= 0
+    || !Number.isInteger(idAluno)
+    || idAluno <= 0
+  ) {
+    return res.status(400).json({
+      error:
+        'Fase, turma ou aluno inválido'
+    })
+  }
+
+  const client =
+    await getPgPool().connect()
+
+  try {
+
+    await client.query('BEGIN')
+
+    // ----------------------------------
+    // CONFIRMA ATRIBUIÇÃO DA TURMA
+    // ----------------------------------
+
+    const atribuicao =
+      await client.query(
+        `
+          SELECT id_atribuicao
+
+          FROM public.avaliacao_aplicador_atribuicoes
+
+          WHERE id_fase = $1
+            AND id_turma = $2
+            AND cpf_aplicador = $3
+            AND ativo = true
+
+          LIMIT 1
+        `,
+        [
+          idFase,
+          idTurma,
+          cpf
+        ]
+      )
+
+    if (atribuicao.rowCount === 0) {
+      await client.query('ROLLBACK')
+
+      return res.status(403).json({
+        error:
+          'Esta turma não está atribuída a este aplicador'
+      })
+    }
+
+    // ----------------------------------
+    // CONFIRMA QUE ALUNO É DA TURMA
+    // ----------------------------------
+
+    const aluno =
+      await client.query(
+        `
+          SELECT 1
+
+          FROM public.enturmacao_aluno
+
+          WHERE id_turma = $1
+            AND id_aluno = $2
+
+          LIMIT 1
+        `,
+        [
+          idTurma,
+          idAluno
+        ]
+      )
+
+    if (aluno.rowCount === 0) {
+      await client.query('ROLLBACK')
+
+      return res.status(400).json({
+        error:
+          'Aluno não pertence à turma'
+      })
+    }
+
+    // ----------------------------------
+    // VERIFICA SE ESTE PRÓPRIO
+    // APLICADOR JÁ POSSUI A APLICAÇÃO
+    // ----------------------------------
+
+    const propria =
+      await client.query(
+        `
+          SELECT
+            id_aplicacao::text
+              AS "idAplicacao",
+            status
+
+          FROM public.avaliacao_aplicador_aplicacoes
+
+          WHERE id_fase = $1
+            AND id_turma = $2
+            AND id_aluno = $3
+            AND cpf_aplicador = $4
+            AND status <> 'CANCELADA'
+
+          LIMIT 1
+        `,
+        [
+          idFase,
+          idTurma,
+          idAluno,
+          cpf
+        ]
+      )
+
+    if (
+      propria.rowCount &&
+      propria.rowCount > 0
+    ) {
+      await client.query('COMMIT')
+
+      return res.json({
+        ok: true,
+        jaExistente: true,
+        aplicacao:
+          propria.rows[0]
+      })
+    }
+
+    // ----------------------------------
+    // TENTA RESERVAR O ALUNO
+    // ----------------------------------
+
+    try {
+
+      const result =
+        await client.query(
+          `
+            INSERT INTO public.avaliacao_aplicador_aplicacoes
+            (
+              id_fase,
+              id_aluno,
+              id_turma,
+              cpf_aplicador,
+              criado_por,
+              status,
+              criado_em,
+              iniciado_em,
+              atualizado_em
+            )
+
+            VALUES
+            (
+              $1,
+              $2,
+              $3,
+              $4,
+              $4,
+              'PENDENTE',
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            )
+
+            RETURNING
+              id_aplicacao::text
+                AS "idAplicacao",
+              status,
+              iniciado_em
+                AS "iniciadoEm"
+          `,
+          [
+            idFase,
+            idAluno,
+            idTurma,
+            cpf
+          ]
+        )
+
+      await client.query('COMMIT')
+
+      return res.status(201).json({
+        ok: true,
+        jaExistente: false,
+        aplicacao:
+          result.rows[0]
+      })
+
+    } catch (error: any) {
+
+      /*
+       * PostgreSQL:
+       * 23505 = unique_violation
+       *
+       * O índice:
+       *
+       * (id_fase, id_aluno, id_turma)
+       * WHERE status <> 'CANCELADA'
+       *
+       * garante que apenas um aplicador
+       * consiga pegar o aluno.
+       */
+      if (error?.code === '23505') {
+
+        await client.query(
+          'ROLLBACK'
+        )
+
+        return res.status(409).json({
+          error:
+            'Este aluno já está sendo avaliado ou já foi avaliado por outro aplicador'
+        })
+      }
+
+      throw error
+    }
+
+  } catch (error) {
+
+    try {
+      await client.query(
+        'ROLLBACK'
+      )
+    } catch {
+      // transação já encerrada
+    }
+
+    console.error(
+      'Erro ao iniciar aplicação:',
+      error
+    )
+
+    return res.status(500).json({
+      error:
+        'Erro ao iniciar aplicação'
+    })
+
+  } finally {
+    client.release()
   }
 })
 
@@ -626,6 +894,49 @@ router.get('/aplicacoes/:id/questionario', async (
  *   ]
  * }
  */
+
+// Observação pertence à aplicação; não altera o cadastro global do aluno.
+router.put('/aplicacoes/:id/observacao', async (req: AuthRequest, res: Response) => {
+  const idAplicacao = Number(req.params.id)
+  const cpf = getAuthenticatedCpf(req)
+  if (!Number.isSafeInteger(idAplicacao) || idAplicacao <= 0) {
+    return res.status(400).json({ error: 'Aplicação inválida' })
+  }
+  if (typeof req.body?.observacao !== 'string' || req.body.observacao.length > 2000) {
+    return res.status(400).json({ error: 'Informe uma observação de até 2.000 caracteres.' })
+  }
+  const observacao = req.body.observacao.trim() || null
+  const client = await getPgPool().connect()
+  try {
+    await client.query('BEGIN')
+    const aplicacao = await client.query(`
+      SELECT status FROM public.avaliacao_aplicador_aplicacoes
+      WHERE id_aplicacao = $1 AND cpf_aplicador = $2 FOR UPDATE
+    `, [idAplicacao, cpf])
+    if (!aplicacao.rowCount) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Aplicação não encontrada' })
+    }
+    if (!['PENDENTE', 'EM_ANDAMENTO'].includes(aplicacao.rows[0].status)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: 'Esta aplicação não pode mais receber alterações.' })
+    }
+    await client.query(`
+      UPDATE public.avaliacao_aplicador_aplicacoes
+      SET observacao = $3, atualizado_em = CURRENT_TIMESTAMP
+      WHERE id_aplicacao = $1 AND cpf_aplicador = $2
+    `, [idAplicacao, cpf, observacao])
+    await client.query('COMMIT')
+    return res.json({ ok: true, observacao })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('Erro ao salvar observação:', error)
+    return res.status(500).json({ error: 'Não foi possível salvar a observação.' })
+  } finally {
+    client.release()
+  }
+})
+
 router.put('/aplicacoes/:id/respostas', async (
   req: AuthRequest,
   res: Response
@@ -2278,29 +2589,42 @@ router.get('/pendentes/escolas', async (
 
     const result = await pool.query(
       `
-        SELECT
+        SELECT DISTINCT
           e.id_escola::text AS "idEscola",
           e.nome_escola AS "nomeEscola",
-          COUNT(*)::integer AS quantidade
 
-        FROM public.avaliacao_aplicador_aplicacoes aa
+          (
+            SELECT COUNT(
+            DISTINCT ea.id_aluno
+          )::integer
 
-        INNER JOIN public.turmas t
-          ON t.id_turma = aa.id_turma
+          FROM public.avaliacao_aplicador_atribuicoes at2
 
-        INNER JOIN public.escolas e
-          ON e.id_escola = t.id_escola
+          INNER JOIN public.turmas t2
+            ON t2.id_turma = at2.id_turma
 
-        WHERE aa.cpf_aplicador = $1
-          AND aa.status = 'PENDENTE'
+          INNER JOIN public.enturmacao_aluno ea
+            ON ea.id_turma = t2.id_turma
 
-        GROUP BY
-          e.id_escola,
-          e.nome_escola
+          WHERE at2.cpf_aplicador = $1
+            AND at2.ativo = true
+            AND t2.id_escola = e.id_escola
+          ) AS quantidade
 
-        ORDER BY
-          e.nome_escola
-      `,
+          FROM public.avaliacao_aplicador_atribuicoes at
+
+          INNER JOIN public.turmas t
+            ON t.id_turma = at.id_turma
+
+          INNER JOIN public.escolas e
+            ON e.id_escola = t.id_escola
+
+          WHERE at.cpf_aplicador = $1
+            AND at.ativo = true
+
+          ORDER BY
+            e.nome_escola
+        `,
       [cpf]
     )
 
@@ -2339,18 +2663,24 @@ router.get('/pendentes/escolas/:idEscola/etapas', async (
         SELECT
           et.id_etapa::text AS "idEtapa",
           et.descricao,
-          COUNT(*)::integer AS quantidade
 
-        FROM public.avaliacao_aplicador_aplicacoes aa
+        COUNT(
+          DISTINCT ea.id_aluno
+        )::integer AS quantidade
+
+        FROM public.avaliacao_aplicador_atribuicoes at
 
         INNER JOIN public.turmas t
-          ON t.id_turma = aa.id_turma
+          ON t.id_turma = at.id_turma
 
         INNER JOIN public.etapas et
           ON et.id_etapa = t.id_etapa
 
-        WHERE aa.cpf_aplicador = $1
-          AND aa.status = 'PENDENTE'
+        INNER JOIN public.enturmacao_aluno ea
+          ON ea.id_turma = t.id_turma
+
+        WHERE at.cpf_aplicador = $1
+          AND at.ativo = true
           AND t.id_escola = $2
 
         GROUP BY
@@ -2411,15 +2741,21 @@ router.get(
             t.id_turma::text AS "idTurma",
             t.letra_turma AS "letraTurma",
             t.turno,
-            COUNT(*)::integer AS quantidade
 
-          FROM public.avaliacao_aplicador_aplicacoes aa
+            COUNT(
+              DISTINCT ea.id_aluno
+            )::integer AS quantidade
+
+          FROM public.avaliacao_aplicador_atribuicoes at
 
           INNER JOIN public.turmas t
-            ON t.id_turma = aa.id_turma
+            ON t.id_turma = at.id_turma
 
-          WHERE aa.cpf_aplicador = $1
-            AND aa.status = 'PENDENTE'
+          INNER JOIN public.enturmacao_aluno ea
+            ON ea.id_turma = t.id_turma
+
+          WHERE at.cpf_aplicador = $1
+            AND at.ativo = true
             AND t.id_escola = $2
             AND t.id_etapa = $3
 
@@ -2429,8 +2765,8 @@ router.get(
             t.turno
 
           ORDER BY
-            t.letra_turma,
-            t.turno
+          t.letra_turma,
+          t.turno
         `,
         [
           cpf,
@@ -2482,53 +2818,132 @@ router.get(
 
       const pool = getPgPool()
 
+      /*
+       * Descobre a fase ativa atribuída a este aplicador
+       * para esta turma.
+       */
+      const atribuicao = await pool.query(
+        `
+          SELECT
+            at.id_fase
+
+          FROM public.avaliacao_aplicador_atribuicoes at
+
+          INNER JOIN public.turmas t
+            ON t.id_turma = at.id_turma
+
+          WHERE at.cpf_aplicador = $1
+            AND at.ativo = true
+            AND at.id_turma = $2
+            AND t.id_escola = $3
+            AND t.id_etapa = $4
+
+          ORDER BY at.id_fase DESC
+
+          LIMIT 1
+        `,
+        [
+          cpf,
+          idTurma,
+          idEscola,
+          idEtapa
+        ]
+      )
+
+      if (atribuicao.rowCount === 0) {
+        return res.status(404).json({
+          error:
+            'Turma não atribuída a este aplicador'
+        })
+      }
+
+      const idFase =
+        Number(atribuicao.rows[0].id_fase)
+
       const result = await pool.query(
         `
           SELECT
-            aa.id_aplicacao::text AS "idAplicacao",
-
             a.id_aluno::text AS "idAluno",
             a.nome AS "nomeAluno",
             a.inep,
 
-            aa.status
+            $2::integer::text AS "idFase",
 
-          FROM public.avaliacao_aplicador_aplicacoes aa
+            aa.id_aplicacao::text
+              AS "idAplicacao",
+
+            aa.status,
+
+            CASE
+              WHEN aa.id_aplicacao IS NULL
+                THEN 'DISPONIVEL'
+
+              WHEN aa.cpf_aplicador = $1
+                THEN 'MINHA_APLICACAO'
+
+              ELSE 'JA_APLICADO'
+            END AS "situacao",
+
+            CASE
+              WHEN aa.cpf_aplicador = $1
+                THEN true
+              ELSE false
+            END AS "minhaAplicacao"
+
+          FROM public.enturmacao_aluno ea
 
           INNER JOIN public.alunos a
-            ON a.id_aluno = aa.id_aluno
+            ON a.id_aluno = ea.id_aluno
 
-          INNER JOIN public.turmas t
-            ON t.id_turma = aa.id_turma
+          LEFT JOIN public.avaliacao_aplicador_aplicacoes aa
+            ON aa.id_aluno = ea.id_aluno
+           AND aa.id_turma = $3
+           AND aa.id_fase = $2
+           AND aa.status <> 'CANCELADA'
 
-          WHERE aa.cpf_aplicador = $1
-            AND aa.status = 'PENDENTE'
+          WHERE ea.id_turma = $3
 
-            AND t.id_escola = $2
-            AND t.id_etapa = $3
-            AND t.id_turma = $4
-
-          ORDER BY
-            a.nome
+          ORDER BY a.nome
         `,
         [
           cpf,
-          idEscola,
-          idEtapa,
+          idFase,
           idTurma
         ]
       )
 
-      return res.json(result.rows)
+      /*
+       * Não expõe o id da aplicação de outro aplicador.
+       */
+      const alunos =
+        result.rows.map(
+          aluno => ({
+            ...aluno,
+
+            idAplicacao:
+              aluno.minhaAplicacao
+                ? aluno.idAplicacao
+                : null,
+
+            status:
+              aluno.situacao ===
+              'JA_APLICADO'
+                ? null
+                : aluno.status
+          })
+        )
+
+      return res.json(alunos)
 
     } catch (error) {
       console.error(
-        'Erro ao carregar alunos pendentes:',
+        'Erro ao carregar alunos da turma atribuída:',
         error
       )
 
       return res.status(500).json({
-        error: 'Erro ao carregar alunos'
+        error:
+          'Erro ao carregar alunos'
       })
     }
   }
