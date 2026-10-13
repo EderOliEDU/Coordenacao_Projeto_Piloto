@@ -1647,6 +1647,27 @@ router.post(
  */
 
 // Atribuições de turmas e aplicações dos alunos são registros distintos.
+// Retira somente o vínculo da turma; preserva aplicações e respostas existentes.
+router.delete('/aplicador/atribuicoes/:idAtribuicao', requireAdministrador, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.idAtribuicao)
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Atribuição inválida' })
+  }
+  try {
+    const result = await pool.query(`
+      UPDATE public.avaliacao_aplicador_atribuicoes
+      SET ativo = false, atualizado_em = CURRENT_TIMESTAMP
+      WHERE id_atribuicao = $1
+      RETURNING id_atribuicao::text AS "idAtribuicao"
+    `, [id])
+    if (!result.rowCount) return res.status(404).json({ error: 'Atribuição não encontrada' })
+    return res.json({ ok: true, atribuicao: result.rows[0] })
+  } catch (error) {
+    console.error('Erro ao retirar atribuição:', error)
+    return res.status(500).json({ error: 'Não foi possível retirar a atribuição.' })
+  }
+})
+
 router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: AuthRequest, res: Response) => {
   const idFase = Number(req.query.idFase)
   if (!Number.isSafeInteger(idFase) || idFase <= 0) {
@@ -1661,6 +1682,7 @@ router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: Aut
         t.letra_turma AS "letraTurma", t.turno,
         COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
+            'idAtribuicao', atr.id_atribuicao::text,
             'cpf', atr.cpf_aplicador,
             'nome', COALESCE((SELECT COALESCE(NULLIF(trim(p.profissional_nome_social::text), ''),
               NULLIF(trim(p.profissional_nome::text), '')) FROM public.professores p

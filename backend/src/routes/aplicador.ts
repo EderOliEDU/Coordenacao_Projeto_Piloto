@@ -141,9 +141,31 @@ router.get('/resumo', async (
         SELECT
           COUNT(*)::integer AS total,
 
-          COUNT(*) FILTER (
-            WHERE status = 'PENDENTE'
-          )::integer AS pendentes,
+          (
+            SELECT COUNT(DISTINCT (at.id_turma, ea.id_aluno))::integer
+            FROM public.avaliacao_aplicador_atribuicoes at
+            INNER JOIN public.enturmacao_aluno ea
+              ON ea.id_turma = at.id_turma
+            WHERE at.cpf_aplicador = $1
+              AND at.ativo = true
+              AND at.id_fase = (
+                SELECT MAX(at2.id_fase)
+                FROM public.avaliacao_aplicador_atribuicoes at2
+                WHERE at2.cpf_aplicador = $1
+                  AND at2.ativo = true
+                  AND at2.id_turma = at.id_turma
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM public.avaliacao_aplicador_aplicacoes ocupada
+                WHERE ocupada.id_fase = at.id_fase
+                  AND ocupada.id_turma = at.id_turma
+                  AND ocupada.id_aluno = ea.id_aluno
+                  AND ocupada.status <> 'CANCELADA'
+                  AND (ocupada.cpf_aplicador <> $1
+                    OR ocupada.status <> 'PENDENTE')
+              )
+          ) AS pendentes,
 
           COUNT(*) FILTER (
             WHERE status = 'EM_ANDAMENTO'
@@ -479,6 +501,7 @@ router.post('/aplicacoes/iniciar', async (
             AND ativo = true
 
           LIMIT 1
+          FOR SHARE
         `,
         [
           idFase,
@@ -2608,6 +2631,23 @@ router.get('/pendentes/escolas', async (
 
           WHERE at2.cpf_aplicador = $1
             AND at2.ativo = true
+            AND at2.id_fase = (
+              SELECT MAX(ultima.id_fase)
+              FROM public.avaliacao_aplicador_atribuicoes ultima
+              WHERE ultima.cpf_aplicador = $1
+                AND ultima.ativo = true
+                AND ultima.id_turma = at2.id_turma
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM public.avaliacao_aplicador_aplicacoes ocupada
+              WHERE ocupada.id_fase = at2.id_fase
+                AND ocupada.id_turma = at2.id_turma
+                AND ocupada.id_aluno = ea.id_aluno
+                AND ocupada.status <> 'CANCELADA'
+                AND (ocupada.cpf_aplicador <> $1
+                  OR ocupada.status <> 'PENDENTE')
+            )
             AND t2.id_escola = e.id_escola
           ) AS quantidade
 
@@ -2681,6 +2721,23 @@ router.get('/pendentes/escolas/:idEscola/etapas', async (
 
         WHERE at.cpf_aplicador = $1
           AND at.ativo = true
+          AND at.id_fase = (
+            SELECT MAX(ultima.id_fase)
+            FROM public.avaliacao_aplicador_atribuicoes ultima
+            WHERE ultima.cpf_aplicador = $1
+              AND ultima.ativo = true
+              AND ultima.id_turma = at.id_turma
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.avaliacao_aplicador_aplicacoes ocupada
+            WHERE ocupada.id_fase = at.id_fase
+              AND ocupada.id_turma = at.id_turma
+              AND ocupada.id_aluno = ea.id_aluno
+              AND ocupada.status <> 'CANCELADA'
+              AND (ocupada.cpf_aplicador <> $1
+                OR ocupada.status <> 'PENDENTE')
+          )
           AND t.id_escola = $2
 
         GROUP BY
@@ -2756,6 +2813,23 @@ router.get(
 
           WHERE at.cpf_aplicador = $1
             AND at.ativo = true
+          AND at.id_fase = (
+            SELECT MAX(ultima.id_fase)
+            FROM public.avaliacao_aplicador_atribuicoes ultima
+            WHERE ultima.cpf_aplicador = $1
+              AND ultima.ativo = true
+              AND ultima.id_turma = at.id_turma
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.avaliacao_aplicador_aplicacoes ocupada
+            WHERE ocupada.id_fase = at.id_fase
+              AND ocupada.id_turma = at.id_turma
+              AND ocupada.id_aluno = ea.id_aluno
+              AND ocupada.status <> 'CANCELADA'
+              AND (ocupada.cpf_aplicador <> $1
+                OR ocupada.status <> 'PENDENTE')
+          )
             AND t.id_escola = $2
             AND t.id_etapa = $3
 

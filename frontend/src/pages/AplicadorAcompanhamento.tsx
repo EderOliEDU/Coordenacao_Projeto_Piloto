@@ -8,12 +8,14 @@ interface Linha {
   etapa: string | null
   letraTurma: string | null
   turno: string | null
-  aplicadores: { cpf: string; nome: string; atribuidoEm: string }[]
+  aplicadores: { idAtribuicao: string; cpf: string; nome: string; atribuidoEm: string }[]
   alunos: { idAluno: string; nomeAluno: string; cpfAplicador: string | null;
     nomeAplicador: string | null; observacao: string | null; status: string | null }[]
 }
 
 export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: string; revisao: number }) {
+  const [retirando, setRetirando] = useState(false)
+  const [sucesso, setSucesso] = useState('')
   const [dados, setDados] = useState<Linha[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
@@ -41,6 +43,24 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
     return () => controller.abort()
   }, [faseId, revisao, atualizacao])
 
+  async function retirarAtribuicao(turma: Linha, pessoa: Linha['aplicadores'][number]) {
+    if (!window.confirm(`Retirar a atribuição de ${pessoa.nome} da turma ${turma.letraTurma || turma.idTurma} em ${turma.nomeEscola}? As avaliações já iniciadas serão preservadas e poderão ser continuadas pelo responsável.`)) return
+    setRetirando(true)
+    setErro('')
+    setSucesso('')
+    try {
+      const response = await fetch(`/api/superadmin/aplicador/atribuicoes/${encodeURIComponent(pessoa.idAtribuicao)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível retirar a atribuição.')
+      setSucesso(`Atribuição de ${pessoa.nome} retirada. As avaliações existentes foram preservadas.`)
+      setAtualizacao(v => v + 1)
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível retirar a atribuição.')
+    } finally { setRetirando(false) }
+  }
+
   const escolas = useMemo(() => [...new Map(dados.map(t => [t.idEscola, t.nomeEscola])).entries()], [dados])
   const aplicadores = useMemo(() => {
     const mapa = new Map<string, string>()
@@ -60,7 +80,7 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
 
   return <section style={s.painel}>
     <div style={s.topo}><h2 style={{ margin: 0 }}>Acompanhamento das atribuições</h2>
-      <button type="button" disabled={loading || !faseId} onClick={() => setAtualizacao(v => v + 1)}>Atualizar</button></div>
+      <button type="button" disabled={loading || retirando || !faseId} onClick={() => setAtualizacao(v => v + 1)}>Atualizar</button></div>
     <p>A turma pode ter vários aplicadores. O responsável pelo aluno aparece quando uma aplicação de verificação é iniciada.</p>
     <div style={s.filtros}>
       <label>Escola<select style={s.campo} value={escola} onChange={e => setEscola(e.target.value)}>
@@ -71,6 +91,7 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
         <option value="TODAS">Todas as turmas</option><option value="ATRIBUIDAS">Com atribuição ativa</option><option value="SEM">Sem atribuição ativa</option></select></label>
       <label>Buscar escola, turma ou aluno<input style={s.campo} value={busca} onChange={e => setBusca(e.target.value)} /></label>
     </div>
+    {sucesso && <p role="status" style={{ color: '#256029' }}>{sucesso}</p>}
     {erro && <p role="alert" style={{ color: '#b71c1c' }}>{erro}</p>}
     {!faseId ? <p>Selecione uma fase para consultar.</p> : loading ? <p>Carregando acompanhamento...</p> : !erro && <>
       <p><strong>{new Set(linhas.map(t => t.idEscola)).size}</strong> escola(s) • <strong>{linhas.length}</strong> turma(s) • <strong>{linhas.filter(t => t.aplicadores.length > 0).length}</strong> turma(s) atribuída(s) • <strong>{alunos.length}</strong> vínculo(s) de aluno • <strong>{concluidos}</strong> avaliação(ões) concluída(s)</p>
@@ -79,7 +100,7 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
       {linhas.map(t => <details key={t.idTurma} style={s.turma}>
         <summary style={{ cursor: 'pointer' }}><strong>{t.nomeEscola} → {t.etapa || '-'} → Turma {t.letraTurma || t.idTurma} ({t.turno || '-'})</strong>
           <div style={{ marginTop: 6 }}>{t.aplicadores.length ? `Aplicadores: ${t.aplicadores.map(a => a.nome).join(', ')}` : 'Sem atribuição ativa'} • {t.alunos.length} aluno(s) • {t.alunos.filter(a => a.status === 'CONCLUIDA').length} concluído(s)</div></summary>
-        {t.aplicadores.map(a => <p key={a.cpf} style={{ fontSize: 14 }}>{a.nome} — atribuído em {new Date(a.atribuidoEm).toLocaleString('pt-BR')}</p>)}
+        {t.aplicadores.map(a => <p key={a.cpf} style={{ fontSize: 14 }}>{a.nome} — atribuído em {new Date(a.atribuidoEm).toLocaleString('pt-BR')} <button type="button" style={{ marginLeft: 12 }} disabled={retirando || loading} onClick={() => retirarAtribuicao(t, a)}>Retirar atribuição</button></p>)}
         <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 14 }}>
           <thead><tr><th style={s.celula}>Aluno</th><th style={s.celula}>Aplicador responsável</th><th style={s.celula}>Situação</th><th style={s.celula}>Observação</th></tr></thead>
           <tbody>{t.alunos.map(a => <tr key={a.idAluno}>
