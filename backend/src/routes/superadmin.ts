@@ -1048,6 +1048,11 @@ router.get('/aplicador/escolas', requireAdministrador, async (
           ON ea.id_turma = t.id_turma
 
         WHERE e.projeto = 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
 
         GROUP BY
           e.id_escola,
@@ -1117,6 +1122,11 @@ router.get(
 
           WHERE t.id_escola = $1
             AND e.projeto = 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
 
           GROUP BY
             et.id_etapa,
@@ -1192,6 +1202,11 @@ router.get(
           WHERE t.id_escola = $1
             AND t.id_etapa = $2
             AND e.projeto = 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
 
           GROUP BY
             t.id_turma,
@@ -1332,6 +1347,11 @@ router.get(
 
             AND e.projeto =
                 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
 
           ORDER BY
             a.nome
@@ -1484,6 +1504,11 @@ router.post(
 
             WHERE t.id_turma = $1
               AND e.projeto = 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
 
             LIMIT 1
           `,
@@ -1716,6 +1741,11 @@ router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: Aut
       JOIN public.escolas e ON e.id_escola = t.id_escola
       LEFT JOIN public.etapas et ON et.id_etapa = t.id_etapa
       WHERE e.projeto = 'PJINSTFONI'
+            AND EXISTS (
+              SELECT 1 FROM public.etapas etapa_projeto
+              WHERE etapa_projeto.id_etapa = t.id_etapa
+                AND etapa_projeto.projeto = 'PJINSTFONI'
+            )
         AND EXISTS (SELECT 1 FROM public.enturmacao_aluno ea WHERE ea.id_turma = t.id_turma)
       ORDER BY e.nome_escola, et.descricao, t.letra_turma, t.turno, t.id_turma
     `, [idFase])
