@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import { clearSession } from '../session'
 
 interface Escola { id: string; nome: string; municipio?: string; uf?: string }
 interface Turma {
@@ -21,9 +22,9 @@ function formatarCpf(cpf: string) {
 
 function getViewAsProfessor(): ProfessorBusca | null {
   try {
-    return JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+    return JSON.parse(sessionStorage.getItem('viewAsProfessor') || 'null')
   } catch {
-    localStorage.removeItem('viewAsProfessor')
+    sessionStorage.removeItem('viewAsProfessor')
     return null
   }
 }
@@ -32,7 +33,7 @@ export default function TurmasPage() {
   const [turmas, setTurmas] = useState<Turma[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-  const professor = JSON.parse(localStorage.getItem('professor') || '{}')
+  const professor = JSON.parse(sessionStorage.getItem('professor') || '{}')
   const [canViewSuperadmin, setCanViewSuperadmin] = useState(Boolean(professor.permissoes?.superadmin))
   const [canAdministrar, setCanAdministrar] = useState(Boolean(professor.permissoes?.administrador || professor.permissoes?.superadmin))
   const [viewAs, setViewAs] = useState<ProfessorBusca | null>(() => getViewAsProfessor())
@@ -47,7 +48,7 @@ export default function TurmasPage() {
     api.get('/auth/me').then((res) => {
       const refreshedProfessor = res.data?.professor
       if (refreshedProfessor) {
-        localStorage.setItem('professor', JSON.stringify(refreshedProfessor))
+        sessionStorage.setItem('professor', JSON.stringify(refreshedProfessor))
         setCanViewSuperadmin(Boolean(refreshedProfessor.permissoes?.superadmin))
         setCanAdministrar(Boolean(refreshedProfessor.permissoes?.administrador || refreshedProfessor.permissoes?.superadmin))
       }
@@ -77,7 +78,7 @@ export default function TurmasPage() {
   }, [buscaProfessor, canAdministrar])
 
   function logout() {
-    localStorage.clear()
+    clearSession()
     navigate('/login')
   }
 
@@ -86,14 +87,14 @@ export default function TurmasPage() {
       cpf: item.cpf,
       nome: item.nomeSocial || item.nome || formatarCpf(item.cpf),
     }
-    localStorage.setItem('viewAsProfessor', JSON.stringify(professorVisualizado))
+    sessionStorage.setItem('viewAsProfessor', JSON.stringify(professorVisualizado))
     setViewAs(professorVisualizado)
     setBuscaProfessor('')
     setProfessoresBusca([])
   }
 
   function sairVisualizacao() {
-    localStorage.removeItem('viewAsProfessor')
+    sessionStorage.removeItem('viewAsProfessor')
     setViewAs(null)
   }
 

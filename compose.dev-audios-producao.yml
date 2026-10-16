@@ -1,0 +1,16 @@
+# Usar apenas no DEV, depois de autorizar 172.17.2.42 no servidor NFS.
+# COMPOSE_FILE=compose.yml:compose.dev-audios-producao.yml
+services:
+  backend-dev:
+    environment:
+      AUDIO_READONLY_STORAGE_PATH: /mnt/audios-producao
+    volumes:
+      - audios_producao_leitura:/mnt/audios-producao:ro
+
+volumes:
+  audios_producao_leitura:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=192.168.0.121,nfsvers=4,ro,hard
+      device: :/opt/projeto_piloto_app/data/audios

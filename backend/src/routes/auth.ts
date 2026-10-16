@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
+import { heartbeatSession, registerSession, revokeSession, sessionPolicy } from '../services/sessions';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '../services/ldap';
@@ -11,6 +13,13 @@ import { sendPasswordSetupEmail } from '../services/mail';
 
 const router = Router();
 const pool = getPgPool();
+const heartbeatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: (req: AuthRequest) => req.sessionId!,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -147,19 +156,24 @@ router.post('/login', loginLimiter, async (req: Request, res: Response) => {
 
     const expiresIn = (process.env.JWT_EXPIRES_IN || '8h') as `${number}${'s' | 'm' | 'h' | 'd' | 'w'}`;
     const permissoes = await getUserPermissionsAsync(professor.profissional_cpf);
+    const sid = randomUUID();
     const token = jwt.sign(
       {
         cpf: professor.profissional_cpf,
         nome: professor.profissional_nome,
         login: professor.profissional_cpf,
         permissoes,
+        sid,
       },
       process.env.JWT_SECRET!,
       { expiresIn }
     );
 
+    const payload = jwt.decode(token) as { exp: number };
+    await registerSession(sid, professor.profissional_cpf, new Date(payload.exp * 1000));
     const responseBody: Record<string, unknown> = {
       token,
+      session: sessionPolicy,
       professor: {
         cpf: professor.profissional_cpf,
         nome: professor.profissional_nome,
@@ -207,6 +221,27 @@ router.post('/cadastrar-senha', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Falha ao cadastrar senha:', err);
     return res.status(400).json({ error: 'Link inválido ou expirado' });
+  }
+});
+
+router.post('/session/heartbeat', authMiddleware, heartbeatLimiter, async (req: AuthRequest, res: Response) => {
+  try {
+    const active = await heartbeatSession(req.sessionId!, req.professor?.cpf || req.professor?.login || '', req.body?.activity === true);
+    if (!active) return res.status(401).json({ error: 'Sessão encerrada. Entre novamente.' });
+    return res.json({ ok: true, ...sessionPolicy });
+  } catch (error) {
+    console.error('Falha ao atualizar sessão:', error);
+    return res.status(503).json({ error: 'Não foi possível atualizar a sessão.' });
+  }
+});
+
+router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await revokeSession(req.sessionId!, req.professor?.cpf || req.professor?.login || '');
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Falha ao encerrar sessão:', error);
+    return res.status(503).json({ error: 'Não foi possível encerrar a sessão.' });
   }
 });
 

@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import { startSession } from '../session'
 
 export default function LoginPage() {
   const [login, setLogin] = useState('')
@@ -23,8 +24,7 @@ export default function LoginPage() {
         return
       }
 
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('professor', JSON.stringify(data.professor))
+      startSession(data)
       navigate('/inicio')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Erro ao autenticar')
@@ -50,6 +50,9 @@ export default function LoginPage() {
           <p className="hint">Informe o CPF somente com números. No primeiro acesso, deixe a senha em branco para receber o link de cadastro no e-mail corporativo.</p>
 
           <form onSubmit={handleSubmit}>
+            {new URLSearchParams(window.location.search).get('motivo') === 'sessao-encerrada' && (
+              <p role="status">Sua sessão foi encerrada. Entre novamente para continuar.</p>
+            )}
             <div className="field">
               <label>CPF somente números</label>
               <input value={login} onChange={e => setLogin(e.target.value)} placeholder="Somente números" autoComplete="username" required />

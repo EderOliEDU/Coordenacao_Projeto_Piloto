@@ -62,6 +62,11 @@ interface ResultadoAtribuicao {
 
 export default function AplicadorAtribuicoesPage() {
   const navigate = useNavigate()
+  const superadmin = JSON.parse(sessionStorage.getItem('professor') || '{}').permissoes?.superadmin === true
+  const [resultadoTodos, setResultadoTodos] = useState<{
+    escolas: number; turmas: number; aplicadores: number; total: number;
+    novasOuReativadas: number; jaAtivas: number
+  } | null>(null)
 
   const [fases, setFases] =
     useState<Fase[]>([])
@@ -114,7 +119,7 @@ export default function AplicadorAtribuicoesPage() {
   function headers() {
     return {
       Authorization:
-        `Bearer ${localStorage.getItem('token')}`
+        `Bearer ${sessionStorage.getItem('token')}`
     }
   }
 
@@ -122,7 +127,7 @@ export default function AplicadorAtribuicoesPage() {
     return {
       'Content-Type': 'application/json',
       Authorization:
-        `Bearer ${localStorage.getItem('token')}`
+        `Bearer ${sessionStorage.getItem('token')}`
     }
   }
 
@@ -493,6 +498,25 @@ export default function AplicadorAtribuicoesPage() {
     }
   }
 
+  async function atribuirTodos() {
+    if (!superadmin || !faseId || salvando || loading) return
+    if (!window.confirm(`Atribuir TODAS as turmas do projeto com alunos a TODOS os ${aplicadores.length} aplicadores ativos na fase “${faseSelecionada?.nome || faseId}”? As atribuições inativas serão reativadas. Reservas e avaliações existentes serão preservadas. Esta ação abrange todas as escolas, independentemente dos filtros selecionados.`)) return
+    setSalvando(true)
+    setErro('')
+    setResultado(null)
+    setResultadoTodos(null)
+    try {
+      const response = await fetch('/api/superadmin/aplicador/atribuicoes/todos', {
+        method: 'POST', headers: headersJson(), body: JSON.stringify({ idFase: faseId })
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível atribuir a todos.')
+      setResultadoTodos(data)
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível atribuir a todos.')
+    } finally { setSalvando(false) }
+  }
+
   return (
     <div style={styles.pagina}>
 
@@ -531,6 +555,11 @@ export default function AplicadorAtribuicoesPage() {
           <div>{resultado.criada ? 'Nova atribuição de turma criada.' : resultado.reativada ? 'Atribuição de turma reativada.' : 'Esta turma já estava atribuída ao aplicador.'}</div>
         </div>
       )}
+      {resultadoTodos && <div style={styles.sucesso} role="status">
+        <strong>Atribuição a todos concluída.</strong>
+        <div>{resultadoTodos.turmas} turma(s) em {resultadoTodos.escolas} escola(s), para {resultadoTodos.aplicadores} aplicador(es) ativo(s).</div>
+        <div>{resultadoTodos.novasOuReativadas} atribuição(ões) criada(s) ou reativada(s); {resultadoTodos.jaAtivas} já estava(m) ativa(s). Total: {resultadoTodos.total}.</div>
+      </div>}
 
       <h2>Organizar a coleta posterior</h2>
       <p>Quando a administração indicar a verificação, atribua a turma aos aplicadores designados. A atribuição inclui todos os alunos da turma e pode ser compartilhada entre aplicadores.</p>
@@ -544,6 +573,7 @@ export default function AplicadorAtribuicoesPage() {
           <select
             style={styles.select}
             value={faseId}
+            disabled={salvando || loading}
             onChange={event => {
               const novaFase =
                 event.target.value
@@ -557,6 +587,7 @@ export default function AplicadorAtribuicoesPage() {
               )
 
               setResultado(null)
+              setResultadoTodos(null)
               setErro('')
             }}
           >
@@ -591,6 +622,16 @@ export default function AplicadorAtribuicoesPage() {
             </div>
           )}
         </Campo>
+
+        {superadmin && <div style={{ gridColumn: '1 / -1', border: '1px solid #ccc', borderRadius: 8, padding: 16 }}>
+          <h3 style={{ marginTop: 0 }}>Atribuir todas as turmas a todos os aplicadores</h3>
+          <p>Na fase selecionada, inclui todas as turmas com alunos das escolas e etapas do projeto, para todos os aplicadores ativos. Reservas e avaliações existentes mantêm seus responsáveis.</p>
+          <button type="button" style={styles.botaoAtribuir}
+            disabled={loading || salvando || !faseId || !faseSelecionada?.ativo || aplicadores.length === 0}
+            onClick={atribuirTodos}>
+            {salvando ? 'Salvando atribuições...' : 'Atribuir todas as turmas a todos'}
+          </button>
+        </div>}
 
         {/* APLICADOR */}
 

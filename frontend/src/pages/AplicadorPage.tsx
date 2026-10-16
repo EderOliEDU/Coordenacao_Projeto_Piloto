@@ -87,7 +87,7 @@ export default function AplicadorPage() {
   const navigate = useNavigate()
 
   const professor = JSON.parse(
-    localStorage.getItem('professor') || '{}'
+    sessionStorage.getItem('professor') || '{}'
   )
 
   const [resumo, setResumo] = useState<Resumo>({
@@ -145,7 +145,7 @@ export default function AplicadorPage() {
   function headers() {
     return {
       Authorization:
-        `Bearer ${localStorage.getItem('token')}`
+        `Bearer ${sessionStorage.getItem('token')}`
     }
   }
 

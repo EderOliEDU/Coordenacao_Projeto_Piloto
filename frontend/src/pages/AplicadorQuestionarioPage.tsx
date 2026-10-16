@@ -1,3 +1,6 @@
+import AvisoPAEE from '../components/AvisoPAEE'
+import QuestaoVogais, { type RespostaVogal } from '../components/QuestaoVogais'
+import QuestaoConsoantes from '../components/QuestaoConsoantes'
 import {
   useEffect,
   useMemo,
@@ -35,6 +38,8 @@ interface Pergunta {
 }
 
 interface Questionario {
+  versaoInstrumento: number
+  vogais: RespostaVogal[]
   idAplicacao: string
   status: string
   perguntas: Pergunta[]
@@ -125,9 +130,6 @@ export default function AplicadorQuestionarioPage() {
   const [letrasAplicadas, setLetrasAplicadas] =
     useState<Record<string, string>>({})
 
-  const [sugestaoVogal, setSugestaoVogal] =
-    useState<string | null>(null)
-
   const [salvando, setSalvando] =
     useState<Set<string>>(new Set())
 
@@ -192,7 +194,7 @@ export default function AplicadorQuestionarioPage() {
   function headers() {
     return {
       Authorization:
-        `Bearer ${localStorage.getItem('token')}`
+        `Bearer ${sessionStorage.getItem('token')}`
     }
   }
 
@@ -200,7 +202,7 @@ export default function AplicadorQuestionarioPage() {
     return {
       'Content-Type': 'application/json',
       Authorization:
-        `Bearer ${localStorage.getItem('token')}`
+        `Bearer ${sessionStorage.getItem('token')}`
     }
   }
 
@@ -334,34 +336,6 @@ export default function AplicadorQuestionarioPage() {
       setRespostas(respostasIniciais)
       setLetrasAplicadas(letrasIniciais)
 
-      try {
-        const respostaSugestao =
-          await fetch(
-            `/api/aplicador/aplicacoes/${id}/sugestao-vogal`,
-            { headers: headers() }
-          )
-
-        if (respostaSugestao.ok) {
-          const dadosSugestao =
-            await respostaSugestao.json()
-
-          setSugestaoVogal(
-            dadosSugestao?.sugestao
-              ? String(dadosSugestao.sugestao)
-                  .trim()
-                  .toUpperCase()
-              : null
-          )
-        } else {
-          setSugestaoVogal(null)
-        }
-      } catch (error) {
-        console.error(
-          'Erro ao carregar sugestão de vogal:',
-          error
-        )
-        setSugestaoVogal(null)
-      }
 
     } catch (error: any) {
       console.error(error)
@@ -397,6 +371,11 @@ export default function AplicadorQuestionarioPage() {
                   return false
                 }
 
+                if (pergunta.ordem === 2) {
+                  const avaliadas = questionario.vogais.filter(v => v.acertou !== null).length
+                  return avaliadas >= (questionario.versaoInstrumento === 2 ? 5 : 1)
+                }
+
                 const possuiResposta =
                   Boolean(
                     respostas[
@@ -409,7 +388,6 @@ export default function AplicadorQuestionarioPage() {
                 }
 
                 if (
-                  pergunta.ordem === 2 ||
                   pergunta.ordem === 5
                 ) {
                   return Boolean(
@@ -526,6 +504,23 @@ export default function AplicadorQuestionarioPage() {
     salvando.size > 0 ||
     salvandoLeitura.size > 0 ||
     gravandoId !== null
+
+  async function responderVogal(idPergunta: string, vogal: string, acertou: boolean) {
+    if (!podeEditar || salvando.has(idPergunta)) return
+    setSalvando(anterior => new Set(anterior).add(idPergunta))
+    setErro('')
+    try {
+      const response = await fetch(`/api/aplicador/aplicacoes/${id}/vogais/${vogal}`, {
+        method: 'PUT', headers: headersJson(), body: JSON.stringify({ acertou })
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Não foi possível salvar a vogal.')
+      setQuestionario(anterior => anterior ? { ...anterior,
+        vogais: anterior.vogais.map(v => v.vogal === vogal ? data : v) } : anterior)
+      if (acertou !== null) atualizarStatusEmAndamento()
+    } catch (error: any) { setErro(error.message) }
+    finally { setSalvando(anterior => { const novo = new Set(anterior); novo.delete(idPergunta); return novo }) }
+  }
 
   function formatarTempo(
     segundos: number
@@ -741,7 +736,7 @@ export default function AplicadorQuestionarioPage() {
 
           headers: {
             Authorization:
-              `Bearer ${localStorage.getItem('token')}`,
+              `Bearer ${sessionStorage.getItem('token')}`,
 
             'Content-Type':
               'audio/webm'
@@ -1009,7 +1004,6 @@ export default function AplicadorQuestionarioPage() {
     }
 
     const exigeLetra =
-      pergunta.ordem === 2 ||
       pergunta.ordem === 5
 
     const letraSelecionada =
@@ -1028,9 +1022,7 @@ export default function AplicadorQuestionarioPage() {
       !letraSelecionada
     ) {
       setErro(
-        pergunta.ordem === 2
-          ? 'Selecione a vogal aplicada antes de registrar SIM ou NÃO.'
-          : 'Selecione a consoante aplicada antes de registrar SIM ou NÃO.'
+        'Selecione a consoante aplicada antes de registrar SIM ou NÃO.'
       )
       return
     }
@@ -1174,6 +1166,8 @@ export default function AplicadorQuestionarioPage() {
     const normalizada =
       letra.trim().toUpperCase()
 
+    if (normalizada === letrasAplicadas[pergunta.idPergunta]) return
+
     setLetrasAplicadas(
       anterior => ({
         ...anterior,
@@ -1184,6 +1178,17 @@ export default function AplicadorQuestionarioPage() {
 
     setErro('')
     setMensagem('')
+
+    if (pergunta.ordem === 5) {
+      // Uma nova imagem precisa de uma nova avaliação. O banco só recebe
+      // a nova consoante junto com o SIM/NÃO explicitamente registrado.
+      setRespostas(anterior => {
+        const novo = { ...anterior }
+        delete novo[pergunta.idPergunta]
+        return novo
+      })
+      return
+    }
 
     const respostaAtual =
       respostas[
@@ -1357,8 +1362,15 @@ export default function AplicadorQuestionarioPage() {
     questionario.status ===
     'CONCLUIDA'
 
+  const possuiNecessidadeEspecifica = Boolean(
+    aplicacao.paee || aplicacao.necessidadesEspecificas?.length
+  )
+
   return (
     <div style={styles.pagina}>
+
+      <AvisoPAEE key={aplicacao.idAplicacao} alunoNome={aplicacao.alunoNome}
+        paee={aplicacao.paee} necessidades={aplicacao.necessidadesEspecificas} />
 
       {/* CABEÇALHO */}
 
@@ -1424,70 +1436,66 @@ export default function AplicadorQuestionarioPage() {
 
         </div>
 
-        <div
-          style={
-            aplicacao.paee ||
-            (
-              aplicacao
-                .necessidadesEspecificas
-                ?.length || 0
-            ) > 0
-              ? styles.necessidadesAviso
-              : styles.necessidadesNeutro
-          }
-        >
-          <div style={styles.necessidadesTitulo}>
-            Necessidades específicas / Educação Especial
-          </div>
 
-          <div>
-            <strong>PAEE:</strong>{' '}
-            {aplicacao.paee
-              ? 'Sim'
-              : 'Não informado / Não identificado'}
-          </div>
-
-          {(
-            aplicacao
-              .necessidadesEspecificas
-              ?.length || 0
-          ) > 0 ? (
-            <div style={styles.necessidadesLista}>
-              <strong>
-                Necessidades registradas:
-              </strong>
-
-              {aplicacao
-                .necessidadesEspecificas!
-                .map(
-                  necessidade => (
-                    <div
-                      key={
-                        [
-                          necessidade.necessidadeId,
-                          necessidade.tipo || '',
-                          necessidade.descricaoOutros || ''
-                        ].join('-')
-                      }
-                    >
-                      • {necessidade.descricao}
-                      {necessidade.tipo
-                        ? ` (${necessidade.tipo})`
-                        : ''}
-                      {necessidade.descricaoOutros
-                        ? ` – ${necessidade.descricaoOutros}`
-                        : ''}
-                    </div>
-                  )
-                )}
-            </div>
-          ) : (
-            <div style={styles.necessidadesSemRegistro}>
-              Nenhuma necessidade específica registrada
-              para esta turma/fase.
-            </div>
-          )}
+      <div
+        role="region"
+        aria-label="Necessidades específicas / Educação Especial"
+        style={{
+          ...(possuiNecessidadeEspecifica ? styles.necessidadesAviso : styles.necessidadesNeutro),
+        }}
+      >
+        <div style={styles.necessidadesTitulo}>
+          Necessidades específicas / Educação Especial
         </div>
+
+        <div>
+          <strong>PAEE:</strong>{' '}
+          {aplicacao.paee
+            ? 'Sim'
+            : 'Não informado / Não identificado'}
+        </div>
+
+        {(
+          aplicacao
+            .necessidadesEspecificas
+            ?.length || 0
+        ) > 0 ? (
+          <div style={styles.necessidadesLista}>
+            <strong>
+              Necessidades registradas:
+            </strong>
+
+            {aplicacao
+              .necessidadesEspecificas!
+              .map(
+                necessidade => (
+                  <div
+                    key={
+                      [
+                        necessidade.necessidadeId,
+                        necessidade.tipo || '',
+                        necessidade.descricaoOutros || ''
+                      ].join('-')
+                    }
+                  >
+                    • {necessidade.descricao}
+                    {necessidade.tipo
+                      ? ` (${necessidade.tipo})`
+                      : ''}
+                    {necessidade.descricaoOutros
+                      ? ` – ${necessidade.descricaoOutros}`
+                      : ''}
+                  </div>
+                )
+              )}
+          </div>
+        ) : (
+          <div style={styles.necessidadesSemRegistro}>
+            Nenhuma necessidade específica registrada
+            para esta turma/fase.
+          </div>
+        )}
+      </div>
 
       </div>
 
@@ -1627,6 +1635,19 @@ export default function AplicadorQuestionarioPage() {
         {questionario.perguntas.map(
           pergunta => {
 
+            if (pergunta.ordem === 2) return <QuestaoVogais
+              key={pergunta.idPergunta} respostas={questionario.vogais}
+              versao={questionario.versaoInstrumento} disabled={!podeEditar}
+              salvando={salvando.has(pergunta.idPergunta)}
+              onResponder={(vogal, acertou) => responderVogal(pergunta.idPergunta, vogal, acertou)} />
+
+            if (pergunta.ordem === 5) return <QuestaoConsoantes
+              key={pergunta.idPergunta} letra={letrasAplicadas[pergunta.idPergunta] || ''}
+              resposta={respostas[pergunta.idPergunta]} opcoes={pergunta.opcoes}
+              disabled={!podeEditar} salvando={salvando.has(pergunta.idPergunta)}
+              onSelecionar={letra => selecionarLetra(pergunta, letra)}
+              onResponder={idOpcao => responder(pergunta, idOpcao)} />
+
             const respostaAtual =
               respostas[
                 pergunta.idPergunta
@@ -1637,20 +1658,14 @@ export default function AplicadorQuestionarioPage() {
                 pergunta.idPergunta
               )
 
-            const ehQuestaoVogal =
-              pergunta.ordem === 2
-
             const ehQuestaoConsoante =
               pergunta.ordem === 5
 
             const exigeLetra =
-              ehQuestaoVogal ||
               ehQuestaoConsoante
 
             const letrasDisponiveis =
-              ehQuestaoVogal
-                ? ['A', 'E', 'I', 'O', 'U']
-                : ehQuestaoConsoante
+              ehQuestaoConsoante
                   ? [
                       'B', 'C', 'D', 'F', 'J', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'V', 'X', 'Z'
                     ]
@@ -1698,21 +1713,8 @@ export default function AplicadorQuestionarioPage() {
                 {exigeLetra && (
                   <div style={styles.blocoLetra}>
                     <div style={styles.tituloLetra}>
-                      {ehQuestaoVogal
-                        ? 'Vogal aplicada:'
-                        : 'Consoante aplicada:'}
+                      Consoante aplicada:
                     </div>
-
-                    {ehQuestaoVogal &&
-                      sugestaoVogal && (
-                        <div style={styles.sugestaoLetra}>
-                          Sugestão do sistema:
-                          {' '}
-                          <strong>
-                            {sugestaoVogal}
-                          </strong>
-                        </div>
-                      )}
 
                     <div style={styles.letrasGrid}>
                       {letrasDisponiveis.map(
@@ -1720,9 +1722,6 @@ export default function AplicadorQuestionarioPage() {
                           const selecionada =
                             letraAtual === letra
 
-                          const sugerida =
-                            ehQuestaoVogal &&
-                            sugestaoVogal === letra
 
                           return (
                             <button
@@ -1730,9 +1729,6 @@ export default function AplicadorQuestionarioPage() {
                               type="button"
                               style={{
                                 ...styles.botaoLetra,
-                                ...(sugerida
-                                  ? styles.botaoLetraSugerida
-                                  : {}),
                                 ...(selecionada
                                   ? styles.botaoLetraSelecionada
                                   : {})

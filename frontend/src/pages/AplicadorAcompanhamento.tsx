@@ -10,10 +10,13 @@ interface Linha {
   turno: string | null
   aplicadores: { idAtribuicao: string; cpf: string; nome: string; atribuidoEm: string }[]
   alunos: { idAluno: string; nomeAluno: string; cpfAplicador: string | null;
-    nomeAplicador: string | null; observacao: string | null; status: string | null }[]
+    nomeAplicador: string | null; observacao: string | null; status: string | null;
+    idAplicacao: string | null; podeLiberarReserva: boolean }[]
 }
 
 export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: string; revisao: number }) {
+  const superadmin = JSON.parse(sessionStorage.getItem('professor') || '{}').permissoes?.superadmin === true
+  const [liberando, setLiberando] = useState<string | null>(null)
   const [retirando, setRetirando] = useState(false)
   const [sucesso, setSucesso] = useState('')
   const [dados, setDados] = useState<Linha[]>([])
@@ -32,7 +35,7 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
     if (!faseId) { setLoading(false); return }
     setLoading(true)
     fetch(`/api/superadmin/aplicador/atribuicoes/visao?idFase=${encodeURIComponent(faseId)}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, signal: controller.signal
+      headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` }, signal: controller.signal
     }).then(async response => {
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error || 'Erro ao carregar acompanhamento.')
@@ -50,7 +53,7 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
     setSucesso('')
     try {
       const response = await fetch(`/api/superadmin/aplicador/atribuicoes/${encodeURIComponent(pessoa.idAtribuicao)}`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        method: 'DELETE', headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` }
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error || 'Não foi possível retirar a atribuição.')
@@ -59,6 +62,25 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível retirar a atribuição.')
     } finally { setRetirando(false) }
+  }
+
+  async function liberarReserva(turma: Linha, aluno: Linha['alunos'][number]) {
+    if (!superadmin || !aluno.idAplicacao || !aluno.podeLiberarReserva || liberando || retirando) return
+    if (!window.confirm(`Liberar a reserva de ${aluno.nomeAluno}, atualmente com ${aluno.nomeAplicador || 'o aplicador'}, na turma ${turma.letraTurma || turma.idTurma} de ${turma.nomeEscola}? O aluno ficará disponível para os aplicadores atribuídos à turma.`)) return
+    setLiberando(aluno.idAplicacao)
+    setErro('')
+    setSucesso('')
+    try {
+      const response = await fetch(`/api/superadmin/aplicador/aplicacoes/${encodeURIComponent(aluno.idAplicacao)}/liberar-reserva`, {
+        method: 'POST', headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível liberar a reserva.')
+      setSucesso(`Reserva de ${aluno.nomeAluno} liberada. As atribuições da turma foram mantidas.`)
+      setAtualizacao(v => v + 1)
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível liberar a reserva.')
+    } finally { setLiberando(null) }
   }
 
   const escolas = useMemo(() => [...new Map(dados.map(t => [t.idEscola, t.nomeEscola])).entries()], [dados])
@@ -80,8 +102,9 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
 
   return <section style={s.painel}>
     <div style={s.topo}><h2 style={{ margin: 0 }}>Acompanhamento das atribuições</h2>
-      <button type="button" disabled={loading || retirando || !faseId} onClick={() => setAtualizacao(v => v + 1)}>Atualizar</button></div>
+      <button type="button" disabled={loading || retirando || liberando !== null || !faseId} onClick={() => setAtualizacao(v => v + 1)}>Atualizar</button></div>
     <p>A turma pode ter vários aplicadores. O responsável pelo aluno aparece quando uma aplicação de verificação é iniciada.</p>
+    {superadmin && <p>Use “Liberar reserva” para disponibilizar aos aplicadores da turma um aluno cuja aplicação ainda não possui registros.</p>}
     <div style={s.filtros}>
       <label>Escola<select style={s.campo} value={escola} onChange={e => setEscola(e.target.value)}>
         <option value="">Todas as escolas</option>{escolas.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}</select></label>
@@ -100,13 +123,18 @@ export default function AplicadorAcompanhamento({ faseId, revisao }: { faseId: s
       {linhas.map(t => <details key={t.idTurma} style={s.turma}>
         <summary style={{ cursor: 'pointer' }}><strong>{t.nomeEscola} → {t.etapa || '-'} → Turma {t.letraTurma || t.idTurma} ({t.turno || '-'})</strong>
           <div style={{ marginTop: 6 }}>{t.aplicadores.length ? `Aplicadores: ${t.aplicadores.map(a => a.nome).join(', ')}` : 'Sem atribuição ativa'} • {t.alunos.length} aluno(s) • {t.alunos.filter(a => a.status === 'CONCLUIDA').length} concluído(s)</div></summary>
-        {t.aplicadores.map(a => <p key={a.cpf} style={{ fontSize: 14 }}>{a.nome} — atribuído em {new Date(a.atribuidoEm).toLocaleString('pt-BR')} <button type="button" style={{ marginLeft: 12 }} disabled={retirando || loading} onClick={() => retirarAtribuicao(t, a)}>Retirar atribuição</button></p>)}
+        {t.aplicadores.map(a => <p key={a.cpf} style={{ fontSize: 14 }}>{a.nome} — atribuído em {new Date(a.atribuidoEm).toLocaleString('pt-BR')} <button type="button" style={{ marginLeft: 12 }} disabled={retirando || loading || liberando !== null} onClick={() => retirarAtribuicao(t, a)}>Retirar atribuição</button></p>)}
         <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 14 }}>
-          <thead><tr><th style={s.celula}>Aluno</th><th style={s.celula}>Aplicador responsável</th><th style={s.celula}>Situação</th><th style={s.celula}>Observação</th></tr></thead>
+          <thead><tr><th style={s.celula}>Aluno</th><th style={s.celula}>Aplicador responsável</th><th style={s.celula}>Situação</th><th style={s.celula}>Observação</th>{superadmin && <th style={s.celula}>Reserva</th>}</tr></thead>
           <tbody>{t.alunos.map(a => <tr key={a.idAluno}>
             <td style={s.celula}>{a.nomeAluno}</td><td style={s.celula}>{a.nomeAplicador || 'Ainda sem responsável'}</td>
-            <td style={s.celula}>{a.status === 'CONCLUIDA' ? 'Concluída' : a.status === 'EM_ANDAMENTO' ? 'Em andamento' : a.status === 'PENDENTE' ? 'Iniciada / pendente' : a.status || (t.aplicadores.length ? 'Disponível para os aplicadores da turma' : 'Turma sem atribuição')}</td>
+            <td style={s.celula}>{a.status === 'CONCLUIDA' ? 'Concluída' : a.status === 'EM_ANDAMENTO' ? 'Em andamento' : a.status === 'PENDENTE' ? 'Reservada / pendente' : a.status || (t.aplicadores.length ? 'Disponível para os aplicadores da turma' : 'Turma sem atribuição')}</td>
             <td style={{ ...s.celula, whiteSpace: 'pre-wrap', minWidth: 220, overflowWrap: 'anywhere' }}>{a.observacao || '—'}</td>
+            {superadmin && <td style={s.celula}>{a.idAplicacao && a.podeLiberarReserva ?
+              <button type="button" disabled={loading || retirando || liberando !== null}
+                aria-label={`Liberar reserva de ${a.nomeAluno}`} onClick={() => liberarReserva(t, a)}>
+                {liberando === a.idAplicacao ? 'Liberando...' : 'Liberar reserva'}
+              </button> : a.idAplicacao ? 'Avaliação com registros ou concluída' : '—'}</td>}
           </tr>)}</tbody></table></div>
       </details>)}
     </>}

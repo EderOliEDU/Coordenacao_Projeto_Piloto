@@ -4,7 +4,7 @@ import { VisaoDasEtapas } from '../components/EtapaContexto'
 
 export default function AdminPage() {
   const navigate = useNavigate()
-  const p = JSON.parse(localStorage.getItem('professor') || '{}').permissoes || {}
+  const p = JSON.parse(sessionStorage.getItem('professor') || '{}').permissoes || {}
   function card(titulo: string, descricao: string, destino: string) {
     return <button type="button" style={styles.card} onClick={() => navigate(destino)}>
       <strong style={{ fontSize: 18 }}>{titulo}</strong><span>{descricao}</span>

@@ -58,7 +58,7 @@ export default function FormularioPage() {
   const navigate = useNavigate()
   const viewAs = (() => {
     try {
-      return JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+      return JSON.parse(sessionStorage.getItem('viewAsProfessor') || 'null')
     } catch {
       return null
     }
@@ -103,7 +103,7 @@ export default function FormularioPage() {
       setAluno(foundAluno || null)
       const foundTurma = turmasRes.data.find((t: any) => t.id === turmaId)
       setTurma(foundTurma || null)
-      setProfessorNome(meRes.data?.professor?.nome || JSON.parse(localStorage.getItem('professor') || '{}').nome || '')
+      setProfessorNome(meRes.data?.professor?.nome || JSON.parse(sessionStorage.getItem('professor') || '{}').nome || '')
       setNecessidades(Array.isArray(necessidadesRes.data) ? necessidadesRes.data : [])
 
       const necessidadesSalvas = alunoNecRes.data?.necessidades || []

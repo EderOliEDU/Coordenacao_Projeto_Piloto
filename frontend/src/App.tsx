@@ -17,7 +17,7 @@ import AplicadorAtribuicoesPage from './pages/AplicadorAtribuicoesPage'
 import AplicadorQuestionarioPage from './pages/AplicadorQuestionarioPage'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   if (!token) {
     return <Navigate to="/login" replace />
@@ -27,14 +27,14 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 }
 
 function RequireAplicador({ children }: { children: JSX.Element }) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   if (!token) {
     return <Navigate to="/login" replace />
   }
 
   const professor = JSON.parse(
-    localStorage.getItem('professor') || '{}'
+    sessionStorage.getItem('professor') || '{}'
   )
 
   const podeAcessar =
@@ -52,14 +52,14 @@ function RequireAdministrador({
 }: {
   children: JSX.Element
 }) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   if (!token) {
     return <Navigate to="/login" replace />
   }
 
   const professor = JSON.parse(
-    localStorage.getItem('professor') || '{}'
+    sessionStorage.getItem('professor') || '{}'
   )
 
   const podeAcessar =
@@ -78,14 +78,14 @@ function RequireSuperadmin({
 }: {
   children: JSX.Element
 }) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   if (!token) {
     return <Navigate to="/login" replace />
   }
 
   const professor = JSON.parse(
-    localStorage.getItem('professor') || '{}'
+    sessionStorage.getItem('professor') || '{}'
   )
 
   const podeAcessar =

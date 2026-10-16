@@ -34,7 +34,7 @@ export default function AlunosPage() {
         const preenchido = Boolean(cronogramaRes.data?.preenchido)
         setCronogramaPreenchido(preenchido)
         setTurma((Array.isArray(turmasRes.data) ? turmasRes.data : []).find((item: Turma) => item.id === turmaId) || null)
-        setProfessorNome(meRes.data?.professor?.nome || JSON.parse(localStorage.getItem('professor') || '{}').nome || '')
+        setProfessorNome(meRes.data?.professor?.nome || JSON.parse(sessionStorage.getItem('professor') || '{}').nome || '')
 
         if (!preenchido) {
           setAlunos([])

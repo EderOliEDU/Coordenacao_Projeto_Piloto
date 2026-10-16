@@ -10,6 +10,9 @@ import {
   usuarioTemPerfil
 } from '../services/permissions'
 import { getPgPool } from '../services/pgPool'
+import { findReadableAudioPath, resolveAudioPath } from '../services/audioStorage'
+
+import { carregarVogais, resumirVogais, VOGAIS } from '../services/vogais'
 
 const router = Router()
 
@@ -43,27 +46,7 @@ function getAudioRelativePath(
 function getAudioAbsolutePath(
   relativePath: string
 ) {
-  const root =
-    path.resolve(AUDIO_STORAGE_PATH)
-
-  const absolute =
-    path.resolve(
-      root,
-      relativePath
-    )
-
-  if (
-    absolute !== root &&
-    !absolute.startsWith(
-      `${root}${path.sep}`
-    )
-  ) {
-    throw new Error(
-      'Caminho de áudio inválido'
-    )
-  }
-
-  return absolute
+  return resolveAudioPath(AUDIO_STORAGE_PATH, relativePath)
 }
 
 router.use(authMiddleware)
@@ -107,6 +90,48 @@ async function requireAplicador(
 }
 
 router.use(requireAplicador)
+
+// A trava da aplicação serializa resposta, finalização e liberação de reserva.
+router.put('/aplicacoes/:id/vogais/:vogal', async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id)
+  const vogal = String(req.params.vogal).toUpperCase()
+  const acertou = req.body?.acertou
+  if (!Number.isSafeInteger(id) || id <= 0 || !VOGAIS.includes(vogal as any)
+    || typeof acertou !== 'boolean') {
+    return res.status(400).json({ error: 'Informe uma aplicação, vogal e resposta válidas.' })
+  }
+  const client = await getPgPool().connect()
+  try {
+    await client.query('BEGIN')
+    const app = await client.query(`SELECT status FROM public.avaliacao_aplicador_aplicacoes
+      WHERE id_aplicacao=$1 AND cpf_aplicador=$2 FOR UPDATE`, [id, getAuthenticatedCpf(req)])
+    if (!app.rowCount) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Aplicação não encontrada' })
+    }
+    if (!['PENDENTE','EM_ANDAMENTO'].includes(app.rows[0].status)) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: 'Esta aplicação não pode mais receber respostas' })
+    }
+    const saved = await client.query(`INSERT INTO public.avaliacao_aplicador_vogais
+      (id_aplicacao,id_pergunta,vogal,acertou,origem,respondido_em)
+      SELECT $1,id_pergunta,$2,$3,'NOVO',CURRENT_TIMESTAMP
+      FROM public.avaliacao_aplicador_perguntas WHERE codigo='ALITERACAO' AND ativo=true
+      ON CONFLICT (id_aplicacao,id_pergunta,vogal) DO UPDATE SET acertou=EXCLUDED.acertou,
+        origem=EXCLUDED.origem,respondido_em=EXCLUDED.respondido_em,atualizado_em=CURRENT_TIMESTAMP
+      RETURNING vogal,acertou,origem,respondido_em AS "respondidoEm"`, [id, vogal, acertou])
+    if (!saved.rowCount) throw new Error('Questão de aliteração não cadastrada')
+    await client.query(`UPDATE public.avaliacao_aplicador_aplicacoes
+      SET status='EM_ANDAMENTO',iniciado_em=COALESCE(iniciado_em,CURRENT_TIMESTAMP),atualizado_em=CURRENT_TIMESTAMP
+      WHERE id_aplicacao=$1`, [id])
+    await client.query('COMMIT')
+    return res.json(saved.rows[0])
+  } catch (error) {
+    await client.query('ROLLBACK')
+    console.error('Erro ao salvar vogal:', error)
+    return res.status(500).json({ error: 'Não foi possível salvar a resposta da vogal.' })
+  } finally { client.release() }
+})
 
 /**
  * GET /api/aplicador/me
@@ -805,6 +830,7 @@ router.get('/aplicacoes/:id/questionario', async (
       `
         SELECT
           id_aplicacao,
+          versao_instrumento,
           status
         FROM public.avaliacao_aplicador_aplicacoes
         WHERE id_aplicacao = $1
@@ -882,9 +908,13 @@ router.get('/aplicacoes/:id/questionario', async (
       })
     }
 
+    const vogais = await carregarVogais(idAplicacao)
     return res.json({
       idAplicacao: String(idAplicacao),
       status: aplicacao.rows[0].status,
+      versaoInstrumento: aplicacao.rows[0].versao_instrumento,
+      vogais,
+      resumoVogais: resumirVogais(vogais),
       perguntas: Array.from(mapa.values())
     })
 
@@ -1113,14 +1143,10 @@ router.put('/aplicacoes/:id/respostas', async (
           opcaoValida.rows[0].ordemPergunta
         )
 
-      const vogaisValidas =
-        new Set([
-          'A',
-          'E',
-          'I',
-          'O',
-          'U'
-        ])
+      if (ordemPergunta === 2) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: 'A Questão 2 mudou. Atualize a página para responder cada vogal.' })
+      }
 
       const consoantesValidas =
         new Set([
@@ -1144,26 +1170,7 @@ router.put('/aplicacoes/:id/respostas', async (
       let letraParaSalvar:
         string | null = null
 
-      if (ordemPergunta === 2) {
-        if (
-          letraAplicada.length !== 1 ||
-          !vogaisValidas.has(
-            letraAplicada
-          )
-        ) {
-          await client.query('ROLLBACK')
-
-          return res.status(400).json({
-            error:
-              'Informe uma vogal válida para a Questão 2: A, E, I, O ou U.'
-          })
-        }
-
-        letraParaSalvar =
-          letraAplicada
-      } else if (
-        ordemPergunta === 5
-      ) {
+      if (ordemPergunta === 5) {
         if (
           letraAplicada.length !== 1 ||
           !consoantesValidas.has(
@@ -2248,16 +2255,13 @@ router.get(
         })
       }
 
-      const absolutePath =
-        getAudioAbsolutePath(
-          relativePath
-        )
+      const absolutePath = await findReadableAudioPath(
+        relativePath,
+        AUDIO_STORAGE_PATH,
+        process.env.AUDIO_READONLY_STORAGE_PATH
+      )
 
-      try {
-        await fs.access(
-          absolutePath
-        )
-      } catch {
+      if (!absolutePath) {
         return res.status(404).json({
           error:
             'Arquivo de áudio não encontrado no armazenamento'
@@ -2316,6 +2320,7 @@ router.post('/aplicacoes/:id/finalizar', async (
       `
         SELECT
           id_aplicacao,
+          versao_instrumento,
           status
         FROM public.avaliacao_aplicador_aplicacoes
         WHERE id_aplicacao = $1
@@ -2345,6 +2350,13 @@ router.post('/aplicacoes/:id/finalizar', async (
       })
     }
 
+    const vogais = (await client.query('SELECT acertou FROM public.avaliacao_aplicador_vogais WHERE id_aplicacao=$1', [idAplicacao])).rows
+    const minimoVogais = aplicacao.rows[0].versao_instrumento === 2 ? 5 : 1
+    if (resumirVogais(vogais).avaliadas < minimoVogais) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: `A Questão 2 exige ${minimoVogais} vogal(is) avaliada(s).` })
+    }
+
     const conferencia = await client.query(
       `
         SELECT
@@ -2352,7 +2364,7 @@ router.post('/aplicacoes/:id/finalizar', async (
             SELECT COUNT(*)
             FROM public.avaliacao_aplicador_perguntas
             WHERE ativo = true
-              AND ordem <> 8
+              AND ordem NOT IN (2,8)
           )::integer AS total_perguntas,
 
           (
@@ -2362,7 +2374,7 @@ router.post('/aplicacoes/:id/finalizar', async (
               ON p.id_pergunta = r.id_pergunta
             WHERE r.id_aplicacao = $1
               AND p.ativo = true
-              AND p.ordem <> 8
+              AND p.ordem NOT IN (2,8)
           )::integer AS total_respostas,
 
           (
@@ -2388,24 +2400,6 @@ router.post('/aplicacoes/:id/finalizar', async (
             WHERE r.id_aplicacao = $1
               AND p.ativo = true
               AND (
-                (
-                  p.ordem = 2
-                  AND UPPER(
-                        BTRIM(
-                          COALESCE(
-                            r.letra_aplicada,
-                            ''
-                          )
-                        )
-                      ) NOT IN (
-                        'A',
-                        'E',
-                        'I',
-                        'O',
-                        'U'
-                      )
-                )
-                OR
                 (
                   p.ordem = 5
                   AND UPPER(
@@ -2513,7 +2507,7 @@ router.post('/aplicacoes/:id/finalizar', async (
 
       return res.status(409).json({
         error:
-          'As Questões 2 e 5 exigem o registro da letra aplicada.',
+          'A Questão 5 exige o registro da letra aplicada.',
         letrasObrigatoriasInvalidas
       })
     }

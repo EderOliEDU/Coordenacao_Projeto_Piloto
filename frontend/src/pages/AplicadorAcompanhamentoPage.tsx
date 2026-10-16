@@ -8,7 +8,7 @@ export default function AplicadorAcompanhamentoPage() {
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/superadmin/aplicador/fases', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, signal: controller.signal })
+    fetch('/api/superadmin/aplicador/fases', { headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` }, signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error('Não foi possível carregar as fases.')
         const data = await response.json()

@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { sessionIsActive } from '../services/sessions';
 import { canViewResultados, getUserPermissions, isAdministrador, normalizarCpf } from '../services/permissions';
 
 export interface AuthRequest extends Request {
+  sessionId?: string;
   professor?: { id: string; login: string; nome: string; cpf?: string; permissoes?: { administrador?: boolean; resultados: boolean; superadmin?: boolean; coordenador?: boolean; aplicador?: boolean; diretor?: boolean } };
 }
 
@@ -34,15 +36,25 @@ export function blockViewOnlyWrites(req: AuthRequest, res: Response, next: NextF
   next()
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Não autenticado' });
 
   const token = authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Não autenticado' });
 
+  let payload: any;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    payload = jwt.verify(token, process.env.JWT_SECRET!);
+  } catch {
+    return res.status(401).json({ error: 'Token inválido ou expirado' });
+  }
+  try {
+    const cpf = normalizarCpf(payload.cpf || payload.login || '');
+    if (!await sessionIsActive(payload.sid, cpf)) {
+      return res.status(401).json({ error: 'Sessão encerrada. Entre novamente.' });
+    }
+    req.sessionId = payload.sid;
     req.professor = {
       // tenta pegar o login, se não pega o cpf
       login: payload.login || payload.cpf,
@@ -52,8 +64,9 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
       // inclua outros campos se necessário
     } as any;
     next();
-  } catch {
-    res.status(401).json({ error: 'Token inválido' });
+  } catch (error) {
+    console.error('Falha ao validar sessão:', error);
+    res.status(503).json({ error: 'Não foi possível validar a sessão. Tente novamente.' });
   }
 }
 

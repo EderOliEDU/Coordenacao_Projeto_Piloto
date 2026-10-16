@@ -23,6 +23,8 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
 const apiLimiter = rateLimit({
+  // Presença tem limite por sessão na rota, para não consumir a cota da escola por IP.
+  skip: req => req.method === 'POST' && req.path === '/auth/session/heartbeat',
   windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,

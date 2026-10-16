@@ -26,7 +26,7 @@ export default function CronogramaTurmaPage() {
   const navigate = useNavigate()
   const viewAs = (() => {
     try {
-      return JSON.parse(localStorage.getItem('viewAsProfessor') || 'null')
+      return JSON.parse(sessionStorage.getItem('viewAsProfessor') || 'null')
     } catch {
       return null
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 
@@ -88,7 +88,7 @@ function onlyDigits(value: string) {
 
 export default function SuperadminPage() {
   const navigate = useNavigate()
-  const professor = JSON.parse(localStorage.getItem('professor') || '{}')
+  const professor = JSON.parse(sessionStorage.getItem('professor') || '{}')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [professores, setProfessores] = useState<ProfessorAdmin[]>([])
@@ -98,7 +98,12 @@ export default function SuperadminPage() {
   const [turmas, setTurmas] = useState<TurmaAdmin[]>([])
   const [acessos, setAcessos] = useState<UsuarioAcesso[]>([])
   const [acessosLoading, setAcessosLoading] = useState(false)
+  const [acessosVisiveis, setAcessosVisiveis] = useState(false)
   const [acessosQuery, setAcessosQuery] = useState('')
+  const [acessosPerfil, setAcessosPerfil] = useState('')
+  const [acessosStatus, setAcessosStatus] = useState('')
+  const acessosRequest = useRef(0)
+  const [acessosRevisao, setAcessosRevisao] = useState(0)
   const [acessoCpf, setAcessoCpf] = useState('')
   const [acessoNome, setAcessoNome] = useState('')
   const [acessoPerfil, setAcessoPerfil] = useState<PerfilAcesso>('COORDENADOR')
@@ -146,12 +151,21 @@ export default function SuperadminPage() {
       .catch((err) => setError(err.response?.data?.error || 'Nao foi possivel carregar fases'))
   }
 
-  function carregarAcessos(q = acessosQuery) {
+  function carregarAcessos() {
+    if (!acessosVisiveis) return
+    const request = ++acessosRequest.current
     setAcessosLoading(true)
-    api.get('/superadmin/acessos', { params: q.trim() ? { q: q.trim() } : {} })
-      .then((res) => setAcessos(res.data || []))
-      .catch((err) => setError(err.response?.data?.error || 'Nao foi possivel carregar acessos'))
-      .finally(() => setAcessosLoading(false))
+    api.get('/superadmin/acessos', { params: {
+      q: acessosQuery.trim() || undefined,
+      perfil: acessosPerfil || undefined,
+      status: acessosStatus || undefined
+    } })
+      .then((res) => { if (request === acessosRequest.current) setAcessos(res.data || []) })
+      .catch((err) => { if (request === acessosRequest.current) {
+        setAcessos([])
+        setError(err.response?.data?.error || 'Não foi possível carregar acessos')
+      } })
+      .finally(() => { if (request === acessosRequest.current) setAcessosLoading(false) })
   }
 
   useEffect(() => {
@@ -180,14 +194,19 @@ export default function SuperadminPage() {
     api.get('/superadmin/turmas')
       .then((res) => setTurmas(res.data || []))
       .catch(() => setTurmas([]))
-    carregarAcessos('')
     carregarFases()
   }, [])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => carregarAcessos(acessosQuery), 300)
-    return () => window.clearTimeout(timer)
-  }, [acessosQuery])
+    ++acessosRequest.current
+    if (!acessosVisiveis) {
+      setAcessosLoading(false)
+      return
+    }
+    setAcessosLoading(true)
+    const timer = window.setTimeout(() => carregarAcessos(), 300)
+    return () => { window.clearTimeout(timer); ++acessosRequest.current }
+  }, [acessosVisiveis, acessosQuery, acessosPerfil, acessosStatus, acessosRevisao])
 
   useEffect(() => {
     const trimmed = alunoQuery.trim()
@@ -321,7 +340,7 @@ export default function SuperadminPage() {
       setAcessoCpf('')
       setAcessoNome('')
       setAcessoEscolaId('')
-      carregarAcessos('')
+      setAcessosRevisao(revisao => revisao + 1)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Nao foi possivel cadastrar o acesso')
     }
@@ -333,7 +352,7 @@ export default function SuperadminPage() {
     try {
       await api.patch(`/superadmin/acessos/${item.id}`, { ativo: !item.ativo })
       setMessage(`${item.ativo ? 'Acesso desativado' : 'Acesso ativado'}: ${item.perfil}`)
-      setAcessos((items) => items.map((acesso) => acesso.id === item.id ? { ...acesso, ativo: !item.ativo } : acesso))
+      setAcessosRevisao(revisao => revisao + 1)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Nao foi possivel alterar o acesso')
     }
@@ -938,13 +957,41 @@ export default function SuperadminPage() {
           </button>
         </div>
 
-        <div style={{ marginTop: 18 }}>
-          <input
-            value={acessosQuery}
-            onChange={(event) => setAcessosQuery(event.target.value)}
-            placeholder="Filtrar acessos por nome, CPF ou e-mail"
-          />
-        </div>
+        <button type="button" style={{ marginTop: 18 }} aria-expanded={acessosVisiveis}
+          aria-controls="lista-perfis-acesso" onClick={() => setAcessosVisiveis(visivel => !visivel)}>
+          {acessosVisiveis ? 'Ocultar usuários e perfis' : 'Mostrar usuários e perfis'}
+        </button>
+
+        {acessosVisiveis && <div id="lista-perfis-acesso">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginTop: 18 }}>
+            <label style={{ display: 'grid', gap: 6 }}>Nome, CPF ou e-mail
+              <input value={acessosQuery} onChange={event => setAcessosQuery(event.target.value)} placeholder="Buscar usuário" />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>Perfil de acesso
+              <select value={acessosPerfil} onChange={event => setAcessosPerfil(event.target.value)}>
+                <option value="">Todos os perfis</option>
+                <option value="SUPERADMIN">Superadministrador</option>
+                <option value="ADMINISTRADOR">Administrador</option>
+                <option value="COORDENADOR">Coordenador</option>
+                <option value="DIRETOR">Diretor</option>
+                <option value="APLICADOR">Aplicador</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>Status
+              <select value={acessosStatus} onChange={event => setAcessosStatus(event.target.value)}>
+                <option value="">Todos os status</option>
+                <option value="ATIVO">Ativos</option>
+                <option value="INATIVO">Inativos</option>
+              </select>
+            </label>
+            <button type="button" style={{ alignSelf: 'end' }} onClick={() => {
+              setAcessosQuery(''); setAcessosPerfil(''); setAcessosStatus('')
+            }}>Limpar filtros</button>
+          </div>
+          <p aria-live="polite" style={{ fontSize: 13, color: '#636e72' }}>
+            {acessosLoading ? 'Buscando usuários…' : `${acessos.length} acesso(s) exibido(s).`}
+            {!acessosLoading && acessos.length === 100 && ' Exibindo até 100 acessos. Refine os filtros para localizar outros usuários.'}
+          </p>
 
         <div style={{ marginTop: 14, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -965,7 +1012,7 @@ export default function SuperadminPage() {
               )}
               {!acessosLoading && acessos.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: '12px 6px', color: '#636e72' }}>Nenhum acesso cadastrado.</td>
+                  <td colSpan={5} style={{ padding: '12px 6px', color: '#636e72' }}>Nenhum acesso encontrado para os filtros selecionados.</td>
                 </tr>
               )}
               {!acessosLoading && acessos.map((item) => (
@@ -993,6 +1040,7 @@ export default function SuperadminPage() {
             </tbody>
           </table>
         </div>
+        </div>}
       </section>
 
     </div>

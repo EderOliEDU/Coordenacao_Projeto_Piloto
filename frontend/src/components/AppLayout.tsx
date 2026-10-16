@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { gruposDoMenu, linkAtivo } from './navigation'
 import './AppLayout.css'
 import EtapaContexto from './EtapaContexto'
+import { clearSession } from '../session'
 
 function Icone({ nome }: { nome: string }) {
   const paths: Record<string, string> = {
@@ -34,7 +35,7 @@ export default function AppLayout() {
   const asideRef = useRef<HTMLElement>(null)
   const abrirRef = useRef<HTMLButtonElement>(null)
   let professor: any = {}
-  try { professor = JSON.parse(localStorage.getItem('professor') || '{}') } catch { /* sessão inválida */ }
+  try { professor = JSON.parse(sessionStorage.getItem('professor') || '{}') } catch { /* sessão inválida */ }
   const permissoes = professor.permissoes || {}
   const nome = professor.nome || professor.profissionalNome || professor.profissional_nome || 'Usuário'
   const grupos = gruposDoMenu(permissoes)
@@ -113,9 +114,7 @@ export default function AppLayout() {
 export function EncerrarSessao() {
   const navigate = useNavigate()
   useEffect(() => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('professor')
-    localStorage.removeItem('viewAsProfessor')
+    clearSession()
     navigate('/login', { replace: true })
   }, [navigate])
   return <p>Encerrando sessão...</p>

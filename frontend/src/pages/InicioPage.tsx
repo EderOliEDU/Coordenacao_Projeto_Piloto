@@ -12,7 +12,7 @@ export default function InicioPage() {
   const navigate = useNavigate()
 
   const professor = JSON.parse(
-    localStorage.getItem('professor') || '{}'
+    sessionStorage.getItem('professor') || '{}'
   )
 
   const permissoes =

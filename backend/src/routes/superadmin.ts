@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
+import type { PoolClient } from 'pg'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { ensureUsuariosAcessosTable, isAdministrador, isSuperadmin, normalizarCpf, PerfilAcesso, usuarioTemPerfil } from '../services/permissions'
@@ -742,10 +743,18 @@ router.get('/acessos', requireSuperadmin, async (req: AuthRequest, res: Response
   await ensureUsuariosAcessosTable()
   const termo = normalizeSearchTerm(req.query.q)
   const cpfTermo = normalizarCpf(termo)
+  const perfil = normalizeSearchTerm(req.query.perfil).toUpperCase()
+  const status = normalizeSearchTerm(req.query.status).toUpperCase()
+  if (perfil && !['SUPERADMIN','ADMINISTRADOR','COORDENADOR','DIRETOR','APLICADOR'].includes(perfil)) {
+    return res.status(400).json({ error: 'Perfil de acesso inválido' })
+  }
+  if (status && !['ATIVO','INATIVO'].includes(status)) {
+    return res.status(400).json({ error: 'Status de acesso inválido' })
+  }
   const params: any[] = []
   const where: string[] = []
 
-  if (termo.length >= 2) {
+  if (termo.length > 0) {
     params.push(`%${termo}%`)
     const textParam = `$${params.length}`
     where.push(`(
@@ -758,6 +767,17 @@ router.get('/acessos', requireSuperadmin, async (req: AuthRequest, res: Response
   if (cpfTermo) {
     params.push(`%${cpfTermo}%`)
     where.push(`ua.cpf_usuario LIKE $${params.length}`)
+  }
+
+  // Nome/e-mail e CPF são alternativas da busca; perfil e status refinam o conjunto.
+  const filtros = where.length ? [`(${where.join(' OR ')})`] : []
+  if (perfil) {
+    params.push(perfil)
+    filtros.push(`ua.perfil = $${params.length}`)
+  }
+  if (status) {
+    params.push(status === 'ATIVO')
+    filtros.push(`ua.ativo = $${params.length}`)
   }
 
   const result = await pool.query<UsuarioAcessoAdmin>(
@@ -774,7 +794,7 @@ router.get('/acessos', requireSuperadmin, async (req: AuthRequest, res: Response
     LEFT JOIN public.professores p
       ON regexp_replace(p.profissional_cpf::text, '\\D', '', 'g') = ua.cpf_usuario
     LEFT JOIN public.escolas e ON e.id_escola = ua.id_escola
-    ${where.length ? `WHERE ${where.join(' OR ')}` : ''}
+    ${filtros.length ? `WHERE ${filtros.join(' AND ')}` : ''}
     ORDER BY ua.ativo DESC, ua.perfil, nome NULLS LAST, e.nome_escola NULLS LAST
     LIMIT 100
     `,
@@ -1380,6 +1400,62 @@ router.get(
   }
 )
 
+router.post('/aplicador/atribuicoes/todos', requireSuperadmin, async (req: AuthRequest, res: Response) => {
+  const idFase = Number(req.body?.idFase)
+  if (!Number.isSafeInteger(idFase) || idFase <= 0) {
+    return res.status(400).json({ error: 'Fase inválida' })
+  }
+  let client: PoolClient | undefined
+  try {
+    client = await pool.connect()
+    await client.query('BEGIN')
+    const fase = await client.query(`SELECT id_fase FROM public.avaliacao_fases
+      WHERE id_fase = $1 AND ativo = true FOR SHARE`, [idFase])
+    if (!fase.rowCount) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Fase inexistente ou inativa' })
+    }
+    const resultado = await client.query(`
+      WITH turmas_elegiveis AS MATERIALIZED (
+        SELECT t.id_turma, t.id_escola FROM public.turmas t
+        JOIN public.escolas e ON e.id_escola = t.id_escola
+        JOIN public.etapas et ON et.id_etapa = t.id_etapa
+        WHERE e.projeto = 'PJINSTFONI' AND et.projeto = 'PJINSTFONI'
+          AND EXISTS (SELECT 1 FROM public.enturmacao_aluno ea
+            JOIN public.alunos a ON a.id_aluno = ea.id_aluno WHERE ea.id_turma = t.id_turma)
+      ), aplicadores AS MATERIALIZED (
+        SELECT DISTINCT u.cpf_usuario FROM public.usuarios_acessos u
+        JOIN public.professores p ON p.profissional_cpf = u.cpf_usuario
+        WHERE u.perfil = 'APLICADOR' AND u.ativo = true
+      ), alteradas AS (
+        INSERT INTO public.avaliacao_aplicador_atribuicoes
+          (id_fase, id_turma, cpf_aplicador, ativo, criado_por)
+        SELECT $1, t.id_turma, a.cpf_usuario, true, $2
+        FROM turmas_elegiveis t CROSS JOIN aplicadores a
+        ORDER BY t.id_turma, a.cpf_usuario
+        ON CONFLICT (id_fase, id_turma, cpf_aplicador) DO UPDATE
+          SET ativo = true, atualizado_em = CURRENT_TIMESTAMP
+          WHERE avaliacao_aplicador_atribuicoes.ativo = false
+        RETURNING id_atribuicao
+      )
+      SELECT (SELECT count(*)::int FROM turmas_elegiveis) AS turmas,
+        (SELECT count(DISTINCT id_escola)::int FROM turmas_elegiveis) AS escolas,
+        (SELECT count(*)::int FROM aplicadores) AS aplicadores,
+        (SELECT count(*)::int FROM turmas_elegiveis) * (SELECT count(*)::int FROM aplicadores) AS total,
+        (SELECT count(*)::int FROM alteradas) AS "novasOuReativadas"
+    `, [idFase, normalizarCpf(req.professor?.cpf || req.professor?.login || '')])
+    await client.query('COMMIT')
+    const resumo = resultado.rows[0]
+    return res.json({ ok: true, ...resumo, jaAtivas: resumo.total - resumo.novasOuReativadas })
+  } catch (error) {
+    if (client) await client.query('ROLLBACK')
+    console.error('Erro ao atribuir todas as turmas aos aplicadores:', error)
+    return res.status(500).json({ error: 'Não foi possível concluir as atribuições. Nenhuma alteração foi aplicada.' })
+  } finally {
+    client?.release()
+  }
+})
+
 router.post(
   '/aplicador/atribuicoes',
   requireAdministrador,
@@ -1693,6 +1769,63 @@ router.delete('/aplicador/atribuicoes/:idAtribuicao', requireAdministrador, asyn
   }
 })
 
+router.post('/aplicador/aplicacoes/:idAplicacao/liberar-reserva', requireSuperadmin, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.idAplicacao)
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Aplicação inválida' })
+  }
+  let client: PoolClient | undefined
+  try {
+    client = await pool.connect()
+    await client.query('BEGIN')
+    // Respostas e classificações também bloqueiam esta linha antes de gravar.
+    // Assim, uma resposta concorrente é preservada ou encontra a reserva cancelada.
+    const aplicacao = await client.query(`
+      SELECT status FROM public.avaliacao_aplicador_aplicacoes
+      WHERE id_aplicacao = $1 FOR UPDATE
+    `, [id])
+    if (!aplicacao.rowCount) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Aplicação não encontrada' })
+    }
+    if (aplicacao.rows[0].status === 'CANCELADA') {
+      await client.query('COMMIT')
+      return res.json({ ok: true, jaLiberada: true })
+    }
+    const liberada = await client.query(`
+      UPDATE public.avaliacao_aplicador_aplicacoes ap
+      SET status = 'CANCELADA', atualizado_em = CURRENT_TIMESTAMP
+      WHERE ap.id_aplicacao = $1
+        AND ap.status IN ('PENDENTE', 'EM_ANDAMENTO')
+        AND ap.concluido_em IS NULL
+        AND NULLIF(TRIM(ap.observacao), '') IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM public.avaliacao_aplicador_respostas r
+          WHERE r.id_aplicacao = ap.id_aplicacao
+        )
+        AND NOT EXISTS (SELECT 1 FROM public.avaliacao_aplicador_vogais v
+          WHERE v.id_aplicacao = ap.id_aplicacao AND v.acertou IS NOT NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM public.avaliacao_aplicador_leitura_respostas r
+          WHERE r.id_aplicacao = ap.id_aplicacao
+        )
+      RETURNING ap.id_aplicacao::text AS "idAplicacao"
+    `, [id])
+    if (!liberada.rowCount) {
+      await client.query('ROLLBACK')
+      return res.status(409).json({ error: 'A reserva não pode ser liberada: a aplicação possui registros ou já foi concluída. Atualize a lista para conferir.' })
+    }
+    await client.query('COMMIT')
+    return res.json({ ok: true, jaLiberada: false, idAplicacao: liberada.rows[0].idAplicacao })
+  } catch (error) {
+    if (client) await client.query('ROLLBACK')
+    console.error('Erro ao liberar reserva de aluno:', error)
+    return res.status(500).json({ error: 'Não foi possível liberar a reserva.' })
+  } finally {
+    client?.release()
+  }
+})
+
 router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: AuthRequest, res: Response) => {
   const idFase = Number(req.query.idFase)
   if (!Number.isSafeInteger(idFase) || idFase <= 0) {
@@ -1722,6 +1855,7 @@ router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: Aut
           SELECT jsonb_agg(jsonb_build_object(
             'idAluno', aluno.id_aluno::text, 'nomeAluno', aluno.nome,
             'cpfAplicador', app.cpf_aplicador, 'status', app.status, 'observacao', app.observacao,
+            'idAplicacao', app.id_aplicacao, 'podeLiberarReserva', COALESCE(app.pode_liberar_reserva, false),
             'nomeAplicador', COALESCE((SELECT COALESCE(NULLIF(trim(p.profissional_nome_social::text), ''),
               NULLIF(trim(p.profissional_nome::text), '')) FROM public.professores p
               WHERE regexp_replace(p.profissional_cpf::text, '\\D', '', 'g') = app.cpf_aplicador
@@ -1729,7 +1863,17 @@ router.get('/aplicador/atribuicoes/visao', requireAdministrador, async (req: Aut
           ) ORDER BY aluno.nome, aluno.id_aluno)
           FROM public.alunos aluno
           LEFT JOIN LATERAL (
-            SELECT ap.cpf_aplicador, ap.status, ap.observacao FROM public.avaliacao_aplicador_aplicacoes ap
+            SELECT ap.id_aplicacao::text AS id_aplicacao, ap.cpf_aplicador, ap.status, ap.observacao,
+              (ap.status IN ('PENDENTE', 'EM_ANDAMENTO')
+                AND ap.concluido_em IS NULL
+                AND NULLIF(TRIM(ap.observacao), '') IS NULL
+                AND NOT EXISTS (SELECT 1 FROM public.avaliacao_aplicador_respostas r
+                  WHERE r.id_aplicacao = ap.id_aplicacao)
+                AND NOT EXISTS (SELECT 1 FROM public.avaliacao_aplicador_vogais v
+                  WHERE v.id_aplicacao = ap.id_aplicacao AND v.acertou IS NOT NULL)
+                AND NOT EXISTS (SELECT 1 FROM public.avaliacao_aplicador_leitura_respostas r
+                  WHERE r.id_aplicacao = ap.id_aplicacao)) AS pode_liberar_reserva
+            FROM public.avaliacao_aplicador_aplicacoes ap
             WHERE ap.id_aluno = aluno.id_aluno AND ap.id_turma = t.id_turma
               AND ap.id_fase = $1 AND ap.status <> 'CANCELADA'
             ORDER BY ap.id_aplicacao DESC LIMIT 1
