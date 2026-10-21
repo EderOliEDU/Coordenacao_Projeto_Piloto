@@ -18,7 +18,9 @@ export function gruposDoMenu(p: Permissoes): MenuGrupo[] {
   if (p.aplicador === true) verificacao.push({ nome: 'Minhas verificações', destino: '/aplicador', icone: 'avaliacao' })
   if (admin) verificacao.push(
     { nome: 'Atribuir turmas', destino: '/admin/aplicador/atribuicoes', icone: 'atribuir' },
-    { nome: 'Acompanhar verificações', destino: '/admin/aplicador/acompanhamento', icone: 'acompanhar' })
+    { nome: 'Acompanhar verificações', destino: '/admin/aplicador/acompanhamento', icone: 'acompanhar' },
+    { nome: 'Gráficos das verificações', destino: '/admin/aplicador/graficos', icone: 'grafico' },
+    { nome: 'Relatório da terceira avaliação', destino: '/admin/aplicador/relatorio-terceira', icone: 'resultado' })
   const cadastros: MenuLink[] = []
   if (p.superadmin === true) cadastros.push(
     { nome: 'Cadastrar professor', destino: '/superadmin#professores', icone: 'usuario' },

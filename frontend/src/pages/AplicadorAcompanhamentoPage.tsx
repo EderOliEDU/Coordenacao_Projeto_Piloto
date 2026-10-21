@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AplicadorAcompanhamento from './AplicadorAcompanhamento'
 
 export default function AplicadorAcompanhamentoPage() {
@@ -21,6 +22,7 @@ export default function AplicadorAcompanhamentoPage() {
   }, [])
   return <div style={{ maxWidth: 1180, padding: 24, margin: '0 auto' }}>
     <h1>Acompanhamento das verificações por aplicadores</h1>
+    <p><Link to={`/admin/aplicador/graficos${faseId ? `?faseId=${encodeURIComponent(faseId)}` : ''}`}>Ver gráficos deste período</Link></p>
     <p>Consulte a coleta da etapa 2: turmas atribuídas, responsáveis pelas aplicações, andamento e observações dos alunos.</p>
     {erro && <p role="alert" className="error-text">{erro}</p>}
     <label htmlFor="fase-acompanhamento">Fase de avaliação</label>

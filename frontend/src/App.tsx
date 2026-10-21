@@ -1,6 +1,8 @@
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from 'react-router-dom'
 import AppLayout, { EncerrarSessao } from './components/AppLayout'
 import AplicadorAcompanhamentoPage from './pages/AplicadorAcompanhamentoPage'
+import AplicadorGraficosPage from './pages/AplicadorGraficosPage'
+import AplicadorRelatorioPage from './pages/AplicadorRelatorioPage'
 import LoginPage from './pages/LoginPage'
 import InicioPage from './pages/InicioPage'
 import AdminPage from './pages/AdminPage'
@@ -113,6 +115,8 @@ const router = createBrowserRouter(createRoutesFromElements(
 
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route path="/logout" element={<EncerrarSessao />} />
+        <Route path="/admin/aplicador/relatorio-terceira" element={<RequireAdministrador><AplicadorRelatorioPage /></RequireAdministrador>} />
+        <Route path="/admin/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
         <Route path="/admin/aplicador/acompanhamento" element={<RequireAdministrador><AplicadorAcompanhamentoPage /></RequireAdministrador>} />
         <Route path="/superadmin/aplicador/acompanhamento" element={<Navigate to="/admin/aplicador/acompanhamento" replace />} />
         <Route

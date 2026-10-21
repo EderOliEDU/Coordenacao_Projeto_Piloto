@@ -1,4 +1,6 @@
 import { Router, Response, NextFunction } from 'express'
+import { carregarRelatorioTerceiraAvaliacao } from '../services/relatorioTerceiraAvaliacao'
+import { carregarGraficosAplicador } from '../services/aplicadorGraficos'
 import bcrypt from 'bcryptjs'
 import type { PoolClient } from 'pg'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
@@ -958,6 +960,52 @@ router.post('/professores/alterar-email-corporativo', requireSuperadmin, async (
 router.post('/atribuicoes/sincronizar', requireSuperadmin, async (_req: AuthRequest, res: Response) => {
   const report = await syncAtribuicoesFromDesignacoes(pool)
   res.json(report)
+})
+
+router.get('/aplicador/relatorio-terceira', requireAdministrador, async (req: AuthRequest, res: Response) => {
+  if (Object.keys(req.query).some(k => !['escolaId', 'turmaId'].includes(k))) {
+    return res.status(400).json({ error: 'O protocolo permite somente a terceira fase. Use os filtros de escola e turma.' })
+  }
+  for (const key of ['escolaId', 'turmaId']) {
+    const raw = req.query[key]
+    if (raw !== undefined && (typeof raw !== 'string' || !/^[1-9][0-9]*$/.test(raw) || Number(raw) > 2147483647)) {
+      return res.status(400).json({ error: 'Escola ou turma inválida.' })
+    }
+  }
+  if (req.query.turmaId && !req.query.escolaId) {
+    return res.status(400).json({ error: 'Selecione uma escola antes da turma.' })
+  }
+  try {
+    res.setHeader('Cache-Control', 'no-store')
+    return res.json(await carregarRelatorioTerceiraAvaliacao(req.query.escolaId === undefined ? undefined : Number(req.query.escolaId),
+      req.query.turmaId === undefined ? undefined : Number(req.query.turmaId)))
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ error: error.message })
+    console.error('Erro no relatório padronizado:', error)
+    return res.status(500).json({ error: 'Não foi possível gerar o relatório padronizado.' })
+  }
+})
+
+// Mesma permissão administrativa do acompanhamento; não retorna dados individuais.
+router.get('/aplicador/graficos', requireAdministrador, async (req: AuthRequest, res: Response) => {
+  const filtros: { faseId?: number; escolaId?: number; versao?: number } = {}
+  for (const key of ['faseId', 'escolaId', 'versao'] as const) {
+    const raw = req.query[key]
+    if (raw === undefined) continue
+    if (typeof raw !== 'string' || !/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(Number(raw))
+      || Number(raw) > 2147483647 || (key === 'versao' && !['1', '2'].includes(raw))) {
+      return res.status(400).json({ error: 'Filtros de gráficos inválidos.' })
+    }
+    filtros[key] = Number(raw)
+  }
+  try {
+    res.setHeader('Cache-Control', 'no-store')
+    return res.json(await carregarGraficosAplicador(filtros))
+  } catch (error) {
+    if (error.status === 400) return res.status(400).json({ error: error.message })
+    console.error('Erro nos gráficos dos aplicadores:', error)
+    return res.status(500).json({ error: 'Não foi possível carregar os gráficos dos aplicadores.' })
+  }
 })
 
 router.get('/aplicador/fases', requireAdministrador, async (
