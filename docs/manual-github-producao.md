@@ -1,5 +1,7 @@
 # Manual: enviar atualizacoes ao GitHub e atualizar producao
 
+Regra vigente: sempre publicar no GitHub antes de atualizar Produção. Para o acesso permanente e a execução por `ederoli`, seguir [Acesso para atualizações de Produção](acesso-atualizacoes-producao.md). Os exemplos antigos abaixo são históricos; não substituem esse procedimento.
+
 Este fluxo parte da estacao Windows, onde o Codex altera os arquivos em:
 
 ```text

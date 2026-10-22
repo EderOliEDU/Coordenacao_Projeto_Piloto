@@ -1,0 +1,45 @@
+#!/bin/bash
+# Privilégio restrito a scripts publicados na main do repositório oficial.
+set -Eeuo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root
+export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+umask 077
+[[ $EUID -eq 0 ]] || { echo 'Use sudo -n /usr/local/sbin/fonica-update ...'; exit 1; }
+case "$(hostname -s)" in semecel01|semecel02) ;; *) echo 'Servidor não autorizado.'; exit 1;; esac
+if [[ $# -eq 1 && $1 == status ]]; then
+ hostname -s
+ if [[ $(hostname -s) == semecel02 ]]; then
+  git -C /opt/projeto_piloto_app/app rev-parse HEAD
+  curl --fail --silent --max-time 10 http://127.0.0.1:5173/api/health
+ else
+  runuser -u postgres -- psql -X -d projPiloto -Atc 'SELECT current_database(), current_setting('"'"'server_version'"'"');'
+ fi
+ exit
+fi
+[[ $# -eq 3 && $1 == executar && $2 =~ ^[0-9a-f]{40}$ && $3 =~ ^[a-z0-9][a-z0-9-]*$ ]] || {
+ echo 'Uso: fonica-update status | executar SHA_COMPLETO nome-do-script'; exit 2;
+}
+sha=$2
+script=$3
+exec 9>/run/lock/fonica-update.lock
+flock -n 9 || { echo 'Outra atualização está em execução.'; exit 1; }
+base=/var/lib/fonica-update
+repo=$base/github.git
+install -d -o root -g root -m 700 "$base" "$base/releases" "$base/logs"
+if [[ ! -d $repo ]]; then git init --bare "$repo" >/dev/null; fi
+# URL fixa: não aceita outro repositório nem arquivos enviados por SSH.
+git --git-dir="$repo" -c core.hooksPath=/dev/null fetch --no-tags https://github.com/EderOliEDU/Coordenacao_Projeto_Piloto.git refs/heads/main:refs/heads/main
+[[ $(git --git-dir="$repo" rev-parse refs/heads/main) == "$sha" ]] || {
+ echo 'Publicação bloqueada: o SHA solicitado precisa ser o commit atual da main no GitHub.'; exit 1;
+}
+[[ $(git --git-dir="$repo" ls-tree "$sha" -- "scripts/producao/$script.sh" | awk '{print $1}') == 100644 ]] || {
+ echo 'Script regular de atualização não encontrado na main.'; exit 1;
+}
+release=$(mktemp -d "$base/releases/$sha.XXXXXX")
+git --git-dir="$repo" archive "$sha" | tar -x -C "$release"
+export FONICA_RELEASE_SHA=$sha FONICA_RELEASE_DIR=$release FONICA_GITHUB_MIRROR=$repo
+log=$base/logs/$(date -u +%Y%m%dT%H%M%SZ)-$script.log
+printf 'GitHub confirmado: %s; script: %s; log: %s\n' "$sha" "$script" "$log"
+# O script e seus recursos vêm exclusivamente do commit confirmado no GitHub.
+/bin/bash "$release/scripts/producao/$script.sh" 2>&1 | tee "$log"
