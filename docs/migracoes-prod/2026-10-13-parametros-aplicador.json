@@ -209,6 +209,14 @@
       "detalhamento": "Ocorre o processamento de unidades maiores, como sílabas e morfemas, permitindo ler mais rapidamente.",
       "ordem": 4,
       "ativo": true
+    },
+    {
+      "pergunta_codigo": "NIVEL_ESCRITA",
+      "codigo": "NAO_ESCREVEU",
+      "descricao": "NÃO ESCREVEU",
+      "detalhamento": null,
+      "ordem": 5,
+      "ativo": true
     }
   ],
   "palavras": [

@@ -27,6 +27,7 @@ test('Questão 2: migração, autorização, persistência e conclusão', async 
       FROM (SELECT id_aplicacao,status,concluido_em FROM public.avaliacao_aplicador_aplicacoes) a`)).rows[0].dados
     const before = await snapshot()
     await db.query(migration)
+    await db.query(fs.readFileSync(__dirname + '/../../docs/migracoes-prod/2026-10-22-questoes7-8.sql','utf8').replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''))
     await t.test('migra somente a vogal escolhida e preserva a conclusão e o registro original', async () => {
       assert.deepEqual(await snapshot(), before)
       const invalid = await db.query(`SELECT r.id_resposta FROM public.avaliacao_aplicador_respostas r
@@ -80,11 +81,49 @@ test('Questão 2: migração, autorização, persistência e conclusão', async 
     const finish = id => request(`/api/aplicador/aplicacoes/${id}/finalizar`, undefined, token, 'POST')
     const rest = async id => {
       await db.query(`INSERT INTO public.avaliacao_aplicador_respostas(id_aplicacao,id_pergunta,id_opcao,letra_aplicada)
-        SELECT $1,p.id_pergunta,(SELECT o.id_opcao FROM public.avaliacao_aplicador_opcoes o WHERE o.id_pergunta=p.id_pergunta AND o.ativo ORDER BY o.ordem LIMIT 1),
+        SELECT $1,p.id_pergunta,(SELECT o.id_opcao FROM public.avaliacao_aplicador_opcoes o WHERE o.id_pergunta=p.id_pergunta AND o.ativo ORDER BY CASE WHEN p.ordem=7 AND o.codigo='NAO_ESCREVE' THEN 0 ELSE 1 END,o.ordem LIMIT 1),
           CASE WHEN p.ordem=5 THEN 'B' END FROM public.avaliacao_aplicador_perguntas p WHERE p.ativo AND p.ordem NOT IN (2,8)`, [id])
       await db.query(`INSERT INTO public.avaliacao_aplicador_leitura_respostas(id_aplicacao,id_palavra,classificacao)
         SELECT $1,id_palavra,'NAO_RESPONDEU' FROM public.avaliacao_aplicador_leitura_palavras WHERE ativo`, [id])
     }
+    await t.test('Q7 exige detalhamento válido, grava e recupera sem alterar o tipo de apoio', async () => {
+      const id = await fixture()
+      const options = (await db.query(`SELECT o.id_pergunta,o.id_opcao,o.codigo FROM public.avaliacao_aplicador_opcoes o
+        JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta) WHERE p.ordem=7 AND o.ativo`)).rows
+      const answer = async (codigo,nomeEscrito) => {
+        const o=options.find(o=>o.codigo===codigo)
+        return request(`/api/aplicador/aplicacoes/${id}/respostas`,{respostas:[{idPergunta:o.id_pergunta,idOpcao:o.id_opcao,nomeEscrito}]})
+      }
+      for (const [codigo,nome] of [['COM_APOIO','NOME'],['COM_APOIO','NOME_COMPOSTO'],['COM_APOIO','NOME_COMPLETO'],['SEM_APOIO','NOME'],['SEM_APOIO','NOME_COMPOSTO'],['SEM_APOIO','NOME_COMPLETO'],['NAO_ESCREVE',null]]) {
+        assert.equal((await answer(codigo,nome)).status,200)
+        const r=await request(`/api/aplicador/aplicacoes/${id}/questionario`,undefined,token,'GET')
+        assert.equal(r.body.exigeDetalheNome,true)
+        const q=r.body.perguntas.find(p=>p.ordem===7)
+        assert.equal(q.nomeEscrito,nome)
+        assert.equal(q.respostaIdOpcao,String(options.find(o=>o.codigo===codigo).id_opcao))
+      }
+      for (const [codigo,nome] of [['COM_APOIO',null],['SEM_APOIO',null],['COM_APOIO',['NOME']],['COM_APOIO','INVALIDO'],['NAO_ESCREVE','NOME']]) {
+        assert.equal((await answer(codigo,nome)).status,400)
+      }
+      assert.equal((await db.query('SELECT nome_escrito FROM public.avaliacao_aplicador_respostas WHERE id_aplicacao=$1',[id])).rows[0].nome_escrito,null)
+    })
+    await t.test('Q8 oferece NÃO ESCREVEU e salva essa opção', async () => {
+      const id=await fixture()
+      const r=await request(`/api/aplicador/aplicacoes/${id}/questionario`,undefined,token,'GET')
+      const q=r.body.perguntas.find(p=>p.ordem===8)
+      const o=q.opcoes.find(o=>o.codigo==='NAO_ESCREVEU')
+      assert.equal(o.descricao,'NÃO ESCREVEU')
+      assert.equal((await request(`/api/aplicador/aplicacoes/${id}/respostas`,{respostas:[{idPergunta:q.idPergunta,idOpcao:o.idOpcao}]})).status,200)
+    })
+    await t.test('nova aplicação não finaliza Q7 sem detalhe; aplicação histórica mantém a regra anterior', async () => {
+      const id=await fixture()
+      await rest(id)
+      for(const v of ['A','E','I','O','U']) await save(id,v,true)
+      await db.query(`UPDATE public.avaliacao_aplicador_respostas SET id_opcao=(SELECT id_opcao FROM public.avaliacao_aplicador_opcoes o JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta) WHERE p.ordem=7 AND o.codigo='COM_APOIO') WHERE id_aplicacao=$1 AND id_pergunta=(SELECT id_pergunta FROM public.avaliacao_aplicador_perguntas WHERE ordem=7)`,[id])
+      const missing=await finish(id);assert.equal(missing.status,409);assert.match(missing.body.error,/Questão 7/)
+      await db.query('UPDATE public.avaliacao_aplicador_aplicacoes SET exige_detalhe_nome=false WHERE id_aplicacao=$1',[id])
+      assert.equal((await finish(id)).status,200)
+    })
     await t.test('Q5 grava a consoante junto com a opção SIM/NÃO e recupera o mesmo par', async () => {
       const id = await fixture()
       const options = (await db.query(`SELECT o.id_pergunta,o.id_opcao,o.codigo

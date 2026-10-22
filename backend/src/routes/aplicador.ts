@@ -1,3 +1,4 @@
+import { detalheNomeValido } from '../services/escritaNome'
 import { Router, Response, NextFunction, raw } from 'express'
 import { promises as fs } from 'fs'
 import * as path from 'path'
@@ -831,6 +832,7 @@ router.get('/aplicacoes/:id/questionario', async (
         SELECT
           id_aplicacao,
           versao_instrumento,
+          exige_detalhe_nome,
           status
         FROM public.avaliacao_aplicador_aplicacoes
         WHERE id_aplicacao = $1
@@ -862,7 +864,8 @@ router.get('/aplicacoes/:id/questionario', async (
           o.ordem AS "opcaoOrdem",
 
           r.id_opcao::text AS "respostaIdOpcao",
-          r.letra_aplicada AS "letraAplicada"
+          r.letra_aplicada AS "letraAplicada",
+          r.nome_escrito AS "nomeEscrito"
 
         FROM public.avaliacao_aplicador_perguntas p
 
@@ -895,6 +898,7 @@ router.get('/aplicacoes/:id/questionario', async (
           pergunta: row.pergunta,
           respostaIdOpcao: row.respostaIdOpcao,
           letraAplicada: row.letraAplicada || null,
+          nomeEscrito: row.nomeEscrito || null,
           opcoes: []
         })
       }
@@ -913,6 +917,7 @@ router.get('/aplicacoes/:id/questionario', async (
       idAplicacao: String(idAplicacao),
       status: aplicacao.rows[0].status,
       versaoInstrumento: aplicacao.rows[0].versao_instrumento,
+      exigeDetalheNome: aplicacao.rows[0].exige_detalhe_nome,
       vogais,
       resumoVogais: resumirVogais(vogais),
       perguntas: Array.from(mapa.values())
@@ -1114,7 +1119,8 @@ router.put('/aplicacoes/:id/respostas', async (
       const opcaoValida = await client.query(
         `
           SELECT
-            p.ordem AS "ordemPergunta"
+            p.ordem AS "ordemPergunta",
+            o.codigo AS "codigoOpcao"
           FROM public.avaliacao_aplicador_opcoes o
           INNER JOIN public.avaliacao_aplicador_perguntas p
             ON p.id_pergunta = o.id_pergunta
@@ -1146,6 +1152,12 @@ router.put('/aplicacoes/:id/respostas', async (
       if (ordemPergunta === 2) {
         await client.query('ROLLBACK')
         return res.status(409).json({ error: 'A Questão 2 mudou. Atualize a página para responder cada vogal.' })
+      }
+
+      const nomeEscrito = resposta?.nomeEscrito ?? null
+      if (ordemPergunta === 7 && !detalheNomeValido(opcaoValida.rows[0].codigoOpcao, nomeEscrito)) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: 'Informe quanto do nome a criança escreveu para a opção de apoio escolhida.' })
       }
 
       const consoantesValidas =
@@ -1197,6 +1209,7 @@ router.put('/aplicacoes/:id/respostas', async (
             id_pergunta,
             id_opcao,
             letra_aplicada,
+            nome_escrito,
             respondido_em,
             atualizado_em
           )
@@ -1206,6 +1219,7 @@ router.put('/aplicacoes/:id/respostas', async (
             $2,
             $3,
             $4,
+            $5,
             CURRENT_TIMESTAMP,
             CURRENT_TIMESTAMP
           )
@@ -1214,6 +1228,7 @@ router.put('/aplicacoes/:id/respostas', async (
 
           DO UPDATE SET
             id_opcao = EXCLUDED.id_opcao,
+            nome_escrito = EXCLUDED.nome_escrito,
             letra_aplicada =
               EXCLUDED.letra_aplicada,
             atualizado_em = CURRENT_TIMESTAMP
@@ -1222,7 +1237,8 @@ router.put('/aplicacoes/:id/respostas', async (
           idAplicacao,
           idPergunta,
           idOpcao,
-          letraParaSalvar
+          letraParaSalvar,
+          ordemPergunta === 7 ? nomeEscrito : null
         ]
       )
     }
@@ -2321,6 +2337,7 @@ router.post('/aplicacoes/:id/finalizar', async (
         SELECT
           id_aplicacao,
           versao_instrumento,
+          exige_detalhe_nome,
           status
         FROM public.avaliacao_aplicador_aplicacoes
         WHERE id_aplicacao = $1
@@ -2348,6 +2365,17 @@ router.post('/aplicacoes/:id/finalizar', async (
         error: 'Somente aplicações em andamento podem ser finalizadas',
         status: aplicacao.rows[0].status
       })
+    }
+
+    if (aplicacao.rows[0].exige_detalhe_nome) {
+      const nome = await client.query(`SELECT o.codigo,r.nome_escrito FROM public.avaliacao_aplicador_respostas r
+        JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+        JOIN public.avaliacao_aplicador_opcoes o USING(id_opcao)
+        WHERE r.id_aplicacao=$1 AND p.codigo='ESCRITA_NOME' AND p.ativo`, [idAplicacao])
+      if (nome.rowCount && !detalheNomeValido(nome.rows[0].codigo, nome.rows[0].nome_escrito)) {
+        await client.query('ROLLBACK')
+        return res.status(409).json({ error: 'Complete o detalhamento da escrita do nome na Questão 7.' })
+      }
     }
 
     const vogais = (await client.query('SELECT acertou FROM public.avaliacao_aplicador_vogais WHERE id_aplicacao=$1', [idAplicacao])).rows

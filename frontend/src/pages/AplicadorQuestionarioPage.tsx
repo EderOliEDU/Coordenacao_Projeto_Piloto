@@ -1,3 +1,4 @@
+import QuestaoNome from '../components/QuestaoNome'
 import AvisoPAEE from '../components/AvisoPAEE'
 import QuestaoVogais, { type RespostaVogal } from '../components/QuestaoVogais'
 import QuestaoConsoantes from '../components/QuestaoConsoantes'
@@ -34,10 +35,12 @@ interface Pergunta {
   pergunta: string
   respostaIdOpcao: string | null
   letraAplicada: string | null
+  nomeEscrito: string | null
   opcoes: Opcao[]
 }
 
 interface Questionario {
+  exigeDetalheNome: boolean
   versaoInstrumento: number
   vogais: RespostaVogal[]
   idAplicacao: string
@@ -387,6 +390,11 @@ export default function AplicadorQuestionarioPage() {
                   return false
                 }
 
+                if (pergunta.ordem === 7 && questionario.exigeDetalheNome) {
+                  const opcao = pergunta.opcoes.find(o => o.idOpcao === respostas[pergunta.idPergunta])
+                  return opcao?.codigo === 'NAO_ESCREVE' || Boolean(pergunta.nomeEscrito)
+                }
+
                 if (
                   pergunta.ordem === 5
                 ) {
@@ -504,6 +512,26 @@ export default function AplicadorQuestionarioPage() {
     salvando.size > 0 ||
     salvandoLeitura.size > 0 ||
     gravandoId !== null
+
+  async function responderNome(pergunta: Pergunta, idOpcao: string, nomeEscrito: string | null) {
+    if (!podeEditar || salvando.has(pergunta.idPergunta)) return
+    setSalvando(anterior => new Set(anterior).add(pergunta.idPergunta))
+    setErro('')
+    try {
+      const response = await fetch(`/api/aplicador/aplicacoes/${id}/respostas`, {
+        method: 'PUT', headers: headersJson(), body: JSON.stringify({
+          respostas: [{ idPergunta: Number(pergunta.idPergunta), idOpcao: Number(idOpcao), nomeEscrito }]
+        })
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Não foi possível salvar a escrita do nome.')
+      setRespostas(anterior => ({ ...anterior, [pergunta.idPergunta]: idOpcao }))
+      setQuestionario(anterior => anterior ? { ...anterior,
+        perguntas: anterior.perguntas.map(p => p.idPergunta === pergunta.idPergunta ? { ...p, nomeEscrito, respostaIdOpcao: idOpcao } : p) } : anterior)
+      atualizarStatusEmAndamento()
+    } catch (error: any) { setErro(error.message) }
+    finally { setSalvando(anterior => { const novo = new Set(anterior); novo.delete(pergunta.idPergunta); return novo }) }
+  }
 
   async function responderVogal(idPergunta: string, vogal: string, acertou: boolean) {
     if (!podeEditar || salvando.has(idPergunta)) return
@@ -1647,6 +1675,13 @@ export default function AplicadorQuestionarioPage() {
               disabled={!podeEditar} salvando={salvando.has(pergunta.idPergunta)}
               onSelecionar={letra => selecionarLetra(pergunta, letra)}
               onResponder={idOpcao => responder(pergunta, idOpcao)} />
+
+            if (pergunta.ordem === 7) return <QuestaoNome key={pergunta.idPergunta}
+              opcoes={pergunta.opcoes} respostaId={respostas[pergunta.idPergunta]}
+              nomeEscrito={pergunta.nomeEscrito} disabled={!podeEditar}
+              salvando={salvando.has(pergunta.idPergunta)}
+              onPendente={() => setRespostas(anterior => { const novo = { ...anterior }; delete novo[pergunta.idPergunta]; return novo })}
+              onSalvar={(idOpcao, nome) => responderNome(pergunta, idOpcao, nome)} />
 
             const respostaAtual =
               respostas[
