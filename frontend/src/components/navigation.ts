@@ -30,7 +30,8 @@ export function gruposDoMenu(p: Permissoes): MenuGrupo[] {
   if (p.superadmin === true) parametros.push(
     { nome: 'Configurações e cadastros', destino: '/superadmin', icone: 'administracao' },
     { nome: 'Usuários e permissões', destino: '/superadmin#permissoes', icone: 'permissoes' },
-    { nome: 'Fases e períodos', destino: '/superadmin#fases', icone: 'calendario' })
+    { nome: 'Fases e períodos', destino: '/superadmin#fases', icone: 'calendario' },
+    { nome: 'Armazenamento de Produção', destino: '/superadmin/armazenamento', icone: 'grafico' })
   return [ { nome: ETAPAS.professor.menu, links: registro }, { nome: ETAPAS.aplicador.menu, links: verificacao },
     { nome: 'Cadastros', links: cadastros }, { nome: 'Administração e parâmetros', links: parametros } ].filter(g => g.links.length > 0)
 }

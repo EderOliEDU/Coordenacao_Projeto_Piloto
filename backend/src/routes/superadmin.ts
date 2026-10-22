@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express'
 import { carregarRelatorioTerceiraAvaliacao } from '../services/relatorioTerceiraAvaliacao'
 import { carregarGraficosAplicador } from '../services/aplicadorGraficos'
 import bcrypt from 'bcryptjs'
+import { carregarArmazenamento } from '../services/armazenamento'
 import type { PoolClient } from 'pg'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
@@ -137,6 +138,15 @@ async function getProfessorEmailColumns() {
 }
 
 router.use(authMiddleware)
+
+router.get('/armazenamento', requireSuperadmin, async (_req: AuthRequest,res: Response) => {
+ res.setHeader('Cache-Control','private, no-store')
+ try { res.json(await carregarArmazenamento()) }
+ catch(error) {
+  console.error('Falha na consulta de armazenamento de Produção:',error)
+  res.status(503).json({error:'Monitoramento indisponível. Não foi possível conferir o armazenamento de Produção; verifique a coleta no servidor 192.168.0.121.'})
+ }
+})
 
 router.get('/escolas', requireAdministrador, async (_req: AuthRequest, res: Response) => {
   const result = await pool.query(

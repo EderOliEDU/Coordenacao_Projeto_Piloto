@@ -1,3 +1,4 @@
+import AlertaArmazenamento from './AlertaArmazenamento'
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -107,7 +108,7 @@ export default function AppLayout() {
     <div className="pif-corpo"><header className="pif-header">
       {mobile && <button ref={abrirRef} type="button" aria-label="Abrir menu" aria-controls="menu-lateral" aria-expanded={aberto} onClick={() => setAberto(true)}><Icone nome="menu" /></button>}
       <span>{atual?.nome || 'Projeto Instrução Fônica'}</span><small>{perfil}</small>
-    </header><main id="conteudo-principal" tabIndex={-1}><EtapaContexto pathname={location.pathname} /><Outlet /></main></div>
+    </header><main id="conteudo-principal" tabIndex={-1}><EtapaContexto pathname={location.pathname} />{permissoes.superadmin === true && <AlertaArmazenamento />}<Outlet /></main></div>
   </div>
 }
 

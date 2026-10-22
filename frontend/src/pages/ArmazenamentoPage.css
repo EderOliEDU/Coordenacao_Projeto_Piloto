@@ -1,0 +1,19 @@
+.armazenamento-resumo,.armazenamento-discos { display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin:18px 0; }
+.armazenamento-resumo .section-card { display:flex;flex-direction:column;gap:8px; }
+.armazenamento-numero { font-size:2rem;color:#174e45; }
+.armazenamento-alerta { display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:14px 18px;margin:12px 0;border:1px solid;border-radius:10px; }
+.armazenamento-alerta strong { display:block; }
+.armazenamento-alerta a { font-weight:700;color:inherit;text-decoration:underline; }
+.armazenamento-alerta.atencao { background:#fff8df;color:#735000;border-color:#d5af38; }
+.armazenamento-alerta.critico { background:#fff0ed;color:#9c211d;border-color:#d36a60; }
+.armazenamento-data,.armazenamento-caminho { color:#526171;overflow-wrap:anywhere; }
+.armazenamento-estado { font-weight:700; }
+.armazenamento-estado.normal { color:#16634b; }
+.armazenamento-estado.atencao { color:#875d00; }
+.armazenamento-estado.critico { color:#a82421; }
+.armazenamento-barra { height:14px;background:#e5eaf0;border-radius:9px;overflow:hidden; }
+.armazenamento-barra span { display:block;height:100%;background:#287a66; }
+.armazenamento-barra.atencao span { background:#b9840e; }
+.armazenamento-barra.critico span { background:#be3932; }
+.armazenamento-discos dl { display:grid;grid-template-columns:1fr auto;gap:10px; }
+.armazenamento-discos dd { margin:0;font-weight:700; }
