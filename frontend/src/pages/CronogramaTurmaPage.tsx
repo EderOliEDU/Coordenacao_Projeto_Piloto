@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
+import CronogramaFotos from '../components/CronogramaFotos'
 
 interface CronogramaItem {
   id: string
@@ -179,15 +180,19 @@ export default function CronogramaTurmaPage() {
               {dados.itens.map((item) => {
                 const checked = marcados.has(item.id)
                 return (
-                  <label key={item.id} className={`cronograma-item ${checked ? 'selected' : ''}`}>
+                  <div key={item.id} className="cronograma-conteudo">
+                  <label className={`cronograma-item ${checked ? 'selected' : ''}`}>
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={readOnly || salvando}
                       onChange={() => alternarItem(item.id)}
                     />
                     <span className="cronograma-order">{item.ordem}</span>
                     <span className="cronograma-topic">{item.tema}</span>
                   </label>
+                  <CronogramaFotos turmaId={turmaId!} itemId={item.id} readOnly={readOnly} />
+                  </div>
                 )
               })}
             </div>

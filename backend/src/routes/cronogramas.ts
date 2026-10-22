@@ -1,5 +1,9 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
+import multer from 'multer'
+import { promises as fs } from 'fs'
+import { randomUUID } from 'crypto'
+import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, gravarFoto } from '../services/cronogramaFotos'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { isAdministrador, usuarioTemPerfil } from '../services/permissions'
@@ -187,6 +191,87 @@ router.put('/:turmaId', blockViewOnlyWrites, async (req: AuthRequest, res: Respo
     console.error(err)
     res.status(500).json({ error: 'Erro ao salvar cronograma da turma' })
   }
+})
+
+// A autorização é verificada antes de receber o arquivo na memória.
+const uploadFoto = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FOTO_BYTES, files: 1, fields: 0 } }).single('foto')
+async function acessoFoto(req: AuthRequest) {
+  const turmaId = Number(req.params.turmaId), itemId = Number(req.params.itemId)
+  if (![turmaId,itemId].every(id => Number.isSafeInteger(id) && id > 0)) return null
+  const cpf = getAuthenticatedCpf(req)
+  if (!cpf) return null
+  const admin = !isViewOnlyMode(req) && (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(cpf) || await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR']))
+  const turma = await buscarTurmaAtribuida(getEffectiveProfessorCpf(req),turmaId,admin)
+  if (!turma) return null
+  const item = await getPgPool().query(`SELECT 1 FROM public.cronograma_aplicacao WHERE id_cronograma_aplicacao=$1 AND id_etapa=$2 AND ordem IS NOT NULL`,[itemId,turma.etapa_id])
+  return item.rowCount ? { cpf, admin, turmaId, itemId } : null
+}
+const fotosPath = '/:turmaId/itens/:itemId/fotos'
+router.get(fotosPath, async (req: AuthRequest,res: Response) => {
+ try {
+  const acesso = await acessoFoto(req)
+  if (!acesso) return res.status(403).json({error:'Acesso negado a este conteúdo da turma'})
+  await garantirTabelaFotos()
+  const {rows} = await getPgPool().query(`SELECT id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm",
+    (cpf_professor=$3 OR $4::boolean) AS "podeExcluir" FROM public.cronograma_fotos
+    WHERE id_turma=$1 AND id_cronograma_aplicacao=$2 ORDER BY criado_em,id_foto`,[acesso.turmaId,acesso.itemId,acesso.cpf,acesso.admin])
+  res.json({fotos:rows.map(f=>({...f,podeExcluir:f.podeExcluir && !isViewOnlyMode(req)}))})
+ } catch(err) { console.error(err);res.status(500).json({error:'Erro ao carregar fotos das atividades'}) }
+})
+router.post(fotosPath,blockViewOnlyWrites,async (req: AuthRequest,res: Response) => {
+ try {
+  const acesso = await acessoFoto(req)
+  if (!acesso) return res.status(403).json({error:'Acesso negado a este conteúdo da turma'})
+  uploadFoto(req,res,async (uploadError) => {
+   if (uploadError) return res.status(400).json({error:uploadError.code==='LIMIT_FILE_SIZE'?'Cada foto deve ter no máximo 8 MB.':'Envie uma foto por vez, em JPG, PNG ou WebP.'})
+   const tipo = req.file && identificarFoto(req.file.buffer)
+   if (!tipo || !req.file) return res.status(400).json({error:'Envie uma foto em JPG, PNG ou WebP (até 8 MB).'})
+   let arquivo: string | undefined
+   try {
+    await garantirTabelaFotos()
+    arquivo = await gravarFoto(req.file.buffer,tipo.extensao)
+    const id = randomUUID()
+    const {rows} = await getPgPool().query(`INSERT INTO public.cronograma_fotos
+     (id_foto,id_turma,id_cronograma_aplicacao,cpf_professor,arquivo,nome_original,mime_type,tamanho)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm"`,
+     [id,acesso.turmaId,acesso.itemId,acesso.cpf,arquivo,req.file.originalname.slice(0,255),tipo.mime,req.file.size])
+    res.status(201).json({...rows[0],podeExcluir:true})
+   } catch(err) {
+    if (arquivo) await fs.unlink(caminhoFoto(arquivo)).catch(()=>{})
+    console.error(err);res.status(500).json({error:'Não foi possível guardar a foto. Tente novamente.'})
+   }
+  })
+ } catch(err) { console.error(err);res.status(500).json({error:'Erro ao anexar foto'}) }
+})
+router.get(`${fotosPath}/:fotoId/arquivo`,async (req: AuthRequest,res: Response) => {
+ try {
+  const acesso = await acessoFoto(req)
+  if (!acesso) return res.status(403).json({error:'Acesso negado a este conteúdo da turma'})
+  if (!z.string().uuid().safeParse(req.params.fotoId).success) return res.status(400).json({error:'Foto inválida'})
+  await garantirTabelaFotos()
+  const {rows} = await getPgPool().query(`SELECT arquivo,mime_type FROM public.cronograma_fotos WHERE id_foto=$1 AND id_turma=$2 AND id_cronograma_aplicacao=$3`,[req.params.fotoId,acesso.turmaId,acesso.itemId])
+  if (!rows[0]) return res.status(404).json({error:'Foto não encontrada'})
+  res.set({'Content-Type':rows[0].mime_type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+  res.sendFile(caminhoFoto(rows[0].arquivo),error=>{
+   if (error && !res.headersSent) res.status((error as any).statusCode===404?404:500).json({error:'Arquivo da foto indisponível'})
+  })
+ } catch(err) { console.error(err);res.status(500).json({error:'Erro ao abrir foto'}) }
+})
+router.delete(`${fotosPath}/:fotoId`,blockViewOnlyWrites,async (req: AuthRequest,res: Response) => {
+ try {
+  const acesso = await acessoFoto(req)
+  if (!acesso) return res.status(403).json({error:'Acesso negado a este conteúdo da turma'})
+  if (!z.string().uuid().safeParse(req.params.fotoId).success) return res.status(400).json({error:'Foto inválida'})
+  await garantirTabelaFotos()
+  // Remove o vínculo primeiro. Falha no armazenamento não apaga outros anexos.
+  const {rows} = await getPgPool().query(`DELETE FROM public.cronograma_fotos
+    WHERE id_foto=$1 AND id_turma=$2 AND id_cronograma_aplicacao=$3 AND (cpf_professor=$4 OR $5::boolean)
+    RETURNING arquivo`,[req.params.fotoId,acesso.turmaId,acesso.itemId,acesso.cpf,acesso.admin])
+  if (!rows[0]) return res.status(404).json({error:'Foto não encontrada ou sem permissão para excluir'})
+  await fs.unlink(caminhoFoto(rows[0].arquivo)).catch(err=>console.error('Limpeza de foto pendente',err.code))
+  res.json({ok:true})
+ } catch(err) { console.error(err);res.status(500).json({error:'Erro ao excluir foto'}) }
 })
 
 export default router
