@@ -2,8 +2,7 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import { promises as fs } from 'fs'
-import { randomUUID } from 'crypto'
-import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, gravarFoto } from '../services/cronogramaFotos'
+import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, salvarFotoUnica, FotoJaAnexadaError } from '../services/cronogramaFotos'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { isAdministrador, usuarioTemPerfil } from '../services/permissions'
@@ -226,19 +225,11 @@ router.post(fotosPath,blockViewOnlyWrites,async (req: AuthRequest,res: Response)
    if (uploadError) return res.status(400).json({error:uploadError.code==='LIMIT_FILE_SIZE'?'Cada foto deve ter no máximo 8 MB.':'Envie uma foto por vez, em JPG, PNG ou WebP.'})
    const tipo = req.file && identificarFoto(req.file.buffer)
    if (!tipo || !req.file) return res.status(400).json({error:'Envie uma foto em JPG, PNG ou WebP (até 8 MB).'})
-   let arquivo: string | undefined
    try {
-    await garantirTabelaFotos()
-    arquivo = await gravarFoto(req.file.buffer,tipo.extensao)
-    const id = randomUUID()
-    const {rows} = await getPgPool().query(`INSERT INTO public.cronograma_fotos
-     (id_foto,id_turma,id_cronograma_aplicacao,cpf_professor,arquivo,nome_original,mime_type,tamanho)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     RETURNING id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm"`,
-     [id,acesso.turmaId,acesso.itemId,acesso.cpf,arquivo,req.file.originalname.slice(0,255),tipo.mime,req.file.size])
-    res.status(201).json({...rows[0],podeExcluir:true})
+    res.status(201).json(await salvarFotoUnica({turmaId:acesso.turmaId,itemId:acesso.itemId,cpf:acesso.cpf,
+     buffer:req.file.buffer,extensao:tipo.extensao,mime:tipo.mime,nome:req.file.originalname}))
    } catch(err) {
-    if (arquivo) await fs.unlink(caminhoFoto(arquivo)).catch(()=>{})
+    if(err instanceof FotoJaAnexadaError)return res.status(409).json({error:err.message})
     console.error(err);res.status(500).json({error:'Não foi possível guardar a foto. Tente novamente.'})
    }
   })

@@ -60,6 +60,13 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    assert.equal((await fs.readdir(dir)).length,1)
    assert.notEqual((await fs.readdir(dir))[0],'atividade.png')
   })
+  await t.test('segunda foto é rejeitada sem substituir o registro ou criar outro arquivo',async()=>{
+   const r=await request('POST','',professor,form());assert.equal(r.status,409)
+   assert.match((await r.json()).error,/já possui foto/)
+   const fotos=(await request().then(r=>r.json())).fotos
+   assert.equal(fotos.length,1);assert.equal(fotos[0].id,foto.id)
+   assert.equal((await fs.readdir(dir)).length,1)
+  })
   await t.test('outro professor não acessa nem exclui; conferência pode ler e não alterar',async()=>{
    assert.equal((await request('GET',`/${foto.id}/arquivo`,outsider)).status,403)
    assert.equal((await request('DELETE',`/${foto.id}`,outsider)).status,403)
@@ -78,17 +85,25 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    assert.equal((await fs.readdir(dir)).length,1)
    assert.throws(()=>require('../dist/services/cronogramaFotos').caminhoFoto('../../arquivo'))
   })
-  await t.test('falha de gravação no banco limpa o arquivo e não anuncia sucesso',async()=>{
-   const savedPool=pool.getPgPool
-   pool.getPgPool=()=>({query:(sql,values)=>{if(sql.includes('INSERT INTO public.cronograma_fotos'))throw Error('TESTE falha simulada');return db.query(sql,values)}})
-   try{assert.equal((await request('POST','',professor,form())).status,500)}finally{pool.getPgPool=savedPool}
-   assert.equal((await fs.readdir(dir)).length,1)
-  })
   await t.test('desmarcar conteúdo preserva evidência; excluir remove vínculo e binário',async()=>{
    await db.query('DELETE FROM public.turma_cronograma_aplicacao WHERE id_turma=$1 AND id_cronograma_aplicacao=$2',[base.id_turma,base.item])
    assert.equal((await request('GET',`/${foto.id}/arquivo`)).status,200)
    assert.equal((await request('DELETE',`/${foto.id}`)).status,200)
    assert.equal((await request('GET',`/${foto.id}/arquivo`)).status,404)
+   assert.equal((await fs.readdir(dir)).length,0)
+  })
+  await t.test('excluir a foto libera novo envio',async()=>{
+   const r=await request('POST','',professor,form());assert.equal(r.status,201)
+   const nova=await r.json();assert.notEqual(nova.id,foto.id)
+   assert.equal((await request('DELETE',`/${nova.id}`)).status,200)
+  })
+  await t.test('falha de gravação no banco limpa o arquivo e não anuncia sucesso',async()=>{
+   const savedPool=pool.getPgPool
+   pool.getPgPool=()=>({...savedPool(),connect:async()=>{
+    const client=await savedPool().connect()
+    return {...client,query:(sql,values)=>{if(sql.includes('INSERT INTO public.cronograma_fotos'))throw Error('TESTE falha simulada');return client.query(sql,values)}}
+   }})
+   try{assert.equal((await request('POST','',professor,form())).status,500)}finally{pool.getPgPool=savedPool}
    assert.equal((await fs.readdir(dir)).length,0)
   })
  }finally{

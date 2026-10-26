@@ -39,22 +39,23 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
   return ()=>controller.abort()
  },[aberto,caminho])
  async function enviar(files:FileList|null){
-  if(!files?.length||readOnly||ocupado)return
-  setOcupado(true);setErro('');setMensagem('')
-  const falhas:string[]=[];let salvas=0
+  if(!files?.length||readOnly||ocupado||carregando)return
+  setErro('');setMensagem('')
+  if(files.length!==1||fotos.length){setErro('É permitida apenas uma foto por conteúdo. Exclua a foto atual antes de anexar outra.');return}
+  const foto=files[0]
+  if(foto.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(foto.type)){
+   setErro('Use uma foto JPG, PNG ou WebP, até 8 MB.');if(input.current)input.current.value='';return
+  }
+  setOcupado(true)
   try {
-   for(const foto of Array.from(files)){
-    if(foto.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(foto.type)){
-     falhas.push(`${foto.name}: use JPG, PNG ou WebP, até 8 MB.`);continue
-    }
-    const form=new FormData();form.append('foto',foto)
-    try{
-     const r=await api.post(caminho,form)
-     setFotos(atuais=>[...atuais,r.data]);salvas++
-    }catch(e:any){falhas.push(`${foto.name}: ${e.response?.data?.error||'falha no envio. Tente novamente.'}`)}
+   const form=new FormData();form.append('foto',foto)
+   const r=await api.post(caminho,form)
+   setFotos([r.data]);setMensagem('Foto anexada com sucesso.')
+  }catch(e:any){
+   setErro(e.response?.data?.error||'Falha no envio. Tente novamente.')
+   if(e.response?.status===409){
+    try{const r=await api.get(caminho);setFotos(r.data.fotos)}catch{/* Mantém o erro de envio visível. */}
    }
-   if(salvas)setMensagem(`${salvas} foto(s) anexada(s) com sucesso.`)
-   if(falhas.length)setErro(falhas.join(' '))
   }finally{setOcupado(false);if(input.current)input.current.value=''}
  }
  async function excluir(foto:Foto){
@@ -69,11 +70,12 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
    {aberto?'Ocultar fotos':'Fotos das atividades'}
   </button>
   {aberto&&<div id={`fotos-${itemId}`} className="cronograma-fotos-painel">
-   <p>Anexe os registros das atividades deste conteúdo. JPG, PNG ou WebP, até 8 MB por foto.</p>
+   <p>É permitida uma foto por conteúdo apresentado da turma. JPG, PNG ou WebP, até 8 MB.</p>
    {!readOnly&&<>
-    <input ref={input} type="file" multiple accept="image/jpeg,image/png,image/webp" hidden disabled={ocupado||carregando} onChange={e=>enviar(e.target.files)} />
-    <button type="button" className="primary-btn" disabled={ocupado||carregando} onClick={()=>input.current?.click()}>{ocupado?'Aguarde…':'Anexar fotos'}</button>
+    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={ocupado||carregando||fotos.length>0} onChange={e=>enviar(e.target.files)} />
+    <button type="button" className="primary-btn" disabled={ocupado||carregando||fotos.length>0} onClick={()=>input.current?.click()}>{ocupado?'Aguarde…':'Anexar foto'}</button>
    </>}
+   {!readOnly&&fotos.length>0&&<p>Para anexar outra foto, exclua a atual primeiro.</p>}
    {carregando&&<p role="status">Carregando fotos…</p>}
    {erro&&<p role="alert" className="error-text">{erro}</p>}
    {mensagem&&<p role="status" className="success-text">{mensagem}</p>}

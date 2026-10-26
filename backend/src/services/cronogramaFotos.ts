@@ -51,3 +51,30 @@ export async function garantirTabelaFotos() {
  })
  await inicializacao
 }
+
+export class FotoJaAnexadaError extends Error {}
+
+export async function salvarFotoUnica(dados: { turmaId:number; itemId:number; cpf:string; buffer:Buffer; extensao:string; mime:string; nome:string }) {
+ await garantirTabelaFotos()
+ const client=await getPgPool().connect()
+ let arquivo:string|undefined
+ try {
+  await client.query('BEGIN')
+  // Serializa envios para o mesmo conteúdo, inclusive entre processos/instâncias.
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`cronograma-foto:${dados.turmaId}:${dados.itemId}`])
+  const existente=await client.query('SELECT 1 FROM public.cronograma_fotos WHERE id_turma=$1 AND id_cronograma_aplicacao=$2 LIMIT 1',[dados.turmaId,dados.itemId])
+  if(existente.rowCount)throw new FotoJaAnexadaError('Este conteúdo já possui foto. Exclua a foto atual antes de anexar outra.')
+  arquivo=await gravarFoto(dados.buffer,dados.extensao)
+  const {rows}=await client.query(`INSERT INTO public.cronograma_fotos
+   (id_foto,id_turma,id_cronograma_aplicacao,cpf_professor,arquivo,nome_original,mime_type,tamanho)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+   RETURNING id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm"`,
+   [randomUUID(),dados.turmaId,dados.itemId,dados.cpf,arquivo,dados.nome.slice(0,255),dados.mime,dados.buffer.length])
+  await client.query('COMMIT')
+  return {...rows[0],podeExcluir:true}
+ }catch(error){
+  await client.query('ROLLBACK')
+  if(arquivo)await fs.unlink(caminhoFoto(arquivo)).catch(()=>{})
+  throw error
+ }finally{client.release()}
+}
