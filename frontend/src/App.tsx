@@ -1,3 +1,4 @@
+import CronogramaFotosAdminPage from './pages/CronogramaFotosAdminPage'
 import ArmazenamentoPage from './pages/ArmazenamentoPage'
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from 'react-router-dom'
 import AppLayout, { EncerrarSessao } from './components/AppLayout'
@@ -115,6 +116,7 @@ const router = createBrowserRouter(createRoutesFromElements(
         />
 
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+        <Route path="/admin/cronograma/fotos" element={<RequireAdministrador><CronogramaFotosAdminPage /></RequireAdministrador>} />
         <Route path="/superadmin/armazenamento" element={<RequireSuperadmin><ArmazenamentoPage /></RequireSuperadmin>} />
         <Route path="/logout" element={<EncerrarSessao />} />
         <Route path="/admin/aplicador/relatorio-terceira" element={<RequireAdministrador><AplicadorRelatorioPage /></RequireAdministrador>} />

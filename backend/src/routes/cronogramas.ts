@@ -5,10 +5,30 @@ import { promises as fs } from 'fs'
 import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, salvarFotoUnica, FotoJaAnexadaError } from '../services/cronogramaFotos'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
+import { consultarFotosAtividades } from '../services/cronogramaFotosConsulta'
 import { isAdministrador, usuarioTemPerfil } from '../services/permissions'
 
 const router = Router()
 router.use(authMiddleware)
+
+const filtrosFotosSchema=z.object({
+ escolaId:z.coerce.number().int().positive().max(2147483647).optional(),
+ turmaId:z.coerce.number().int().positive().max(2147483647).optional(),
+ conteudoId:z.coerce.number().int().positive().max(2147483647).optional(),
+ pagina:z.coerce.number().int().min(1).max(100000).default(1),
+})
+router.get('/administracao/fotos',async (req:AuthRequest,res:Response)=>{
+ try {
+  const cpf=getAuthenticatedCpf(req)
+  const admin=Boolean(req.professor?.permissoes?.administrador||req.professor?.permissoes?.superadmin)||isAdministrador(cpf)||await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR'])
+  if(!admin)return res.status(403).json({error:'Consulta restrita a administradores e superadministradores'})
+  if(isViewOnlyMode(req))return res.status(403).json({error:'Saia do modo conferência do professor para consultar as fotos de todas as turmas.'})
+  const filtros=filtrosFotosSchema.safeParse(req.query)
+  if(!filtros.success)return res.status(400).json({error:'Filtros de fotos inválidos'})
+  res.setHeader('Cache-Control','private, no-store')
+  res.json(await consultarFotosAtividades({...filtros.data,pagina:filtros.data.pagina??1}))
+ }catch(error){console.error(error);res.status(500).json({error:'Não foi possível consultar as fotos das atividades'})}
+})
 
 const salvarCronogramaSchema = z.object({
   itensMarcados: z.array(z.coerce.number().int().positive()).min(1),
@@ -75,7 +95,7 @@ router.get('/:turmaId', async (req: AuthRequest, res: Response) => {
     const cpf = getEffectiveProfessorCpf(req)
     const turmaId = Number(req.params.turmaId)
     if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
-    const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
+    const canViewAll = (Boolean(req.professor?.permissoes?.administrador || req.professor?.permissoes?.superadmin) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
     const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)
     if (!turma) return res.status(403).json({ error: 'Acesso negado a esta turma' })
@@ -133,7 +153,7 @@ router.put('/:turmaId', blockViewOnlyWrites, async (req: AuthRequest, res: Respo
   const cpf = getEffectiveProfessorCpf(req)
   const turmaId = Number(req.params.turmaId)
   if (!cpf || !turmaId) return res.status(400).json({ error: 'Turma ou professor inválido' })
-  const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
+  const canViewAll = (Boolean(req.professor?.permissoes?.administrador || req.professor?.permissoes?.superadmin) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
   try {
     const turma = await buscarTurmaAtribuida(cpf, turmaId, canViewAll)
@@ -199,7 +219,7 @@ async function acessoFoto(req: AuthRequest) {
   if (![turmaId,itemId].every(id => Number.isSafeInteger(id) && id > 0)) return null
   const cpf = getAuthenticatedCpf(req)
   if (!cpf) return null
-  const admin = !isViewOnlyMode(req) && (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(cpf) || await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR']))
+  const admin = !isViewOnlyMode(req) && (Boolean(req.professor?.permissoes?.administrador || req.professor?.permissoes?.superadmin) || isAdministrador(cpf) || await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR']))
   const turma = await buscarTurmaAtribuida(getEffectiveProfessorCpf(req),turmaId,admin)
   if (!turma) return null
   const item = await getPgPool().query(`SELECT 1 FROM public.cronograma_aplicacao WHERE id_cronograma_aplicacao=$1 AND id_etapa=$2 AND ordem IS NOT NULL`,[itemId,turma.etapa_id])

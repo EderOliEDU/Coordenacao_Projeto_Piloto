@@ -28,10 +28,10 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    JOIN public.cronograma_aplicacao ca ON ca.id_etapa=t.id_etapa
    WHERE e.projeto='PJINSTFONI' AND et.projeto='PJINSTFONI' AND ca.ordem IS NOT NULL LIMIT 1`)).rows[0]
   assert.ok(base,'Professor com conteúdo atribuído no DEV')
-  const token=async(cpf,admin=false)=>{
+  const token=async(cpf,admin=false,superadmin=false)=>{
    const sid=crypto.randomUUID()
    await require('../dist/services/sessions').registerSession(sid,cpf,new Date(Date.now()+3600000))
-   return jwt.sign({cpf,sid,permissoes:{administrador:admin}},process.env.JWT_SECRET,{expiresIn:'1h'})
+   return jwt.sign({cpf,sid,permissoes:{administrador:admin,superadmin}},process.env.JWT_SECRET,{expiresIn:'1h'})
   }
   const professor=await token(base.cpf),outsider=await token('98765432100'),admin=await token('98765432100',true)
   const app=express();app.use(express.json());app.use('/api/cronogramas',require('../dist/routes/cronogramas').default)
@@ -59,6 +59,42 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    assert.deepEqual(Buffer.from(await file.arrayBuffer()),png)
    assert.equal((await fs.readdir(dir)).length,1)
    assert.notEqual((await fs.readdir(dir))[0],'atividade.png')
+  })
+  await t.test('administrador e superadmin consultam galeria e binário sem atribuição de professor',async()=>{
+   const galeria=`http://127.0.0.1:${server.address().port}/api/cronogramas/administracao/fotos`
+   const consultar=(bearer,query='',headers={})=>fetch(galeria+query,{headers:{...(bearer?{Authorization:`Bearer ${bearer}`} : {}),...headers}})
+   assert.equal((await consultar()).status,401)
+   assert.equal((await consultar(outsider)).status,403)
+   const superadmin=await token('98765432100',false,true)
+   const filtro=`?turmaId=${base.id_turma}&conteudoId=${base.item}`
+   for(const bearer of [admin,superadmin]){
+    const r=await consultar(bearer,filtro);assert.equal(r.status,200)
+    assert.equal(r.headers.get('cache-control'),'private, no-store')
+    const d=await r.json();assert.equal(d.total,1);assert.equal(d.fotos[0].id,foto.id)
+    assert.ok(d.fotos[0].escolaNome);assert.ok(d.fotos[0].turmaNome);assert.ok(d.fotos[0].tema)
+    assert.ok(d.filtros.turmas.some(t=>t.id===String(base.id_turma)))
+    const arquivo=await request('GET',`/${foto.id}/arquivo`,bearer);assert.equal(arquivo.status,200)
+    assert.deepEqual(Buffer.from(await arquivo.arrayBuffer()),png)
+   }
+   assert.equal((await consultar(admin,filtro,{'X-View-As-Cpf':base.cpf})).status,403)
+   assert.equal((await consultar(admin,'?turmaId=invalid')).status,400)
+   assert.equal((await consultar(admin,'?pagina=0')).status,400)
+   assert.equal((await consultar(admin,'?turmaId=2147483647').then(r=>r.json())).total,0)
+   const escola=(await db.query('SELECT id_escola FROM public.turmas WHERE id_turma=$1',[base.id_turma])).rows[0].id_escola
+   assert.equal((await consultar(admin,filtro+'&escolaId='+escola).then(r=>r.json())).total,1)
+   assert.equal((await consultar(admin,filtro+'&escolaId=2147483647').then(r=>r.json())).total,0)
+   assert.equal((await consultar(admin,'?conteudoId=2147483647').then(r=>r.json())).total,0)
+   const extras=[]
+   try{
+    for(let i=0;i<12;i++){
+     const id=crypto.randomUUID();extras.push(id)
+     await db.query(`INSERT INTO public.cronograma_fotos (id_foto,id_turma,id_cronograma_aplicacao,cpf_professor,arquivo,nome_original,mime_type,tamanho)
+      VALUES ($1,$2,$3,$4,$5,'legado.png','image/png',1)`,[id,base.id_turma,base.item,base.cpf,id+'.png'])
+    }
+    const um=await consultar(admin,filtro).then(r=>r.json()),dois=await consultar(admin,filtro+'&pagina=2').then(r=>r.json())
+    assert.equal(um.total,13);assert.equal(um.totalPaginas,2);assert.equal(um.fotos.length,12);assert.equal(dois.fotos.length,1)
+    assert.equal(new Set([...um.fotos,...dois.fotos].map(f=>f.id)).size,13)
+   }finally{await db.query('DELETE FROM public.cronograma_fotos WHERE id_foto=ANY($1::uuid[])',[extras])}
   })
   await t.test('segunda foto é rejeitada sem substituir o registro ou criar outro arquivo',async()=>{
    const r=await request('POST','',professor,form());assert.equal(r.status,409)

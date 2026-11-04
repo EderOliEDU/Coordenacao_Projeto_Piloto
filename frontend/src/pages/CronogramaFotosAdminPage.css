@@ -1,0 +1,8 @@
+.fotos-admin-filtros { display:flex;flex-wrap:wrap;gap:16px;align-items:end;margin-bottom:20px; }
+.fotos-admin-filtros label { display:flex;flex:1 1 210px;flex-direction:column;gap:7px;font-weight:600;min-width:0; }
+.fotos-admin-filtros select { width:100%;min-width:0;padding:10px;border:1px solid #bac7d4;border-radius:8px;background:#fff; }
+.fotos-admin-galeria { grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)); }
+.fotos-admin-galeria img { height:230px; }
+.fotos-admin-galeria figure { background:#fff; }
+.fotos-admin-galeria figcaption { line-height:1.5; }
+.fotos-admin-paginacao { display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:16px;margin-top:24px; }

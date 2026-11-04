@@ -18,6 +18,7 @@ export default function AdminPage() {
     <p>O professor preenche o formulário de cada aluno, conforme as orientações do projeto. A conferência administrativa da visão do professor permanece somente para leitura.</p>
     <div style={styles.cards}>
       {card('Turmas e formulários', 'Consulte as turmas e acesse a conferência dos cronogramas e formulários dos professores.', '/turmas')}
+      {card('Fotos das atividades', 'Visualize as fotos anexadas pelos professores por escola, turma e conteúdo.', '/admin/cronograma/fotos')}
       {p.resultados === true && card('Resultados dos registros', 'Consulte os dados já registrados nos formulários da primeira etapa.', '/resultados')}
     </div>
     <h2>2. Verificação por aplicadores</h2>

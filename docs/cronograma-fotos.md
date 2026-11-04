@@ -11,3 +11,10 @@ Metadados em `public.cronograma_fotos`, vinculados à turma, ao conteúdo e ao C
 Migração idempotente em `migracoes-prod/2026-10-22-cronograma-fotos.sql`; não altera respostas de avaliações ou cronogramas existentes. A API também garante a criação da tabela uma vez por processo, após autorização, seguindo o padrão do cronograma. Na publicação, usar backup próprio e aplicar a estrutura no banco de Produção. Nunca copiar dados do DEV. Primeiro testar no DEV e publicar no GitHub, conforme `acesso-atualizacoes-producao.md`.
 
 Validação: builds de backend/frontend e `backend/tests/cronogramaFotos.integration.cjs`, com PostgreSQL real do DEV, transação revertida e diretório temporário de arquivos. Cobre upload/leitura dos mesmos bytes, acesso entre turmas, modo conferência, limites/tipos inválidos, falha no banco, limpeza e preservação ao desmarcar conteúdo.
+
+
+## Consulta administrativa das fotos
+
+Administradores e superadministradores podem abrir **Administração e parâmetros → Fotos das atividades**, ou o cartão **Fotos das atividades** em `/admin`. A página `/admin/cronograma/fotos` permite filtrar por escola, turma e conteúdo, com paginação de 12 fotos e ampliação da imagem em outra aba. A galeria é de consulta, sem comandos de anexar ou excluir. Não é necessário estar atribuído como professor à turma.
+
+A API `GET /api/cronogramas/administracao/fotos` exige perfil administrativo, restringe o projeto e valida os filtros. As imagens continuam protegidas pelas rotas autenticadas existentes de cada turma/conteúdo. A conferência de um professor não dá acesso à galeria geral; há um botão para sair desse modo e consultar com o perfil administrativo. A consulta inclui anexos preservados de conteúdos desmarcados; não exclui fotos e não exige migração de banco.

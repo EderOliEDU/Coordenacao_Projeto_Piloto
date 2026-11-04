@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import api from '../api/client'
 
 type Foto = { id: string; nome: string; criadoEm: string; podeExcluir: boolean }
-function ImagemAtividade({ caminho, nome }: { caminho: string; nome: string }) {
+export function ImagemAtividade({ caminho, nome }: { caminho: string; nome: string }) {
  const [url,setUrl] = useState('')
  const [erro,setErro] = useState(false)
  useEffect(()=>{

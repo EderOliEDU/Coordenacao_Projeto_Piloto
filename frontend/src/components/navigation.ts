@@ -26,7 +26,9 @@ export function gruposDoMenu(p: Permissoes): MenuGrupo[] {
     { nome: 'Cadastrar professor', destino: '/superadmin#professores', icone: 'usuario' },
     { nome: 'Cadastrar aluno', destino: '/superadmin#alunos', icone: 'usuario' })
   const parametros: MenuLink[] = []
-  if (admin) parametros.push({ nome: 'Administrar a coleta', destino: '/admin', icone: 'administracao' })
+  if (admin) parametros.push(
+    { nome: 'Administrar a coleta', destino: '/admin', icone: 'administracao' },
+    { nome: 'Fotos das atividades', destino: '/admin/cronograma/fotos', icone: 'acompanhar' })
   if (p.superadmin === true) parametros.push(
     { nome: 'Configurações e cadastros', destino: '/superadmin', icone: 'administracao' },
     { nome: 'Usuários e permissões', destino: '/superadmin#permissoes', icone: 'permissoes' },
