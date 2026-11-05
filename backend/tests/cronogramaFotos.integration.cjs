@@ -168,7 +168,7 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    const id=crypto.randomUUID(),arquivo=id+'.png',autorId=crypto.createHash('md5').update('autor-producao-teste').digest('hex')
    await fs.mkdir(path.join(root,'.monitoramento'));await fs.mkdir(path.join(root,'cronograma-fotos'))
    await fs.writeFile(path.join(root,'cronograma-fotos',arquivo),png)
-   const catalogo={versao:1,servidor:'192.168.0.121',coletadoEm:new Date().toISOString(),fotos:[{id,nome:'producao.png',criadoEm:new Date().toISOString(),arquivo,mimeType:'image/png',escolaId:'90000001',turmaId:'90000002',conteudoId:'90000003',escolaNome:'Escola teste Produção',turmaNome:'Integral',tema:'Atividade',ordem:1,professorId:autorId,professorNome:'Professora teste Produção'}]}
+   const catalogo={versao:1,servidor:'192.168.0.121',coletadoEm:new Date().toISOString(),fotos:[{id,nome:'producao.png',criadoEm:new Date().toISOString(),arquivo,mimeType:'image/png',escolaId:'90000001',turmaId:'90000002',conteudoId:'90000003',escolaNome:'Escola teste Produção',turmaNome:'Integral',tema:'Atividade',ordem:'1',professorId:autorId,professorNome:'Professora teste Produção'}]}
    await fs.writeFile(path.join(root,'.monitoramento/cronograma-fotos.json'),JSON.stringify(catalogo))
    await fs.chmod(path.join(root,'cronograma-fotos'),0o555)
    try{

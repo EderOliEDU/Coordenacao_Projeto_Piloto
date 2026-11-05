@@ -3,7 +3,7 @@ import path from 'path'
 import { z } from 'zod'
 import type { FiltrosFotos } from './cronogramaFotosConsulta'
 import { resolveAudioPath } from './audioStorage'
-const fotoSchema=z.object({id:z.string().uuid(),nome:z.string(),criadoEm:z.string(),arquivo:z.string().regex(/^[0-9a-f-]{36}\.(jpg|png|webp)$/),mimeType:z.enum(['image/jpeg','image/png','image/webp']),turmaId:z.string(),escolaId:z.string(),conteudoId:z.string(),escolaNome:z.string(),turmaNome:z.string(),tema:z.string(),ordem:z.number(),professorId:z.string().regex(/^[a-f0-9]{32}$/),professorNome:z.string()})
+const fotoSchema=z.object({id:z.string().uuid(),nome:z.string(),criadoEm:z.string(),arquivo:z.string().regex(/^[0-9a-f-]{36}\.(jpg|png|webp)$/),mimeType:z.enum(['image/jpeg','image/png','image/webp']),turmaId:z.string(),escolaId:z.string(),conteudoId:z.string(),escolaNome:z.string(),turmaNome:z.string(),tema:z.string(),ordem:z.union([z.number().finite(),z.string().regex(/^\d+$/).transform(Number)]),professorId:z.string().regex(/^[a-f0-9]{32}$/),professorNome:z.string()})
 const catalogoSchema=z.object({versao:z.literal(1),servidor:z.literal('192.168.0.121'),coletadoEm:z.string().datetime({offset:true}),fotos:z.array(fotoSchema)})
 export async function lerCatalogoFotosProducao(){
  const root=process.env.AUDIO_READONLY_STORAGE_PATH
