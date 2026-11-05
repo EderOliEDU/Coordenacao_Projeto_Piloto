@@ -33,3 +33,19 @@ test('Base vazia e contagem incompatível não geram conclusões fabricadas',()=
  const r=avaliarTerceiraAvaliacao(d);assert.deepEqual(r.sintese.demonstradas,[]);assert.match(r.conclusao,/Não há aplicações/)
  d.perguntas=[{codigo:'RIMAS',resposta:'SIM',n:1}];assert.throws(()=>avaliarTerceiraAvaliacao(d),/incompatíveis/)
 })
+
+test('Q8 não escreveu é resposta observada, não ausência de avaliação',()=>{
+ const d=base();d.perguntas=[{codigo:'NIVEL_ESCRITA',resposta:'NAO_ESCREVEU',n:2}]
+ const q8=avaliarTerceiraAvaliacao(d).linhas.find(l=>l.item==='Q8')
+ assert.equal(q8.avaliadas,2);assert.equal(q8.ausentes,2)
+ assert.equal(q8.resultados.find(r=>r.codigo==='NAO_ESCREVEU').percentual,100)
+})
+
+test('Q7 cruza tipo de nome com apoio e preserva detalhe ausente e não escreveu',()=>{
+ const d=base();d.resumo.concluidas=8
+ d.perguntas=[{codigo:'ESCRITA_NOME',resposta:'SEM_APOIO',n:4},{codigo:'ESCRITA_NOME',resposta:'COM_APOIO',n:2},{codigo:'ESCRITA_NOME',resposta:'NAO_ESCREVE',n:1}]
+ d.escritaNome=[{tipo:'NOME',apoio:'SEM_APOIO',n:2},{tipo:'NOME_COMPOSTO',apoio:'SEM_APOIO',n:1},{tipo:'NOME_COMPLETO',apoio:'COM_APOIO',n:2},{tipo:null,apoio:'SEM_APOIO',n:1}]
+ const q7=avaliarTerceiraAvaliacao(d).linhas.find(l=>l.item==='Q7')
+ assert.deepEqual(q7.detalhesNome.map(r=>[r.semApoio,r.comApoio,r.total]),[[2,0,2],[1,0,1],[0,2,2],[1,0,1]])
+ assert.equal(q7.ausentes,1);assert.equal(q7.resultados.find(r=>r.codigo==='NAO_ESCREVE').n,1)
+})

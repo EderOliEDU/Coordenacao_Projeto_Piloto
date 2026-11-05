@@ -5,6 +5,7 @@ import ResultadoPizza from '../components/ResultadoPizza'
 import './AplicadorGraficosPage.css'
 
 interface Linha { item: string; habilidade: string; base: number; avaliadas: number; ausentes: number;
+  detalhesNome?: { tipo: string; semApoio: number; comApoio: number; total: number }[];
   resultados: { codigo: string; descricao: string; n: number; percentual: number | null }[]; interpretacao: string; limite: string }
 interface Relatorio {
   protocolo: { titulo: string; codigo: string; versao: string; regras: string[] }; base: number; linhas: Linha[];
@@ -34,7 +35,7 @@ export default function AplicadorRelatorioPage() {
     const texto = [d.protocolo.titulo, `Protocolo: ${d.protocolo.codigo} · versão ${d.protocolo.versao}`,
       `Terceira fase · ${escola} · ${turma} · ${d.base} crianças · Gerado em ${new Date(d.geradoEm).toLocaleString('pt-BR')}`,
       'REGRAS', ...d.protocolo.regras,
-      ...d.linhas.map(l => `\n${l.item} — ${l.habilidade}\n${l.interpretacao}\nAvaliadas: ${l.avaliadas}/${l.base}. Sem resultado: ${l.ausentes}.\nLimite: ${l.limite}`),
+      ...d.linhas.map(l => `\n${l.item} — ${l.habilidade}\n${l.interpretacao}${l.detalhesNome ? "\nTipo de nome | Sem apoio | Com apoio | Total\n" + l.detalhesNome.map(r => `${r.tipo}: ${r.semApoio} | ${r.comApoio} | ${r.total}`).join("\n") : ""}\nAvaliadas: ${l.avaliadas}/${l.base}. Sem resultado: ${l.ausentes}.\nLimite: ${l.limite}`),
       '\nHABILIDADES DEMONSTRADAS', ...d.sintese.demonstradas,
       '\nCONTINUIDADE PEDAGÓGICA', ...d.sintese.continuidade,
       '\nDADOS INSUFICIENTES', ...d.sintese.semDados, '\nCONCLUSÃO', d.conclusao].join('\n')
@@ -63,7 +64,16 @@ export default function AplicadorRelatorioPage() {
         <section className="ag-card"><h2>Resultados por habilidade — Q1 a Q9</h2><p>Percentuais sobre respostas válidas de cada item. A ausência de resultado é informada separadamente.</p>
           {d.linhas.map(l => <article className="ar-item" key={l.item}><div className="ar-item-text"><h3>{l.item} — {l.habilidade}</h3>
             <p>Avaliadas: {l.avaliadas} de {l.base} · Sem resultado registrado: {l.ausentes}</p>
-            <p>{l.interpretacao}</p><p><small>Limite da conclusão: {l.limite}</small></p></div><ResultadoPizza item={l.item} avaliadas={l.avaliadas} resultados={l.resultados} /></article>)}</section>
+            <p>{l.interpretacao}</p>
+            {l.detalhesNome && <><h4>Escrita do nome por tipo e apoio</h4>
+              <div className="ag-scroll"><table><caption>Quantidade de crianças por tipo de nome registrado</caption>
+                <thead><tr><th scope="col">Tipo de nome</th><th scope="col">Sem apoio</th><th scope="col">Com apoio</th><th scope="col">Total</th></tr></thead>
+                <tbody>{l.detalhesNome.map(r => <tr key={r.tipo}><th scope="row">{r.tipo}</th><td>{r.semApoio}</td><td>{r.comApoio}</td><td>{r.total}</td></tr>)}</tbody>
+              </table></div>
+              <p>Não escreveram o nome: {l.resultados.find(r => r.codigo === 'NAO_ESCREVE')?.n ?? 0} crianças.</p>
+              <p><small>O tipo de nome é apresentado conforme registrado pelo aplicador. A falta desse detalhe não significa que a criança não escreveu.</small></p>
+            </>}
+            <p><small>Limite da conclusão: {l.limite}</small></p></div><ResultadoPizza item={l.item} avaliadas={l.avaliadas} resultados={l.resultados} /></article>)}</section>
         <section className="ag-card"><h2>Habilidades demonstradas</h2>
           {d.sintese.demonstradas.length ? <ul>{d.sintese.demonstradas.map(texto => <li key={texto}>{texto}</li>)}</ul> : <p>Nenhum apontamento neste recorte.</p>}
         </section>

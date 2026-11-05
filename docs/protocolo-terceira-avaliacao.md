@@ -15,7 +15,7 @@ Uma única aplicação concluída por criança no período. Quando há mais de u
 - Q1, Q3, Q4, Q5 e Q6: SIM e NÃO. Percentual de SIM = SIM/(SIM+NÃO)*100; mesma fórmula para NÃO. Ausências fora do denominador, mas apresentadas em contagem sobre a base de crianças do recorte.
 - Q2: mesmo cálculo por vogal, agregando respostas sem mostrar a origem interna. Nenhuma conversão de posição não avaliada em erro.
 - Q5: resultado geral sobre a consoante aplicada e detalhes por letra. No detalhe, a base é o grupo que tem resposta naquela consoante, não todas as crianças. Não inferir qual letra deveria ter sido aplicada a quem não possui resultado.
-- Q7: com apoio, sem apoio e não escreve. Q8: quatro classificações originais de escrita, descritas como julgamento registrado; sem atribuir uma fase global nova. Percentuais sobre respostas válidas da questão.
+- Q7: com apoio, sem apoio e não escreve. Q8: quatro classificações originais de escrita mais NÃO ESCREVEU, descritas como julgamento registrado; sem atribuir uma fase global nova. Percentuais sobre respostas válidas da questão.
 - Q9: cinco categorias originais por palavra. Percentuais sobre as classificações registradas da palavra. NAO_RESPONDEU é uma categoria; não equivale à ausência de registro ou áudio. A redação não afirma ter revisado gravações.
 - Cada item apresenta base, avaliadas, ausentes, resultados e limite da conclusão. Sem dados: percentual nulo, frase “Não há evidência registrada suficiente para esta habilidade”. Percentuais numéricos arredondados a uma casa decimal; podem somar 99,9% ou 100,1% por arredondamento.
 
@@ -58,3 +58,7 @@ Cada item Q1–Q9 possui gráfico de pizza à direita do texto, com legenda e pe
 O relatório permite `escolaId` e `turmaId`. Primeiro seleciona-se a escola, depois uma turma com aplicações registradas na terceira fase. A opção “Todas as turmas” mantém a análise da escola. Trocar de escola limpa a turma. A API valida que a turma pertence à escola e possui aplicações no período; turma sem escola é rejeitada. A regra de uma aplicação por criança é aplicada antes dos filtros. A turma selecionada acompanha o cabeçalho, texto baixado e impressão/PDF, e restringe todos os cálculos e pizzas. Uma turma sem concluídas recebe o estado sem dados. A API não permite trocar o período do protocolo.
 
 A seção “Habilidades demonstradas” apresenta somente a síntese textual. Os gráficos de pizza ficam na análise completa “Resultados por habilidade — Q1 a Q9”, evitando repetição visual.
+
+### Detalhamento da Q7 no relatório
+
+A tabela cruza o tipo de nome registrado (só o nome, nome composto ou nome completo) com a realização com apoio ou sem apoio. Registros sem tipo informado ficam em uma linha própria, sem inferir o tipo de escrita. A quantidade que não escreveu e a ausência de resposta permanecem distintas. O detalhamento acompanha os filtros do relatório e consta também no arquivo de texto e na impressão.

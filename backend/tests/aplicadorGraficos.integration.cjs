@@ -23,6 +23,40 @@ test('Gráficos com PostgreSQL real: totais, versões, Q2 sem duplicação e fil
     assert.equal(d.resumo.concluidas, expected.rows[0].n)
     assert.equal(d.versoes.reduce((s, v) => s + v.total, 0), d.resumo.concluidas)
     assert.ok(d.perguntas.every(r => r.codigo !== 'ALITERACAO'))
+    assert.equal(new Set(d.classificacaoTurmas.map(r => `${r.versao}/${r.turmaId}`)).size, d.classificacaoTurmas.length)
+    for (const turma of d.classificacaoTurmas) {
+      assert.ok(Array.isArray(turma.professoras))
+      const referencia = await pool.query(`WITH unicas AS (SELECT DISTINCT ON (id_aluno,versao_instrumento) *
+        FROM public.avaliacao_aplicador_aplicacoes WHERE id_fase=$1 AND status='CONCLUIDA'
+        ORDER BY id_aluno,versao_instrumento,concluido_em DESC NULLS LAST,id_aplicacao DESC)
+        SELECT count(*)::int AS n FROM unicas WHERE id_turma=$2 AND versao_instrumento=$3`, [d.filtros.faseId,turma.turmaId,turma.versao])
+      assert.equal(turma.criancas, referencia.rows[0].n)
+      assert.equal(turma.resultados.length,8)
+      const escrita = await pool.query(`WITH unicas AS (SELECT DISTINCT ON (id_aluno,versao_instrumento) *
+        FROM public.avaliacao_aplicador_aplicacoes WHERE id_fase=$1 AND status='CONCLUIDA'
+        ORDER BY id_aluno,versao_instrumento,concluido_em DESC NULLS LAST,id_aplicacao DESC)
+        SELECT p.codigo,count(*)::int AS avaliadas,count(*) FILTER (WHERE
+          (p.codigo='ESCRITA_NOME' AND o.codigo='SEM_APOIO') OR
+          (p.codigo='NIVEL_ESCRITA' AND o.codigo IN ('ALFABETICA_COMPLETA','ALFABETICA_CONSOLIDADA')))::int AS positivas
+        FROM unicas a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+        JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+        JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+        WHERE a.id_turma=$2 AND a.versao_instrumento=$3 AND p.codigo IN ('ESCRITA_NOME','NIVEL_ESCRITA')
+        GROUP BY p.codigo`, [d.filtros.faseId,turma.turmaId,turma.versao])
+      for (const codigo of ['ESCRITA_NOME','NIVEL_ESCRITA']) {
+        const q = turma.resultados.find(q => q.codigo===codigo)
+        const ref = escrita.rows.find(r => r.codigo===codigo)
+        assert.equal(q.avaliadas,ref?.avaliadas || 0);assert.equal(q.sim,ref?.positivas || 0)
+        assert.equal(q.ausentes,turma.criancas-q.avaliadas)
+        assert.equal(q.categorias.reduce((s,r)=>s+r.n,0),q.avaliadas)
+        if(!q.avaliadas) assert.equal(q.percentual,null)
+      }
+      const q7 = turma.resultados.find(q=>q.codigo==='ESCRITA_NOME')
+      assert.equal(q7.detalhesNome.reduce((s,r)=>s+r.n,0),q7.categorias.filter(r=>r.codigo!=='NAO_ESCREVE').reduce((s,r)=>s+r.n,0))
+
+      assert.ok(turma.indice === null || turma.indice >= 0 && turma.indice <= 100)
+    }
+
     assert.ok(d.vogais.every(r => !Object.hasOwn(r, 'origem')))
     assert.equal(new Set(d.vogais.map(r => `${r.versao}/${r.vogal}/${r.acertou}`)).size, d.vogais.length)
     const vogaisEsperadas = await pool.query(`SELECT a.versao_instrumento AS versao,v.vogal,v.acertou,count(*)::int AS n
@@ -38,6 +72,7 @@ test('Gráficos com PostgreSQL real: totais, versões, Q2 sem duplicação e fil
       }
       const selected = await carregarGraficosAplicador({ faseId: d.filtros.faseId, versao: v.versao })
       assert.equal(selected.resumo.concluidas, v.total)
+      assert.ok(selected.classificacaoTurmas.every(t => t.versao === v.versao))
       assert.ok(selected.leitura.every(r => r.versao === v.versao && r.comMetadadosAudio <= r.n))
     }
     const relatorio = await carregarRelatorioTerceiraAvaliacao()
@@ -45,6 +80,11 @@ test('Gráficos com PostgreSQL real: totais, versões, Q2 sem duplicação e fil
       WHERE id_fase=$1 AND status='CONCLUIDA'`, [relatorio.filtros.faseId])
     assert.equal(relatorio.base, unicas.rows[0].n)
     assert.equal(relatorio.protocolo.codigo, 'TERCEIRA-AVALIACAO-V1')
+    const q7 = relatorio.linhas.find(l => l.item === 'Q7')
+    for (const [campo, codigo] of [['semApoio','SEM_APOIO'],['comApoio','COM_APOIO']]) {
+      assert.equal(q7.detalhesNome.reduce((s,r) => s+r[campo],0), q7.resultados.find(r => r.codigo === codigo).n)
+    }
+
     assert.ok(relatorio.linhas.every(l => l.avaliadas + l.ausentes === l.base))
     assert.ok(!JSON.stringify(relatorio).includes('LEGADO'))
     for (const escola of relatorio.filtros.escolas) {
@@ -69,7 +109,7 @@ test('Gráficos com PostgreSQL real: totais, versões, Q2 sem duplicação e fil
     assert.equal(vazio.base, 0)
     const missing = await carregarGraficosAplicador({ faseId: d.filtros.faseId, escolaId: 2147483647 })
     assert.equal(missing.resumo.concluidas, 0)
-    for (const key of ['versoes','perguntas','vogais','consoantes','leitura']) assert.deepEqual(missing[key], [])
+    for (const key of ['versoes','perguntas','vogais','consoantes','leitura','classificacaoTurmas']) assert.deepEqual(missing[key], [])
     if (d.filtros.escolas.length) {
       const school = d.filtros.escolas[0].id
       const filtered = await carregarGraficosAplicador({ faseId: d.filtros.faseId, escolaId: school })

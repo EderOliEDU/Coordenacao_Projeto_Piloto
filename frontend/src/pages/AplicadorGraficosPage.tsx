@@ -14,6 +14,9 @@ interface Dados {
   consoantes: (Contagem & { letra: string; resposta: string })[]
   leitura: (Contagem & { ordem: number; palavra: string; classificacao: string; comMetadadosAudio: number })[]
   palavras: { palavra: string; ordem: number }[]
+  classificacaoTurmas: { turmaId: number; turma: string; escola: string; professoras: string[]; versao: number;
+    criancas: number; indice: number | null; posicao: number | null;
+    resultados: { codigo: string; avaliadas: number; sim: number; percentual: number | null; ausentes: number | null; cobertura: number | null; detalhesNome: { codigo: string; descricao: string; n: number }[]; categorias: { codigo: string; descricao: string; n: number; percentual: number | null }[]; vogais: { vogal: string; avaliadas: number; sim: number; percentual: number | null }[] }[] }[]
   geradoEm: string
 }
 interface Parcela { label: string; n: number; color: string }
@@ -64,10 +67,11 @@ export default function AplicadorGraficosPage() {
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(true)
   const [revisao, setRevisao] = useState(0)
+  const [paginas, setPaginas] = useState<Record<number, number>>({})
   const query = params.toString()
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true); setErro('')
+    setLoading(true); setErro(''); setPaginas({})
     api.get<Dados>(`/superadmin/aplicador/graficos?${query}`, { signal: controller.signal })
       .then(r => { if (!controller.signal.aborted) setDados(r.data) })
       .catch(e => { if (!controller.signal.aborted) setErro(e.response?.data?.error || 'Não foi possível carregar os gráficos.') })
@@ -119,8 +123,48 @@ export default function AplicadorGraficosPage() {
         const vs = dados.vogais.filter(r => r.versao === v.versao)
         const cs = dados.consoantes.filter(r => r.versao === v.versao)
         const ls = dados.leitura.filter(r => r.versao === v.versao)
+        const turmasClassificacao = dados.classificacaoTurmas.filter(t => t.versao === v.versao)
+        const totalPaginas = Math.max(1, Math.ceil(turmasClassificacao.length / 5))
+        const pagina = Math.min(paginas[v.versao] || 1, totalPaginas)
+        const inicio = (pagina - 1) * 5
+        const mudarPagina = (nova: number) => setPaginas(atual => ({ ...atual, [v.versao]: nova }))
         return <section key={v.versao} aria-label={`Instrumento versão ${v.versao}`}>
           <h2>Instrumento versão {v.versao} · {v.total} avaliações concluídas</h2>
+          <section className="ag-card ag-classificacao"><h3>Classificação das turmas — bloco de habilidades Q1 a Q8</h3>
+            <p>Ordem pela média dos oito indicadores, com peso igual por questão. Q1 a Q6 usam o percentual de SIM. Na Q2, calcula-se o percentual de SIM de cada vogal e depois a média das vogais com respostas válidas. A Q2 contribui uma única vez na média do bloco. Q7 usa o percentual de escrita do nome sem apoio; Q8 usa o percentual de classificações alfabética completa ou consolidada. A leitura Q9 é apresentada separadamente.</p>
+            <p>Somente aplicações concluídas, uma por criança nesta versão. Q7 e Q8 usam somente respostas válidas; a ausência de avaliação não conta como erro. Os detalhes do nome não geram pontos adicionais. As professoras são as vinculadas atualmente à turma. Consulte também o número de crianças avaliadas e os resultados de cada habilidade.</p>
+            <div className="ag-scroll"><table><caption className="ag-sr">Classificação das turmas, professoras e média de Q1 a Q8, versão {v.versao}</caption>
+              <thead><tr><th scope="col">Posição</th><th scope="col">Turma e professora</th><th scope="col">Índice do bloco Q1–Q8</th><th scope="col">Q7 · Nome sem apoio</th><th scope="col">Q8 · Escrita completa ou consolidada</th><th scope="col">Crianças avaliadas</th></tr></thead>
+              <tbody>{turmasClassificacao.slice(inicio, inicio + 5).map(t => <tr key={t.turmaId}>
+                <td>{t.posicao === null ? '—' : `${t.posicao}º`}</td><th scope="row"><strong>{t.turma}</strong><small>{t.escola}</small>
+                  <span className="ag-professora">{t.professoras.length ? t.professoras.join(' · ') : 'Professora não identificada no cadastro'}</span></th>
+                <td>{t.indice === null ? <span>Dados insuficientes para classificar</span> : <><div className="ag-bar" aria-hidden="true"><span style={{ width: `${t.indice}%`, background: '#2867a5' }} /></div><strong>{pct(t.indice, 100)}</strong></>}
+                  <details><summary>Ver cálculo por habilidade</summary><ul>{t.resultados.map(r => <li key={r.codigo}>{({ RIMAS: 'Q1 · Rimas', ALITERACAO: 'Q2 · Vogais', CONSCIENCIA_PALAVRAS: 'Q3 · Palavras da frase', CONSCIENCIA_SILABICA: 'Q4 · Sílabas', RELACAO_LETRA_SOM: 'Q5 · Consoante', LETRAS_NUMEROS: 'Q6 · Letras e números', ESCRITA_NOME: 'Q7 · Nome sem apoio', NIVEL_ESCRITA: 'Q8 · Escrita alfabética completa ou consolidada' } as Record<string, string>)[r.codigo]}: {r.codigo === 'ALITERACAO' ? <>média das vogais avaliadas: {r.percentual === null ? 'sem dados' : pct(r.percentual, 100)}<ul>{r.vogais.map(v => <li key={v.vogal}>{v.vogal}: {v.sim}/{v.avaliadas} ({v.percentual === null ? 'sem dados' : pct(v.percentual, 100)})</li>)}</ul></> : <>{r.sim}/{r.avaliadas} ({r.percentual === null ? 'sem dados' : pct(r.percentual, 100)})</>}{r.categorias.length > 0 && <>
+                    <p>Avaliadas: {r.avaliadas}/{t.criancas} · Cobertura: {r.cobertura === null ? 'sem dados' : pct(r.cobertura,100)} · Sem avaliação: {r.ausentes}</p>
+                    <ul>{r.categorias.map(c => <li key={c.codigo}>{c.descricao}: {c.n} ({c.percentual === null ? 'sem dados' : pct(c.percentual,100)})</li>)}</ul>
+                    {r.detalhesNome.length > 0 && <><p>Detalhe entre quem escreveu com ou sem apoio (sem pontos adicionais):</p><ul>{r.detalhesNome.map(c => <li key={c.codigo}>{c.descricao}: {c.n}</li>)}</ul></>}
+                  </>}</li>)}</ul></details>
+                </td>{['ESCRITA_NOME','NIVEL_ESCRITA'].map(codigo => {
+                  const r = t.resultados.find(r => r.codigo === codigo)
+                  return <td className="ag-indicador-escrita" key={codigo}>{!r || r.percentual === null ? <strong>Sem dados</strong> : <>
+                    <div className="ag-bar" aria-hidden="true"><span style={{ width:`${r.percentual}%`,background:'#287a66' }} /></div>
+                    <strong>{pct(r.percentual,100)}</strong><small>{r.sim}/{r.avaliadas} atingiram o critério</small></>}
+                    <small>Avaliadas: {r?.avaliadas ?? 0}/{t.criancas}</small><small>Cobertura: {r?.cobertura === null || r?.cobertura === undefined ? '—' : pct(r.cobertura,100)}</small>
+                  </td>
+                })}<td>{t.criancas}</td>
+              </tr>)}</tbody></table></div>
+            <div className="ag-paginacao">
+              <p role="status" aria-live="polite">Mostrando {turmasClassificacao.length ? inicio + 1 : 0} a {Math.min(inicio + 5, turmasClassificacao.length)} de {turmasClassificacao.length} turmas · Página {pagina} de {totalPaginas}</p>
+              <nav aria-label={`Paginação da classificação de turmas, versão ${v.versao}`}>
+                <button type="button" disabled={pagina === 1} onClick={() => mudarPagina(pagina - 1)}>Anterior</button>
+                <label>Página<select aria-label={`Página da classificação, versão ${v.versao}`} value={pagina} onChange={e => mudarPagina(Number(e.target.value))}>
+                  {Array.from({ length: totalPaginas }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                </select></label>
+                <button type="button" disabled={pagina === totalPaginas} onClick={() => mudarPagina(pagina + 1)}>Próxima</button>
+              </nav>
+            </div>
+            <p>Empates na média exibida compartilham a posição. Turmas sem respostas válidas em alguma das oito questões ficam sem classificação. A ordem descreve os resultados observados no recorte, sem alterar o Protocolo V1.</p>
+          </section>
           <Grafico titulo="Respostas por habilidade" nota="Contagens e percentuais sobre as aplicações concluídas desta versão. Ausência de resposta permanece separada. Não somar habilidades em uma nota de Ehri."
             linhas={[...new Set(ps.map(r => r.codigo))].filter(c => !['ESCRITA_NOME', 'NIVEL_ESCRITA'].includes(c)).map(c => {
               const rs = ps.filter(r => r.codigo === c)

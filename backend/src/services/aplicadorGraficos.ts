@@ -1,4 +1,5 @@
 import { getPgPool } from './pgPool'
+import { classificarTurmas } from './classificacaoTurmas'
 
 export interface FiltrosGraficosAplicador { faseId?: number; escolaId?: number; turmaId?: number; versao?: number; unicaConcluidaPorAluno?: boolean }
 
@@ -80,18 +81,73 @@ export async function carregarGraficosAplicador(filtros: FiltrosGraficosAplicado
       JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
       JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
       WHERE a.status='CONCLUIDA' AND p.codigo='RELACAO_LETRA_SOM' GROUP BY 1,2,3 ORDER BY 1,2,3`)
+    const escritaNome = await query(`SELECT o.codigo AS apoio,r.nome_escrito AS tipo,count(*)::int AS n
+      FROM base a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+      WHERE a.status='CONCLUIDA' AND p.codigo='ESCRITA_NOME'
+        AND o.codigo IN ('SEM_APOIO','COM_APOIO') GROUP BY 1,2 ORDER BY 1,2`)
     const leitura = await query(`SELECT a.versao_instrumento AS versao,p.ordem,p.palavra,
       r.classificacao,count(*)::int AS n,
       count(*) FILTER (WHERE nullif(trim(r.audio_arquivo),'') IS NOT NULL AND r.audio_tamanho>0)::int AS "comMetadadosAudio"
       FROM base a JOIN public.avaliacao_aplicador_leitura_respostas r USING(id_aplicacao)
       JOIN public.avaliacao_aplicador_leitura_palavras p USING(id_palavra)
       WHERE a.status='CONCLUIDA' GROUP BY 1,2,3,4 ORDER BY 1,2,4`)
+    const indicadoresTurmas = await query(`, unicas AS (
+      SELECT DISTINCT ON (id_aluno,versao_instrumento) * FROM base WHERE status='CONCLUIDA'
+      ORDER BY id_aluno,versao_instrumento,concluido_em DESC NULLS LAST,id_aplicacao DESC
+    ), indicadores AS (
+      SELECT a.id_turma,a.versao_instrumento,p.codigo,count(*)::int AS avaliadas,
+        count(*) FILTER (WHERE o.codigo='SIM')::int AS sim
+      FROM unicas a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+      WHERE p.codigo IN ('RIMAS','CONSCIENCIA_PALAVRAS','CONSCIENCIA_SILABICA','RELACAO_LETRA_SOM','LETRAS_NUMEROS')
+        AND o.codigo IN ('SIM','NAO') GROUP BY 1,2,3
+      UNION ALL
+      SELECT a.id_turma,a.versao_instrumento,p.codigo || '_' || o.codigo,count(*)::int,0::int
+      FROM unicas a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+      WHERE (p.codigo='ESCRITA_NOME' AND o.codigo IN ('SEM_APOIO','COM_APOIO','NAO_ESCREVE'))
+        OR (p.codigo='NIVEL_ESCRITA' AND o.codigo IN ('NAO_ESCREVEU','PRE_ALFABETICA','ALFABETICA_PARCIAL','ALFABETICA_COMPLETA','ALFABETICA_CONSOLIDADA'))
+      GROUP BY 1,2,3
+      UNION ALL
+      SELECT a.id_turma,a.versao_instrumento,'DETALHE_NOME_' || coalesce(r.nome_escrito,'NAO_INFORMADO'),count(*)::int,0::int
+      FROM unicas a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+      WHERE p.codigo='ESCRITA_NOME' AND o.codigo IN ('SEM_APOIO','COM_APOIO') GROUP BY 1,2,3
+      UNION ALL
+      SELECT a.id_turma,a.versao_instrumento,'ALITERACAO_' || v.vogal,count(v.acertou)::int,
+        count(*) FILTER (WHERE v.acertou IS TRUE)::int
+      FROM unicas a JOIN public.avaliacao_aplicador_vogais v USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      WHERE p.codigo='ALITERACAO' GROUP BY 1,2,3
+    ), grupos AS (SELECT id_turma,versao_instrumento,count(*)::int AS criancas FROM unicas GROUP BY 1,2)
+    SELECT g.id_turma AS "turmaId",g.versao_instrumento AS versao,g.criancas,
+      ('Turma ' || coalesce(nullif(trim(et.descricao::text),''),'Etapa não informada') || ' ' ||
+       coalesce(nullif(trim(t.letra_turma::text),''),t.id_turma::text) || coalesce(' · ' || nullif(trim(t.turno::text),''),'')) AS turma,
+      e.nome_escola AS escola,coalesce(n.professoras,ARRAY[]::text[]) AS professoras,
+      coalesce(i.codigo,'') AS codigo,coalesce(i.avaliadas,0)::int AS avaliadas,coalesce(i.sim,0)::int AS sim
+    FROM grupos g JOIN public.turmas t USING(id_turma) JOIN public.escolas e ON e.id_escola=t.id_escola
+    LEFT JOIN public.etapas et ON et.id_etapa=t.id_etapa
+    LEFT JOIN indicadores i ON i.id_turma=g.id_turma AND i.versao_instrumento=g.versao_instrumento
+    LEFT JOIN LATERAL (
+      SELECT array_agg(DISTINCT coalesce(nullif(trim(p.profissional_nome_social::text),''),
+        nullif(trim(p.profissional_nome::text),''))) FILTER (WHERE coalesce(nullif(trim(p.profissional_nome_social::text),''),
+        nullif(trim(p.profissional_nome::text),'')) IS NOT NULL) AS professoras
+      FROM public.atribuicao_professor ap JOIN public.professores p
+        ON regexp_replace(p.profissional_cpf::text,'[^0-9]','','g')=regexp_replace(ap.cpf_professor::text,'[^0-9]','','g')
+      WHERE ap.id_turma=g.id_turma
+    ) n ON true ORDER BY g.versao_instrumento,g.id_turma,i.codigo`)
+    const classificacaoTurmas = classificarTurmas(indicadoresTurmas)
     const palavras = (await client.query(`SELECT palavra,ordem FROM public.avaliacao_aplicador_leitura_palavras
       WHERE ativo OR id_palavra IN (SELECT r.id_palavra FROM public.avaliacao_aplicador_leitura_respostas r
       JOIN public.avaliacao_aplicador_aplicacoes a USING(id_aplicacao) WHERE a.id_fase=$1) ORDER BY ordem`, [faseId])).rows
     await client.query('COMMIT')
     return { filtros: { faseId, escolaId: filtros.escolaId ?? null, versao: filtros.versao ?? null, turmaId: filtros.turmaId ?? null, fases, escolas, turmas },
-      resumo, versoes, perguntas, vogais, consoantes, leitura, palavras, geradoEm: new Date().toISOString() }
+      resumo, versoes, perguntas, vogais, consoantes, leitura, palavras, escritaNome, classificacaoTurmas, geradoEm: new Date().toISOString() }
   } catch (error) {
     await client.query('ROLLBACK')
     throw error

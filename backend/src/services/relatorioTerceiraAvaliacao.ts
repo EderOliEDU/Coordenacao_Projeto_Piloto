@@ -20,6 +20,7 @@ const binarios = [
   ['LETRAS_NUMEROS', 'Q6', 'Diferenciação entre letras e números', 'diferenciação entre letras e números'],
 ]
 export interface LinhaProtocolo { item: string; habilidade: string; base: number; avaliadas: number; ausentes: number;
+  detalhesNome?: { tipo: string; semApoio: number; comApoio: number; total: number }[];
   resultados: { codigo: string; descricao: string; n: number; percentual: number | null }[]; interpretacao: string; limite: string }
 const pct = (n: number, d: number) => d ? Math.round(n / d * 1000) / 10 : null
 const soma = (rs: { n: number }[]) => rs.reduce((s, r) => s + r.n, 0)
@@ -59,11 +60,19 @@ export function avaliarTerceiraAvaliacao(d: Awaited<ReturnType<typeof carregarGr
   }
   const categorias: Record<string, [string, string][]> = {
     ESCRITA_NOME: [['COM_APOIO', 'Realizou a escrita do nome com apoio'], ['SEM_APOIO', 'Realizou a escrita do nome sem apoio'], ['NAO_ESCREVE', 'Não escreveu o nome na tarefa aplicada']],
-    NIVEL_ESCRITA: [['PRE_ALFABETICA', 'Classificação registrada: pré-alfabética'], ['ALFABETICA_PARCIAL', 'Classificação registrada: alfabética parcial'], ['ALFABETICA_COMPLETA', 'Classificação registrada: alfabética completa'], ['ALFABETICA_CONSOLIDADA', 'Classificação registrada: alfabética consolidada']],
+    NIVEL_ESCRITA: [['NAO_ESCREVEU', 'Não escreveu na tarefa aplicada'], ['PRE_ALFABETICA', 'Classificação registrada: pré-alfabética'], ['ALFABETICA_PARCIAL', 'Classificação registrada: alfabética parcial'], ['ALFABETICA_COMPLETA', 'Classificação registrada: alfabética completa'], ['ALFABETICA_CONSOLIDADA', 'Classificação registrada: alfabética consolidada']],
   }
   for (const [codigo, opcoes] of Object.entries(categorias)) registrar(codigo === 'ESCRITA_NOME' ? 'Q7' : 'Q8', codigo === 'ESCRITA_NOME' ? 'Escrita do próprio nome' : 'Classificação da escrita',
     opcoes.map(([c, descricao]) => ({ codigo: c, descricao, n: soma(d.perguntas.filter(r => r.codigo === codigo && r.resposta === c)) })),
     codigo === 'ESCRITA_NOME' ? 'Sequência familiar; não comprova escrita produtiva de palavras novas.' : 'Julgamento registrado pelo aplicador; não validado aqui em produções escritas. A questão é opcional.')
+  const q7 = linhas.find(l => l.item === 'Q7')!
+  q7.detalhesNome = [['NOME', 'Só o nome'], ['NOME_COMPOSTO', 'Nome composto'],
+    ['NOME_COMPLETO', 'Nome completo'], ['NAO_INFORMADO', 'Tipo de nome não informado']].map(([codigo, tipo]) => {
+    const registros = (d.escritaNome || []).filter(r => (['NOME', 'NOME_COMPOSTO', 'NOME_COMPLETO'].includes(r.tipo) ? r.tipo : 'NAO_INFORMADO') === codigo)
+    const semApoio = soma(registros.filter(r => r.apoio === 'SEM_APOIO'))
+    const comApoio = soma(registros.filter(r => r.apoio === 'COM_APOIO'))
+    return { tipo, semApoio, comApoio, total: semApoio + comApoio }
+  })
   const leitura = [['NAO_UTILIZA_SONS', 'Não utiliza sons'], ['UTILIZA_ALGUNS_SONS', 'Utiliza alguns sons'], ['DECODIFICA', 'Decodifica'], ['LE_AUTONOMIA', 'Lê com autonomia'], ['NAO_RESPONDEU', 'Não respondeu na oportunidade registrada']]
   for (const p of d.palavras) registrar(`Q9-${p.palavra}`, `Leitura de ${p.palavra}`, leitura.map(([c, descricao]) => ({ codigo: c, descricao, n: soma(d.leitura.filter(r => r.palavra === p.palavra && r.classificacao === c)) })),
     'Classificação original por palavra; não houve revisão do áudio. Não respondeu é uma categoria registrada e difere de ausência de registro. Autonomia não determina fase consolidada.')

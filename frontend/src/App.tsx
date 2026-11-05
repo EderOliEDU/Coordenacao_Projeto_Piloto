@@ -120,6 +120,7 @@ const router = createBrowserRouter(createRoutesFromElements(
         <Route path="/superadmin/armazenamento" element={<RequireSuperadmin><ArmazenamentoPage /></RequireSuperadmin>} />
         <Route path="/logout" element={<EncerrarSessao />} />
         <Route path="/admin/aplicador/relatorio-terceira" element={<RequireAdministrador><AplicadorRelatorioPage /></RequireAdministrador>} />
+        <Route path="/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
         <Route path="/admin/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
         <Route path="/admin/aplicador/acompanhamento" element={<RequireAdministrador><AplicadorAcompanhamentoPage /></RequireAdministrador>} />
         <Route path="/superadmin/aplicador/acompanhamento" element={<Navigate to="/admin/aplicador/acompanhamento" replace />} />
