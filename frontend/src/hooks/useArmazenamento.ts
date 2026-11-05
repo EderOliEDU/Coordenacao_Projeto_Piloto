@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../api/client'
 export interface Armazenamento {
+ historico?:{coletadoEm:string;total:number;disponivel:number;audiosBytes:number;fotosBytes:number;audiosQuantidade:number;fotosQuantidade:number}[];avisoHistorico?:string;
  servidor:string; coletadoEm:string; completo:boolean; desatualizado:boolean; nivel:string;
  audios:{quantidade:number;bytes:number}; fotos:{quantidade:number;bytes:number}; outros:{quantidade:number;bytes:number};
  discos:{nome:string;caminho:string;total:number;disponivel:number;ocupado:number;percentual:number;inodesPercentual:number;nivel:string}[];

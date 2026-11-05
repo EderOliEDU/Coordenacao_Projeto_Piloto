@@ -97,8 +97,9 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    }finally{await db.query('DELETE FROM public.cronograma_fotos WHERE id_foto=ANY($1::uuid[])',[extras])}
   })
   await t.test('segunda foto é rejeitada sem substituir o registro ou criar outro arquivo',async()=>{
+   await db.query('UPDATE public.cronograma_fotos SET cpf_professor=$1 WHERE id_foto=$2',[base.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'),foto.id])
    const r=await request('POST','',professor,form());assert.equal(r.status,409)
-   assert.match((await r.json()).error,/já possui foto/)
+   assert.match((await r.json()).error,/já anexou uma foto/)
    const fotos=(await request().then(r=>r.json())).fotos
    assert.equal(fotos.length,1);assert.equal(fotos[0].id,foto.id)
    assert.equal((await fs.readdir(dir)).length,1)
@@ -111,6 +112,25 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    assert.equal(view.status,200);assert.equal((await view.json()).fotos.find(f=>f.id===foto.id).podeExcluir,false)
    assert.equal((await request('POST','',admin,form(),headers)).status,403)
    assert.equal((await request('DELETE',`/${foto.id}`,admin,undefined,headers)).status,403)
+  })
+  await t.test('dois professores da mesma turma podem anexar uma foto cada e filtrar pelo autor',async()=>{
+   const novo=(await db.query(`SELECT regexp_replace(profissional_cpf::text,'\\D','','g') AS cpf FROM public.professores
+    WHERE regexp_replace(profissional_cpf::text,'\\D','','g')<>$1 AND length(regexp_replace(profissional_cpf::text,'\\D','','g'))=11 LIMIT 1`,[base.cpf])).rows[0];assert.ok(novo)
+   await db.query('INSERT INTO public.atribuicao_professor(cpf_professor,id_turma) SELECT $1::varchar,$2::integer WHERE NOT EXISTS(SELECT 1 FROM public.atribuicao_professor WHERE cpf_professor=$1::varchar AND id_turma=$2::integer)',[novo.cpf,base.id_turma])
+   const outro=await token(novo.cpf)
+   const r=await request('POST','',outro,form());assert.equal(r.status,201);const segunda=await r.json()
+   assert.equal(segunda.minhaFoto,true);assert.ok(segunda.professorNome)
+   assert.equal((await request('POST','',outro,form())).status,409)
+   const lista=(await request().then(r=>r.json())).fotos;assert.equal(lista.length,2)
+   assert.equal(lista.find(f=>f.id===foto.id).minhaFoto,true);assert.equal(lista.find(f=>f.id===segunda.id).minhaFoto,false)
+   assert.equal((await request('DELETE',`/${foto.id}`,outro)).status,404)
+   const api=`http://127.0.0.1:${server.address().port}/api/cronogramas/administracao/fotos?turmaId=${base.id_turma}&conteudoId=${base.item}`
+   const todos=await fetch(api,{headers:{Authorization:`Bearer ${admin}`}}).then(r=>r.json())
+   assert.equal(todos.total,2);assert.ok(todos.filtros.professores.length>=2)
+   const autor=todos.fotos.find(f=>f.id===segunda.id);assert.ok(autor.professorNome)
+   const filtrado=await fetch(api+'&professorId='+autor.professorId,{headers:{Authorization:`Bearer ${admin}`}}).then(r=>r.json())
+   assert.equal(filtrado.total,1);assert.equal(filtrado.fotos[0].id,segunda.id)
+   assert.equal((await request('DELETE',`/${segunda.id}`,outro)).status,200)
   })
   await t.test('rejeita arquivo disfarçado, vazio, múltiplos e acima de 8 MB',async()=>{
    assert.equal((await request('POST','',professor,form(Buffer.from('<svg>nao foto</svg>')))).status,400)
@@ -141,6 +161,33 @@ test('Fotos por conteúdo: persistência, armazenamento e autorização com roll
    }})
    try{assert.equal((await request('POST','',professor,form())).status,500)}finally{pool.getPgPool=savedPool}
    assert.equal((await fs.readdir(dir)).length,0)
+  })
+  await t.test('DEV consulta e abre fotos de Produção sem copiar metadados ou permitir escrita',async()=>{
+   const root=await fs.mkdtemp(path.join(os.tmpdir(),'fotos-producao-ro-')),anterior=process.env.AUDIO_READONLY_STORAGE_PATH
+   process.env.AUDIO_READONLY_STORAGE_PATH=root
+   const id=crypto.randomUUID(),arquivo=id+'.png',autorId=crypto.createHash('md5').update('autor-producao-teste').digest('hex')
+   await fs.mkdir(path.join(root,'.monitoramento'));await fs.mkdir(path.join(root,'cronograma-fotos'))
+   await fs.writeFile(path.join(root,'cronograma-fotos',arquivo),png)
+   const catalogo={versao:1,servidor:'192.168.0.121',coletadoEm:new Date().toISOString(),fotos:[{id,nome:'producao.png',criadoEm:new Date().toISOString(),arquivo,mimeType:'image/png',escolaId:'90000001',turmaId:'90000002',conteudoId:'90000003',escolaNome:'Escola teste Produção',turmaNome:'Integral',tema:'Atividade',ordem:1,professorId:autorId,professorNome:'Professora teste Produção'}]}
+   await fs.writeFile(path.join(root,'.monitoramento/cronograma-fotos.json'),JSON.stringify(catalogo))
+   await fs.chmod(path.join(root,'cronograma-fotos'),0o555)
+   try{
+    const api=`http://127.0.0.1:${server.address().port}/api/cronogramas/administracao/fotos?origem=producao&professorId=${autorId}`
+    assert.equal((await fetch(api,{headers:{Authorization:`Bearer ${outsider}`}})).status,403)
+    const r=await fetch(api,{headers:{Authorization:`Bearer ${admin}`}});assert.equal(r.status,200);const d=await r.json()
+    assert.equal(d.total,1);assert.equal(d.origem,'producao');assert.equal(d.fotos[0].professorNome,'Professora teste Produção')
+    assert.equal(d.fotos[0].arquivo,undefined)
+    const caminho=`http://127.0.0.1:${server.address().port}/api${d.fotos[0].arquivoUrl}`
+    const imagem=await fetch(caminho,{headers:{Authorization:`Bearer ${admin}`}});assert.equal(imagem.status,200);assert.deepEqual(Buffer.from(await imagem.arrayBuffer()),png)
+    assert.equal((await fetch(caminho,{headers:{Authorization:`Bearer ${outsider}`}})).status,403)
+    for(const method of ['POST','DELETE'])assert.equal((await fetch(caminho,{method,headers:{Authorization:`Bearer ${admin}`}})).status,404)
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM public.cronograma_fotos WHERE id_foto=$1',[id])).rows[0].n,0)
+    assert.equal(await require('../dist/services/cronogramaFotos').localizarFoto(arquivo),path.join(root,'cronograma-fotos',arquivo))
+    assert.deepEqual(await fs.readFile(path.join(root,'cronograma-fotos',arquivo)),png)
+   }finally{
+    if(anterior===undefined)delete process.env.AUDIO_READONLY_STORAGE_PATH;else process.env.AUDIO_READONLY_STORAGE_PATH=anterior
+    await fs.chmod(path.join(root,'cronograma-fotos'),0o755);await fs.rm(root,{recursive:true,force:true})
+   }
   })
  }finally{
   if(server)await new Promise(resolve=>server.close(resolve))

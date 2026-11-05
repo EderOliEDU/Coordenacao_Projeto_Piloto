@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../api/client'
 
-type Foto = { id: string; nome: string; criadoEm: string; podeExcluir: boolean }
+type Foto = { id: string; nome: string; criadoEm: string; podeExcluir: boolean; minhaFoto:boolean; professorNome:string }
 export function ImagemAtividade({ caminho, nome }: { caminho: string; nome: string }) {
  const [url,setUrl] = useState('')
  const [erro,setErro] = useState(false)
@@ -9,7 +9,7 @@ export function ImagemAtividade({ caminho, nome }: { caminho: string; nome: stri
   const controller=new AbortController()
   let objectUrl=''
   setErro(false)
-  api.get(caminho,{responseType:'blob',signal:controller.signal}).then(r=>{
+  api.get(caminho,{responseType:'blob',signal:controller.signal,timeout:30000}).then(r=>{
    if(controller.signal.aborted) return
    objectUrl=URL.createObjectURL(r.data)
    setUrl(objectUrl)
@@ -28,6 +28,7 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
  const [erro,setErro]=useState('')
  const [mensagem,setMensagem]=useState('')
  const input=useRef<HTMLInputElement>(null)
+ const minhaFoto=fotos.some(f=>f.minhaFoto)
  const caminho=`/cronogramas/${turmaId}/itens/${itemId}/fotos`
  useEffect(()=>{
   if(!aberto)return
@@ -41,7 +42,7 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
  async function enviar(files:FileList|null){
   if(!files?.length||readOnly||ocupado||carregando)return
   setErro('');setMensagem('')
-  if(files.length!==1||fotos.length){setErro('É permitida apenas uma foto por conteúdo. Exclua a foto atual antes de anexar outra.');return}
+  if(files.length!==1||minhaFoto){setErro('Cada professor pode anexar uma foto por conteúdo da turma. Exclua a sua foto atual antes de anexar outra.');return}
   const foto=files[0]
   if(foto.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(foto.type)){
    setErro('Use uma foto JPG, PNG ou WebP, até 8 MB.');if(input.current)input.current.value='';return
@@ -50,7 +51,7 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
   try {
    const form=new FormData();form.append('foto',foto)
    const r=await api.post(caminho,form)
-   setFotos([r.data]);setMensagem('Foto anexada com sucesso.')
+   setFotos(atuais=>[...atuais,r.data]);setMensagem('Foto anexada com sucesso.')
   }catch(e:any){
    setErro(e.response?.data?.error||'Falha no envio. Tente novamente.')
    if(e.response?.status===409){
@@ -70,19 +71,19 @@ export default function CronogramaFotos({turmaId,itemId,readOnly}:{turmaId:strin
    {aberto?'Ocultar fotos':'Fotos das atividades'}
   </button>
   {aberto&&<div id={`fotos-${itemId}`} className="cronograma-fotos-painel">
-   <p>É permitida uma foto por conteúdo apresentado da turma. JPG, PNG ou WebP, até 8 MB.</p>
+   <p>É permitida uma foto por professor em cada conteúdo da turma. JPG, PNG ou WebP, até 8 MB.</p>
    {!readOnly&&<>
-    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={ocupado||carregando||fotos.length>0} onChange={e=>enviar(e.target.files)} />
-    <button type="button" className="primary-btn" disabled={ocupado||carregando||fotos.length>0} onClick={()=>input.current?.click()}>{ocupado?'Aguarde…':'Anexar foto'}</button>
+    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={ocupado||carregando||minhaFoto} onChange={e=>enviar(e.target.files)} />
+    <button type="button" className="primary-btn" disabled={ocupado||carregando||minhaFoto} onClick={()=>input.current?.click()}>{ocupado?'Aguarde…':'Anexar foto'}</button>
    </>}
-   {!readOnly&&fotos.length>0&&<p>Para anexar outra foto, exclua a atual primeiro.</p>}
+   {!readOnly&&minhaFoto&&<p>Para anexar outra foto sua, exclua a sua foto atual primeiro.</p>}
    {carregando&&<p role="status">Carregando fotos…</p>}
    {erro&&<p role="alert" className="error-text">{erro}</p>}
    {mensagem&&<p role="status" className="success-text">{mensagem}</p>}
    {!carregando&&!erro&&!fotos.length&&<p>Nenhuma foto anexada a este conteúdo.</p>}
    <div className="cronograma-fotos-galeria">{fotos.map(foto=><figure key={foto.id}>
     <ImagemAtividade caminho={`${caminho}/${foto.id}/arquivo`} nome={foto.nome}/>
-    <figcaption><span>{foto.nome}</span><time dateTime={foto.criadoEm}>{new Date(foto.criadoEm).toLocaleDateString('pt-BR')}</time></figcaption>
+    <figcaption><strong>Professor(a): {foto.professorNome}</strong><span>{foto.nome}</span><time dateTime={foto.criadoEm}>{new Date(foto.criadoEm).toLocaleDateString('pt-BR')}</time></figcaption>
     {!readOnly&&foto.podeExcluir&&<button type="button" className="secondary-btn" disabled={ocupado} onClick={()=>excluir(foto)}>Excluir foto</button>}
    </figure>)}</div>
   </div>}

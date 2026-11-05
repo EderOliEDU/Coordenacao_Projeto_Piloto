@@ -17,6 +17,10 @@ test('Monitoramento restrito ao superadmin, origem Produção e falhas explícit
   const arquivo=path.join(dir,'.monitoramento/armazenamento.json');await fs.mkdir(path.dirname(arquivo));
   const snapshot={versao:1,ambiente:'producao',servidor:'192.168.0.121',coletadoEm:new Date().toISOString(),completo:true,falhas:0,audios:{quantidade:27,bytes:456},fotos:{quantidade:3,bytes:123},outros:{quantidade:0,bytes:0},discos:[{nome:'Mídias',caminho:'/midias',total:100*1024**3,disponivel:50*1024**3,ocupado:50*1024**3,inodesTotal:100,inodesLivres:90}]};
   await fs.writeFile(arquivo,JSON.stringify(snapshot));const r=await request(superadmin);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'private, no-store');const dados=await r.json();assert.equal(dados.audios.quantidade,27);assert.equal(dados.fotos.quantidade,3);assert.equal(dados.servidor,'192.168.0.121');assert.equal(dados.nivel,'normal');
+  const historico=path.join(dir,'.monitoramento/armazenamento-historico.json');
+  await fs.writeFile(historico,JSON.stringify({versao:1,servidor:'192.168.0.121',pontos:[{coletadoEm:new Date().toISOString(),total:100*1024**3,disponivel:50*1024**3,audiosBytes:456,fotosBytes:123,audiosQuantidade:27,fotosQuantidade:3}]}));
+  const h=await request(superadmin).then(r=>r.json());assert.equal(h.historico.length,1);assert.equal(h.historico[0].audiosQuantidade,27);
+  await fs.writeFile(historico,'{invalido');const semHistorico=await request(superadmin).then(r=>r.json());assert.equal(semHistorico.historico.length,0);assert.ok(semHistorico.avisoHistorico);assert.equal(semHistorico.nivel,'normal');
   await fs.writeFile(arquivo,'{invalido');assert.equal((await request(superadmin)).status,503);
  }finally{if(server)await new Promise(resolve=>server.close(resolve));pool.getPgPool=original;await db.query('ROLLBACK');await db.end();await fs.rm(dir,{recursive:true,force:true})}
 });

@@ -2,16 +2,27 @@ import { Router, Response } from 'express'
 import { z } from 'zod'
 import multer from 'multer'
 import { promises as fs } from 'fs'
-import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, salvarFotoUnica, FotoJaAnexadaError } from '../services/cronogramaFotos'
+import { MAX_FOTO_BYTES, garantirTabelaFotos, identificarFoto, caminhoFoto, localizarFoto, salvarFotoUnica, FotoJaAnexadaError } from '../services/cronogramaFotos'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getAuthenticatedCpf, getEffectiveProfessorCpf, isViewOnlyMode } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
 import { consultarFotosAtividades } from '../services/cronogramaFotosConsulta'
+import { FOTO_AUTOR_JOIN,FOTO_AUTOR_NOME } from '../services/cronogramaFotoAutor'
+import { arquivoFotoProducao } from '../services/cronogramaFotosProducao'
 import { isAdministrador, usuarioTemPerfil } from '../services/permissions'
 
 const router = Router()
 router.use(authMiddleware)
 
+async function permitirGaleria(req:AuthRequest,res:Response){
+ const cpf=getAuthenticatedCpf(req)
+ const admin=Boolean(req.professor?.permissoes?.administrador||req.professor?.permissoes?.superadmin)||isAdministrador(cpf)||await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR'])
+ if(!admin){res.status(403).json({error:'Consulta restrita a administradores e superadministradores'});return false}
+ if(isViewOnlyMode(req)){res.status(403).json({error:'Saia do modo conferência do professor para consultar as fotos de todas as turmas.'});return false}
+ return true
+}
 const filtrosFotosSchema=z.object({
+ professorId:z.string().regex(/^[a-f0-9]{32}$/).optional(),
+ origem:z.enum(['local','producao']).optional(),
  escolaId:z.coerce.number().int().positive().max(2147483647).optional(),
  turmaId:z.coerce.number().int().positive().max(2147483647).optional(),
  conteudoId:z.coerce.number().int().positive().max(2147483647).optional(),
@@ -19,15 +30,23 @@ const filtrosFotosSchema=z.object({
 })
 router.get('/administracao/fotos',async (req:AuthRequest,res:Response)=>{
  try {
-  const cpf=getAuthenticatedCpf(req)
-  const admin=Boolean(req.professor?.permissoes?.administrador||req.professor?.permissoes?.superadmin)||isAdministrador(cpf)||await usuarioTemPerfil(cpf,['SUPERADMIN','ADMINISTRADOR'])
-  if(!admin)return res.status(403).json({error:'Consulta restrita a administradores e superadministradores'})
-  if(isViewOnlyMode(req))return res.status(403).json({error:'Saia do modo conferência do professor para consultar as fotos de todas as turmas.'})
+  if(!await permitirGaleria(req,res))return
   const filtros=filtrosFotosSchema.safeParse(req.query)
   if(!filtros.success)return res.status(400).json({error:'Filtros de fotos inválidos'})
   res.setHeader('Cache-Control','private, no-store')
   res.json(await consultarFotosAtividades({...filtros.data,pagina:filtros.data.pagina??1}))
  }catch(error){console.error(error);res.status(500).json({error:'Não foi possível consultar as fotos das atividades'})}
+})
+
+router.get('/administracao/fotos-producao/:fotoId/arquivo',async(req:AuthRequest,res:Response)=>{
+ try{
+  if(!await permitirGaleria(req,res))return
+  if(!z.string().uuid().safeParse(req.params.fotoId).success)return res.status(400).json({error:'Foto inválida'})
+  const foto=await arquivoFotoProducao(String(req.params.fotoId))
+  if(!foto)return res.status(404).json({error:'Foto de Produção não encontrada'})
+  res.set({'Content-Type':foto.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+  res.sendFile(foto.caminho,error=>{if(error&&!res.headersSent)res.status(404).json({error:'Foto indisponível no compartilhamento de Produção'})})
+ }catch(error){console.error(error);res.status(503).json({error:'Não foi possível consultar a foto de Produção'})}
 })
 
 const salvarCronogramaSchema = z.object({
@@ -231,9 +250,10 @@ router.get(fotosPath, async (req: AuthRequest,res: Response) => {
   const acesso = await acessoFoto(req)
   if (!acesso) return res.status(403).json({error:'Acesso negado a este conteúdo da turma'})
   await garantirTabelaFotos()
-  const {rows} = await getPgPool().query(`SELECT id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm",
-    (cpf_professor=$3 OR $4::boolean) AS "podeExcluir" FROM public.cronograma_fotos
-    WHERE id_turma=$1 AND id_cronograma_aplicacao=$2 ORDER BY criado_em,id_foto`,[acesso.turmaId,acesso.itemId,acesso.cpf,acesso.admin])
+  const {rows} = await getPgPool().query(`SELECT f.id_foto AS id,f.nome_original AS nome,f.tamanho,f.criado_em AS "criadoEm",
+    ${FOTO_AUTOR_NOME} AS "professorNome",(regexp_replace(f.cpf_professor,'\\D','','g')=$3) AS "minhaFoto",
+    (regexp_replace(f.cpf_professor,'\\D','','g')=$3 OR $4::boolean) AS "podeExcluir" FROM public.cronograma_fotos f ${FOTO_AUTOR_JOIN}
+    WHERE f.id_turma=$1 AND f.id_cronograma_aplicacao=$2 ORDER BY f.criado_em,f.id_foto`,[acesso.turmaId,acesso.itemId,acesso.cpf,acesso.admin])
   res.json({fotos:rows.map(f=>({...f,podeExcluir:f.podeExcluir && !isViewOnlyMode(req)}))})
  } catch(err) { console.error(err);res.status(500).json({error:'Erro ao carregar fotos das atividades'}) }
 })
@@ -264,7 +284,9 @@ router.get(`${fotosPath}/:fotoId/arquivo`,async (req: AuthRequest,res: Response)
   const {rows} = await getPgPool().query(`SELECT arquivo,mime_type FROM public.cronograma_fotos WHERE id_foto=$1 AND id_turma=$2 AND id_cronograma_aplicacao=$3`,[req.params.fotoId,acesso.turmaId,acesso.itemId])
   if (!rows[0]) return res.status(404).json({error:'Foto não encontrada'})
   res.set({'Content-Type':rows[0].mime_type,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
-  res.sendFile(caminhoFoto(rows[0].arquivo),error=>{
+  const legivel=await localizarFoto(rows[0].arquivo)
+  if(!legivel)return res.status(404).json({error:'Arquivo da foto indisponível'})
+  res.sendFile(legivel,error=>{
    if (error && !res.headersSent) res.status((error as any).statusCode===404?404:500).json({error:'Arquivo da foto indisponível'})
   })
  } catch(err) { console.error(err);res.status(500).json({error:'Erro ao abrir foto'}) }
@@ -277,7 +299,7 @@ router.delete(`${fotosPath}/:fotoId`,blockViewOnlyWrites,async (req: AuthRequest
   await garantirTabelaFotos()
   // Remove o vínculo primeiro. Falha no armazenamento não apaga outros anexos.
   const {rows} = await getPgPool().query(`DELETE FROM public.cronograma_fotos
-    WHERE id_foto=$1 AND id_turma=$2 AND id_cronograma_aplicacao=$3 AND (cpf_professor=$4 OR $5::boolean)
+    WHERE id_foto=$1 AND id_turma=$2 AND id_cronograma_aplicacao=$3 AND (regexp_replace(cpf_professor,'\\D','','g')=$4 OR $5::boolean)
     RETURNING arquivo`,[req.params.fotoId,acesso.turmaId,acesso.itemId,acesso.cpf,acesso.admin])
   if (!rows[0]) return res.status(404).json({error:'Foto não encontrada ou sem permissão para excluir'})
   await fs.unlink(caminhoFoto(rows[0].arquivo)).catch(err=>console.error('Limpeza de foto pendente',err.code))

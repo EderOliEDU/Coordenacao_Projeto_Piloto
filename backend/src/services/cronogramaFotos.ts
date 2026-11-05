@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { getPgPool } from './pgPool'
+import { findReadableAudioPath } from './audioStorage'
 
 export const MAX_FOTO_BYTES = 8 * 1024 * 1024
 export const CRONOGRAMA_FOTOS_SQL = `
@@ -61,20 +62,29 @@ export async function salvarFotoUnica(dados: { turmaId:number; itemId:number; cp
  try {
   await client.query('BEGIN')
   // Serializa envios para o mesmo conteúdo, inclusive entre processos/instâncias.
-  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`cronograma-foto:${dados.turmaId}:${dados.itemId}`])
-  const existente=await client.query('SELECT 1 FROM public.cronograma_fotos WHERE id_turma=$1 AND id_cronograma_aplicacao=$2 LIMIT 1',[dados.turmaId,dados.itemId])
-  if(existente.rowCount)throw new FotoJaAnexadaError('Este conteúdo já possui foto. Exclua a foto atual antes de anexar outra.')
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`cronograma-foto:${dados.turmaId}:${dados.itemId}:${dados.cpf.replace(/\D/g,'')}`])
+  const existente=await client.query(`SELECT 1 FROM public.cronograma_fotos WHERE id_turma=$1 AND id_cronograma_aplicacao=$2 AND regexp_replace(cpf_professor,'\\D','','g')=$3 LIMIT 1`,[dados.turmaId,dados.itemId,dados.cpf.replace(/\D/g,'')])
+  if(existente.rowCount)throw new FotoJaAnexadaError('Você já anexou uma foto a este conteúdo da turma. Exclua a sua foto atual antes de anexar outra.')
   arquivo=await gravarFoto(dados.buffer,dados.extensao)
   const {rows}=await client.query(`INSERT INTO public.cronograma_fotos
    (id_foto,id_turma,id_cronograma_aplicacao,cpf_professor,arquivo,nome_original,mime_type,tamanho)
    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
    RETURNING id_foto AS id,nome_original AS nome,tamanho,criado_em AS "criadoEm"`,
    [randomUUID(),dados.turmaId,dados.itemId,dados.cpf,arquivo,dados.nome.slice(0,255),dados.mime,dados.buffer.length])
+  const autor=await client.query(`SELECT COALESCE(NULLIF(trim(profissional_nome_social::text),''),NULLIF(trim(profissional_nome::text),'')) AS nome
+   FROM public.professores WHERE regexp_replace(profissional_cpf::text,'\\D','','g')=$1 ORDER BY profissional_nome NULLS LAST LIMIT 1`,[dados.cpf.replace(/\D/g,'')])
   await client.query('COMMIT')
-  return {...rows[0],podeExcluir:true}
+  return {...rows[0],podeExcluir:true,minhaFoto:true,professorNome:autor.rows[0]?.nome||'Nome não cadastrado'}
  }catch(error){
   await client.query('ROLLBACK')
   if(arquivo)await fs.unlink(caminhoFoto(arquivo)).catch(()=>{})
   throw error
  }finally{client.release()}
+}
+
+// Leitura pode recorrer ao compartilhamento RO de Produção; escrita e exclusão permanecem locais.
+export async function localizarFoto(arquivo:string) {
+ caminhoFoto(arquivo)
+ return findReadableAudioPath(arquivo,raizFotos(),process.env.AUDIO_READONLY_STORAGE_PATH
+  ? path.join(process.env.AUDIO_READONLY_STORAGE_PATH,'cronograma-fotos'):undefined)
 }

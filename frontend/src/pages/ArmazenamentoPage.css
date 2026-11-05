@@ -17,3 +17,14 @@
 .armazenamento-barra.critico span { background:#be3932; }
 .armazenamento-discos dl { display:grid;grid-template-columns:1fr auto;gap:10px; }
 .armazenamento-discos dd { margin:0;font-weight:700; }
+
+.armazenamento-capacidade { display:flex;align-items:center;flex-wrap:wrap;gap:24px; }
+.armazenamento-capacidade svg { width:190px;max-width:100%;flex:0 0 190px; }
+.armazenamento-capacidade > div { flex:1 1 240px; }
+.armazenamento-grafico > svg { display:block;width:100%;height:auto;margin-top:16px; }
+.armazenamento-grafico circle:focus { outline:2px solid #253d5c; }
+.armazenamento-grafico-filtros { display:flex;flex-wrap:wrap;gap:16px;margin-top:20px; }
+.armazenamento-grafico-filtros label { display:grid;gap:6px; }
+.armazenamento-grafico-filtros select { padding:8px;border:1px solid #bac7d4;border-radius:8px; }
+.armazenamento-grafico table { width:100%;text-align:left;border-collapse:collapse; }
+.armazenamento-grafico td,.armazenamento-grafico th { padding:8px;border-bottom:1px solid #dbe3eb; }

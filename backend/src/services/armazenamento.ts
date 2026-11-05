@@ -10,6 +10,7 @@ const esquema = z.object({
  audios: grupo, fotos: grupo, outros: grupo,
  discos: z.array(z.object({nome:z.string(),caminho:z.string(),total:inteiro.positive(),disponivel:inteiro,ocupado:inteiro,inodesTotal:inteiro,inodesLivres:inteiro})).max(10),
 })
+const pontoHistorico=z.object({coletadoEm:z.string().datetime({offset:true}),total:inteiro.positive(),disponivel:inteiro,audiosBytes:inteiro,fotosBytes:inteiro,audiosQuantidade:inteiro,fotosQuantidade:inteiro}).refine(p=>p.disponivel<=p.total)
 type Coleta = z.infer<typeof esquema>
 export function avaliarArmazenamento(coleta: Coleta, agora=Date.now()) {
  const dados=esquema.parse(coleta)
@@ -34,5 +35,14 @@ export async function carregarArmazenamento() {
  if(!raiz)throw Error('Armazenamento de Produção não configurado')
  const arquivo=path.join(raiz,'.monitoramento/armazenamento.json')
  if((await fs.stat(arquivo)).size>65536)throw Error('Coleta inválida')
- return avaliarArmazenamento(JSON.parse(await fs.readFile(arquivo,'utf8')))
+ const atual=avaliarArmazenamento(JSON.parse(await fs.readFile(arquivo,'utf8')))
+ let historico: z.infer<typeof pontoHistorico>[]=[]
+ let avisoHistorico=''
+ try{
+  const historicoPath=path.join(raiz,'.monitoramento/armazenamento-historico.json')
+  if((await fs.stat(historicoPath)).size>512*1024)throw Error('Histórico muito grande')
+  const dados=z.object({versao:z.literal(1),servidor:z.literal('192.168.0.121'),pontos:z.array(pontoHistorico).max(744)}).parse(JSON.parse(await fs.readFile(historicoPath,'utf8')))
+  historico=dados.pontos.filter(p=>Date.parse(p.coletadoEm)<=Date.now()+300000&&Date.parse(p.coletadoEm)>=Date.now()-30*86400000).sort((a,b)=>a.coletadoEm.localeCompare(b.coletadoEm))
+ }catch(error){avisoHistorico=(error as NodeJS.ErrnoException).code==='ENOENT'?'O histórico começa a ser registrado com esta atualização.':'Histórico indisponível. Os indicadores atuais continuam disponíveis.'}
+ return {...atual,historico,avisoHistorico}
 }

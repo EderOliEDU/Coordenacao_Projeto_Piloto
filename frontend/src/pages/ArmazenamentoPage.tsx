@@ -1,3 +1,4 @@
+import GraficoArmazenamento from '../components/GraficoArmazenamento'
 import useArmazenamento from '../hooks/useArmazenamento'
 import './ArmazenamentoPage.css'
 const numero=(n:number)=>n.toLocaleString('pt-BR')
@@ -24,6 +25,7 @@ export default function ArmazenamentoPage(){
     return <section className="section-card" key={String(titulo)}><h2>{String(titulo)}</h2><strong className="armazenamento-numero">{numero(g.quantidade)}</strong><span>arquivo(s) · {tamanho(g.bytes)}</span></section>
    })}</div>
    {!dados.completo&&<p className="error-text">A contagem pode estar incompleta. Verifique o aviso da coleta.</p>}
+   <GraficoArmazenamento dados={dados}/>
    <div className="armazenamento-discos">{dados.discos.map(d=><section className="section-card" key={d.caminho}>
     <h2>{d.nome}</h2><p className="armazenamento-caminho">{d.caminho}</p>
     <div className={`armazenamento-barra ${d.nivel}`} role="meter" aria-label={`Ocupação: ${d.nome}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(d.percentual)}><span style={{width:`${d.percentual}%`}}/></div>
