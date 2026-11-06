@@ -1,3 +1,4 @@
+import { retornoListaAtividades } from '../atividadesSuperadmin'
 import { headersAtividade } from '../atividadeAdmin'
 import QuestaoNome from '../components/QuestaoNome'
 import AvisoPAEE from '../components/AvisoPAEE'
@@ -119,7 +120,7 @@ export default function AplicadorQuestionarioPage() {
   }, [observacao, observacaoSalva])
 
   function voltarAoPainel() {
-    navigate('/aplicador')
+    navigate(retornoListaAtividades(window.location.search,'/aplicador'))
   }
 
   const [aplicacao, setAplicacao] =
@@ -169,11 +170,11 @@ export default function AplicadorQuestionarioPage() {
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
     currentLocation.pathname !== nextLocation.pathname &&
-    (observacao !== observacaoSalva || salvandoObservacao || finalizando)
+    (observacao !== observacaoSalva || salvandoObservacao || finalizando || salvando.size>0 || salvandoLeitura.size>0 || gravandoId!==null)
   )
   useEffect(() => {
     if (blocker.state !== 'blocked') return
-    if (salvandoObservacao || finalizando) {
+    if (salvandoObservacao || finalizando || salvando.size>0 || salvandoLeitura.size>0 || gravandoId!==null) {
       window.alert('Aguarde o salvamento ou a finalização da avaliação antes de sair.')
       blocker.reset()
     } else if (window.confirm('A observação ainda não foi salva. Deseja sair sem salvar?')) {
@@ -181,7 +182,7 @@ export default function AplicadorQuestionarioPage() {
     } else {
       blocker.reset()
     }
-  }, [blocker, salvandoObservacao, finalizando])
+  }, [blocker, salvandoObservacao, finalizando, salvando, salvandoLeitura, gravandoId])
 
   const mediaRecorderRef =
     useRef<MediaRecorder | null>(null)
@@ -1320,7 +1321,7 @@ export default function AplicadorQuestionarioPage() {
       )
 
       setTimeout(() => {
-        navigate('/aplicador')
+        navigate(retornoListaAtividades(window.location.search,'/aplicador'))
       }, 1000)
 
     } catch (error: any) {
@@ -1410,7 +1411,7 @@ export default function AplicadorQuestionarioPage() {
         style={styles.voltar}
         onClick={voltarAoPainel}
       >
-        ← Voltar ao painel
+        {new URLSearchParams(window.location.search).has('responsavel')?'← Voltar à turma':'← Voltar ao painel'}
       </button>
 
       <div style={styles.cabecalho}>

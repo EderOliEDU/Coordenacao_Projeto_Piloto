@@ -1,6 +1,8 @@
 # Preenchimento e correção pelo superadministrador
 
-No menu Administração e parâmetros, use **Preencher e corrigir atividades**. Selecione formulário ou verificação, fase e turma. A lista inclui atividades não iniciadas, em andamento e encerradas, inclusive registros de responsáveis cujo vínculo foi removido. Cada aluno aparece uma vez; se houver vários responsáveis ou registros, é preciso selecionar qual será preenchido ou corrigido. Nenhum registro histórico é descartado.
+No menu Administração e parâmetros, use **Preencher e corrigir atividades**. Selecione formulário ou verificação, fase, **escola** e depois **turma**. A lista de turmas mostra somente as opções da escola escolhida. A lista inclui atividades não iniciadas, em andamento e encerradas, inclusive registros de responsáveis cujo vínculo foi removido. Cada aluno aparece uma vez; se houver vários responsáveis ou registros, é preciso selecionar qual será preenchido ou corrigido. Nenhum registro histórico é descartado.
+
+As escolhas de escola, turma, fase, atividade e responsável ficam guardadas durante a sessão. Ao abrir uma atividade, use **Voltar à turma** para escolher outro aluno sem refazer os filtros. Cancelar a confirmação ou concluir uma atividade também retorna à mesma turma. Atualizar a página ou usar o botão Voltar do navegador mantém o contexto; sair da conta limpa as preferências da sessão. Se houver alterações não salvas no formulário, a saída exige confirmação.
 
 Ao abrir um registro, confirme que deseja preencher ou alterar mesmo sem ser o professor ou aplicador designado. Cancelar retorna à lista sem gravar. A confirmação é solicitada novamente ao abrir outra atividade ou recarregar a página. Saia do modo conferência antes de utilizar a edição.
 

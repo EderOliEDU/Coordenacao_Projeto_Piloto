@@ -30,3 +30,26 @@ test('identifica registros com segurança e aceita turma sem alunos',()=>{
  assert.notEqual(chaveRegistro(item()),chaveRegistro(item({aplicacaoId:'30'})))
  assert.notEqual(chaveRegistro(item()),chaveRegistro(item({cpf:'22222222222'})))
 })
+
+const {lerFiltrosAtividades,queryFiltrosAtividades,urlListaAtividades,retornoListaAtividades}=modulo.exports
+const filtros={atividade:'verificacao',fase:'3',escola:'101',turma:'202'}
+test('retoma escola, turma, fase e atividade pela URL ao voltar ou atualizar',()=>{
+ const salvo={atividade:'formulario',fase:'1',escola:'5',turma:'6'}
+ assert.deepEqual(lerFiltrosAtividades('',filtros),filtros)
+ assert.deepEqual(lerFiltrosAtividades(queryFiltrosAtividades(filtros),salvo),filtros)
+ const search=new URLSearchParams({responsavel:'11111111111',fase:'3',retorno:urlListaAtividades(filtros)}).toString()
+ assert.equal(retornoListaAtividades(search,'/aplicador'),urlListaAtividades(filtros))
+ assert.deepEqual(lerFiltrosAtividades(new URL(retornoListaAtividades(search,'/aplicador'),'https://teste').search),filtros)
+})
+test('limpar escola e turma na URL não restaura escolhas anteriores',()=>{
+ assert.deepEqual(lerFiltrosAtividades('atividade=verificacao&fase=3&escola=&turma=',filtros),{...filtros,escola:'',turma:''})
+ assert.deepEqual(lerFiltrosAtividades('',null),{atividade:'formulario',fase:'',escola:'',turma:''})
+})
+test('retorno de acesso normal permanece normal; destino externo ou indevido é rejeitado',()=>{
+ assert.equal(retornoListaAtividades('','/aplicador'),'/aplicador')
+ assert.equal(retornoListaAtividades('','/turmas/20/alunos'),'/turmas/20/alunos')
+ for(const retorno of ['https://outro.site/superadmin/atividades','//outro.site/superadmin/atividades','javascript:alert(1)','/superadmin/acessos']) {
+  const search=new URLSearchParams({responsavel:'11111111111',fase:'3',retorno}).toString()
+  assert.equal(retornoListaAtividades(search,'/aplicador'),'/superadmin/atividades')
+ }
+})

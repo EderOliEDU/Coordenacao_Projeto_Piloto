@@ -5,6 +5,7 @@ let activityPending = false
 export function clearSession(notifyServer = true) {
   const token = sessionStorage.getItem('token')
   keys.forEach(key => sessionStorage.removeItem(key))
+  Object.keys(sessionStorage).filter(key=>key.startsWith('atividadesSuperadmin:')).forEach(key=>sessionStorage.removeItem(key))
   if (notifyServer && token) {
     void nativeFetch('/api/auth/logout', {
       method: 'POST', headers: { Authorization: `Bearer ${token}` }, keepalive: true

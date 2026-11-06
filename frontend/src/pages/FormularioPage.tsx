@@ -1,6 +1,7 @@
+import { retornoListaAtividades } from '../atividadesSuperadmin'
 import { headersAtividade } from '../atividadeAdmin'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useBlocker } from 'react-router-dom'
 import api from '../api/client'
 import EscalaSelector from '../components/EscalaSelector'
 
@@ -87,6 +88,26 @@ export default function FormularioPage() {
   const [apoioPedagogico, setApoioPedagogico] = useState<'' | 'SIM' | 'NAO'>('')
   const [descricaoOutros, setDescricaoOutros] = useState('')
   const [orientacaoAberta, setOrientacaoAberta] = useState(false)
+
+  const snapshot = JSON.stringify({respostas,observacoes,necessidadesSelecionadas,caminhoNaoPaee,apoioPedagogico,descricaoOutros})
+  const snapshotSalvo = useRef<string|null>(null)
+  const gravando = useRef(false)
+  useEffect(()=>{if(!loading)snapshotSalvo.current=snapshot},[loading])
+  const blocker=useBlocker(({currentLocation,nextLocation})=>
+    currentLocation.pathname+currentLocation.search!==nextLocation.pathname+nextLocation.search &&
+    (gravando.current || (snapshotSalvo.current!==null && snapshot!==snapshotSalvo.current)))
+  useEffect(()=>{
+    if(blocker.state!=='blocked')return
+    if(gravando.current){window.alert('Aguarde o salvamento do formulário antes de sair.');blocker.reset()}
+    else if(window.confirm('Existem alterações não salvas no formulário. Deseja sair sem salvar?'))blocker.proceed()
+    else blocker.reset()
+  },[blocker])
+  useEffect(()=>{
+    if(snapshotSalvo.current===null||snapshot===snapshotSalvo.current)return
+    const avisar=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue=''}
+    window.addEventListener('beforeunload',avisar)
+    return ()=>window.removeEventListener('beforeunload',avisar)
+  },[snapshot,saving,loading])
 
   function showNotification(type: 'success' | 'error', message: string) {
     setNotification({ type, message })
@@ -235,6 +256,7 @@ export default function FormularioPage() {
       return
     }
     setSaving(true)
+    gravando.current=true
     try {
       const perguntaPublicoAlvo = formulario.secoes.flatMap(secao => secao.perguntas).find(isPerguntaPublicoAlvo) || null
       const respostaPublicoAlvo = respostaSimNao(perguntaPublicoAlvo)
@@ -267,13 +289,15 @@ export default function FormularioPage() {
       }
 
       const res = await api.post('/submissoes/respostas', body)
+      snapshotSalvo.current=snapshot
+      gravando.current=false
       const sid: string = res.data.id
       setSubmissaoId(sid)
       setStatus(body.status as 'FINALIZADO' | 'RASCUNHO')
 
       if (enviar) {
         showNotification('success', 'Formulário finalizado com sucesso!')
-        navigate(`/turmas/${turmaId}/alunos`)
+        navigate(retornoListaAtividades(window.location.search,`/turmas/${turmaId}/alunos`))
       } else {
         showNotification('success', 'Rascunho salvo com sucesso!')
       }
@@ -281,6 +305,7 @@ export default function FormularioPage() {
       if(['PERIODO_FECHADO','FASE_ALTERADA'].includes(err.response?.data?.code))setPeriodo({aberto:false,fase:null,mensagem:err.response.data.error})
       showNotification('error', err.response?.data?.error || 'Erro ao salvar')
     } finally {
+      gravando.current=false
       setSaving(false)
     }
   }
@@ -544,7 +569,7 @@ export default function FormularioPage() {
 
       {/* Header */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, padding: '12px 0', background: '#f5f6fa', boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }}>
-        <button onClick={() => navigate(`/turmas/${turmaId}/alunos`)} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>Voltar</button>
+        <button disabled={saving} onClick={() => navigate(retornoListaAtividades(window.location.search,`/turmas/${turmaId}/alunos`))} style={{ background: '#dfe6e9', color: '#2d3436', padding: '8px 14px' }}>{new URLSearchParams(window.location.search).has('responsavel')?'← Voltar à turma':'Voltar'}</button>
         <div>
           <p className="eyebrow" style={{ marginBottom: 4 }}>Etapa 1 · Formulário do professor</p>
           <h1 style={{ margin: 0, fontSize: 20 }}>{formulario.nome}</h1>

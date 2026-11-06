@@ -1,3 +1,4 @@
+import { retornoListaAtividades } from '../atividadesSuperadmin'
 import api from '../api/client'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -34,7 +35,7 @@ export default function ConfirmarAtividade({children}:{children:JSX.Element}) {
     <p>Você está acessando esta atividade como superadministrador. O responsável pelo registro é o CPF {cpf}.</p>
     <p>Deseja realmente preencher, corrigir ou alterar esta atividade, mesmo não sendo o professor ou aplicador designado? As alterações serão salvas no registro do responsável original.</p>
     {erro&&<p role="alert">{erro}</p>}
-    <button disabled={salvando} onClick={()=>navigate('/superadmin/atividades')}>Cancelar</button>{' '}
+    <button disabled={salvando} onClick={()=>navigate(retornoListaAtividades(location.search,'/superadmin/atividades'))}>Cancelar</button>{' '}
     <button disabled={salvando} onClick={confirmar}>{salvando?'Registrando confirmação...':'Sim, continuar'}</button>
   </section>
 }
