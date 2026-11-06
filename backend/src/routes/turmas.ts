@@ -20,7 +20,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const authenticatedCpf = getAuthenticatedCpf(req)
     const cpf = getEffectiveProfessorCpf(req)
     if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
-    const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
+    const canViewAll = (Boolean(req.professor?.permissoes?.administrador || req.professor?.permissoes?.superadmin) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
     const pool = getPgPool()
     const faseAtual = await getFaseAtual()
@@ -94,7 +94,7 @@ router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
     const authenticatedCpf = getAuthenticatedCpf(req)
     const cpf = getEffectiveProfessorCpf(req)
     if (!cpf) return res.status(400).json({ error: 'CPF do professor ausente no token' })
-    const canViewAll = (Boolean(req.professor?.permissoes?.administrador) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
+    const canViewAll = (Boolean(req.professor?.permissoes?.administrador || req.professor?.permissoes?.superadmin) || isAdministrador(authenticatedCpf) || await usuarioTemPerfil(authenticatedCpf, ['SUPERADMIN', 'ADMINISTRADOR'])) && !isViewOnlyMode(req)
 
     const pool = getPgPool()
 
@@ -102,12 +102,12 @@ router.get('/:id/alunos', async (req: AuthRequest, res: Response) => {
     const check = await pool.query(
       `
       SELECT 1
-      FROM public.atribuicao_professor ap
-      JOIN public.turmas t ON t.id_turma = ap.id_turma
+      FROM public.turmas t
+      LEFT JOIN public.atribuicao_professor ap ON ap.id_turma = t.id_turma
       JOIN public.escolas e ON e.id_escola = t.id_escola
       JOIN public.etapas et ON et.id_etapa = t.id_etapa
       WHERE ($3::boolean = true OR regexp_replace(ap.cpf_professor, '\\D', '', 'g') = $1)
-        AND ap.id_turma::text = $2
+        AND t.id_turma::text = $2
         AND e.projeto = 'PJINSTFONI'
         AND et.projeto = 'PJINSTFONI'
       LIMIT 1

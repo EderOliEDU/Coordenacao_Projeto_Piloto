@@ -1,3 +1,4 @@
+import { headersAtividade } from '../atividadeAdmin'
 import QuestaoNome from '../components/QuestaoNome'
 import AvisoPAEE from '../components/AvisoPAEE'
 import QuestaoVogais, { type RespostaVogal } from '../components/QuestaoVogais'
@@ -196,6 +197,7 @@ export default function AplicadorQuestionarioPage() {
 
   function headers() {
     return {
+      ...headersAtividade(),
       Authorization:
         `Bearer ${sessionStorage.getItem('token')}`
     }
@@ -203,6 +205,7 @@ export default function AplicadorQuestionarioPage() {
 
   function headersJson() {
     return {
+      ...headersAtividade(),
       'Content-Type': 'application/json',
       Authorization:
         `Bearer ${sessionStorage.getItem('token')}`
@@ -563,6 +566,7 @@ export default function AplicadorQuestionarioPage() {
   }
 
   function atualizarStatusEmAndamento() {
+    if (headersAtividade()['X-Atividade-Confirmada'] && !['PENDENTE','EM_ANDAMENTO'].includes(questionario?.status || '')) return
     setQuestionario(anterior =>
       anterior
         ? {
@@ -1025,7 +1029,7 @@ export default function AplicadorQuestionarioPage() {
   ) {
     const podeResponder =
       questionario?.status === 'PENDENTE' ||
-      questionario?.status === 'EM_ANDAMENTO'
+      questionario?.status === 'EM_ANDAMENTO' || Boolean(headersAtividade()['X-Atividade-Confirmada'])
 
     if (!podeResponder) {
       return
@@ -1233,7 +1237,7 @@ export default function AplicadorQuestionarioPage() {
   }
 
   async function salvarObservacao(): Promise<boolean> {
-    if (!id || salvandoObservacao || !['PENDENTE', 'EM_ANDAMENTO'].includes(questionario?.status || '')) return false
+    if (!id || salvandoObservacao || (!['PENDENTE', 'EM_ANDAMENTO'].includes(questionario?.status || '') && !headersAtividade()['X-Atividade-Confirmada'])) return false
     setSalvandoObservacao(true)
     setErro('')
     setMensagem('')
@@ -1384,7 +1388,7 @@ export default function AplicadorQuestionarioPage() {
     'EM_ANDAMENTO'
 
   const podeEditar =
-    pendente || emAndamento
+    pendente || emAndamento || headersAtividade()['X-Atividade-Confirmada']==='sim'
 
   const concluida =
     questionario.status ===

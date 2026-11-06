@@ -1,3 +1,4 @@
+import { atividadeSuperadmin, atividadeAdmin, cpfAtividade } from '../middleware/atividadeSuperadmin'
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getEffectiveProfessorCpf } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
@@ -5,6 +6,7 @@ import { getFaseAtual } from '../services/avaliacaoFases'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(atividadeSuperadmin)
 
 function normalizarCpf(value: string) {
   return (value || '').replace(/\D/g, '')
@@ -55,15 +57,15 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
 
 router.get('/aluno/:alunoId', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = getEffectiveProfessorCpf(req)
+    const cpf = cpfAtividade(req)
     const turmaId = Number(req.query.turmaId)
-    const faseId = Number(req.query.faseId)
+    const faseId = atividadeAdmin(req)?.faseId || Number(req.query.faseId)
     const alunoId = Number(req.params.alunoId)
     if (!turmaId || !alunoId) return res.status(400).json({ error: 'Turma ou aluno inválido' })
 
     const faseAtual = faseId ? { id: faseId } : await getFaseAtual()
     const ok = await assertTurmaAssignment(cpf, turmaId)
-    if (!ok) return res.status(403).json({ error: 'Acesso negado a esta turma' })
+    if (!ok && !atividadeAdmin(req)) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
     const pool = getPgPool()
     const [necessidadesRes, contextoRes] = await Promise.all([

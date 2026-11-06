@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { headersAtividade } from '../atividadeAdmin'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import EscalaSelector from '../components/EscalaSelector'
@@ -46,6 +47,7 @@ interface OpcaoEscala { id: string; chave: string; rotuloUI: string; corHex?: st
 interface EscalaResposta { id: string; codigo: string; nomeExibicao: string; opcoes: OpcaoEscala[] }
 interface Pergunta { id: string; codigo: string; enunciado: string; ordem: number; escala?: EscalaResposta | null }
 interface Secao { id: string; titulo: string; ordem: number; perguntas: Pergunta[] }
+interface PeriodoFormulario { aberto:boolean; fase:{id:number;nome:string;dataInicio:string;dataFim:string}|null; mensagem:string }
 interface Formulario { id: string; nome: string; versao: string; secoes: Secao[] }
 interface NecessidadeEspecifica { id: string; descricao: string; tipo: string }
 
@@ -64,6 +66,9 @@ export default function FormularioPage() {
     }
   })()
   const readOnly = Boolean(viewAs?.cpf)
+  const [periodo,setPeriodo]=useState<PeriodoFormulario|null>(null)
+  const faseCarregada=useRef<number|null>(null)
+  const bloqueado=readOnly || !periodo?.aberto
 
   const [formulario, setFormulario] = useState<Formulario | null>(null)
   const [aluno, setAluno] = useState<any>(null)
@@ -97,8 +102,10 @@ export default function FormularioPage() {
       api.get('/auth/me').catch(() => ({ data: null })),
       api.get('/necessidades-especificas').catch(() => ({ data: [] })),
       api.get(`/necessidades-especificas/aluno/${alunoId}?turmaId=${turmaId}`).catch(() => ({ data: null })),
-    ]).then(([formRes, alunosRes, turmasRes, subRes, meRes, necessidadesRes, alunoNecRes]) => {
+    ]).then(async ([formRes, alunosRes, turmasRes, subRes, meRes, necessidadesRes, alunoNecRes]) => {
       setFormulario(formRes.data)
+      setPeriodo(formRes.data.periodoPreenchimento)
+      faseCarregada.current=formRes.data.periodoPreenchimento?.fase?.id??null
       const foundAluno = alunosRes.data.find((a: any) => a.id === alunoId)
       setAluno(foundAluno || null)
       const foundTurma = turmasRes.data.find((t: any) => t.id === turmaId)
@@ -122,7 +129,7 @@ export default function FormularioPage() {
         setSubmissaoId(sub.id)
         setStatus(sub.status === 'ENVIADA' ? 'FINALIZADO' : sub.status)
         // Load full submission with respostas
-        api.get(`/submissoes/${sub.id}`).then(r => {
+        await api.get(`/submissoes/${sub.id}`).then(r => {
           const rs: Respostas = {}
           r.data.respostas?.forEach((resp: any) => {
             rs[resp.perguntaId] = resp.opcaoEscalaId
@@ -131,8 +138,29 @@ export default function FormularioPage() {
           setObservacoes(r.data.observacoes || '')
         })
       }
-    }).finally(() => setLoading(false))
+    }).catch((err:any)=>{setFormulario(null);showNotification('error',err.response?.data?.error||'Não foi possível carregar a atividade.')}).finally(() => setLoading(false))
   }, [turmaId, alunoId])
+
+  useEffect(()=>{
+    if(loading)return
+    let controller:AbortController|undefined
+    const conferir=()=>{
+      if(document.hidden)return
+      controller?.abort();controller=new AbortController()
+      const atual=controller
+      api.get<PeriodoFormulario>('/formularios/periodo',{signal:atual.signal,timeout:10000}).then(r=>{
+        if(atual.signal.aborted)return
+        const p=r.data
+        if(p.aberto&&p.fase?.id!==faseCarregada.current){
+          setPeriodo({...p,aberto:false,mensagem:'A fase de preenchimento mudou. Atualize a página para carregar o formulário da nova fase.'})
+        }else setPeriodo(p)
+      }).catch(()=>{if(!atual.signal.aborted)setPeriodo({aberto:false,fase:null,mensagem:'Não foi possível confirmar o prazo. O formulário permanece bloqueado até a próxima consulta.'})})
+    }
+    const timer=window.setInterval(conferir,60000)
+    window.addEventListener('focus',conferir)
+    document.addEventListener('visibilitychange',conferir)
+    return ()=>{controller?.abort();window.clearInterval(timer);window.removeEventListener('focus',conferir);document.removeEventListener('visibilitychange',conferir)}
+  },[loading,turmaId,alunoId])
 
   function normalizarTexto(value: string) {
     return value
@@ -202,8 +230,8 @@ export default function FormularioPage() {
 
   async function salvar(enviar = false) {
     if (!formulario || !turma) return
-    if (readOnly) {
-      showNotification('error', 'Modo conferência é somente leitura. Saia da visualização para alterar dados.')
+    if (bloqueado) {
+      showNotification('error', readOnly?'Modo conferência é somente leitura. Saia da visualização para alterar dados.':periodo?.mensagem||'Formulário bloqueado fora do prazo.')
       return
     }
     setSaving(true)
@@ -221,11 +249,12 @@ export default function FormularioPage() {
 
       const body = {
         formularioId: formulario.id,
+        faseId: faseCarregada.current,
         escolaId: turma.escolaId,
         turmaId,
         alunoId,
         observacoes,
-        status: enviar ? 'FINALIZADO' : 'RASCUNHO',
+        status: enviar || (headersAtividade()['X-Atividade-Confirmada'] && status === 'FINALIZADO') ? 'FINALIZADO' : 'RASCUNHO',
         respostas: Object.entries(respostas).map(([perguntaId, opcaoEscalaId]) => ({ perguntaId, opcaoEscalaId })),
         necessidadesEspecificas: {
           paee: respostaPublicoAlvo === 'SIM' ? true : respostaPublicoAlvo === 'NAO' ? false : null,
@@ -240,7 +269,7 @@ export default function FormularioPage() {
       const res = await api.post('/submissoes/respostas', body)
       const sid: string = res.data.id
       setSubmissaoId(sid)
-      setStatus(enviar ? 'FINALIZADO' : 'RASCUNHO')
+      setStatus(body.status as 'FINALIZADO' | 'RASCUNHO')
 
       if (enviar) {
         showNotification('success', 'Formulário finalizado com sucesso!')
@@ -249,6 +278,7 @@ export default function FormularioPage() {
         showNotification('success', 'Rascunho salvo com sucesso!')
       }
     } catch (err: any) {
+      if(['PERIODO_FECHADO','FASE_ALTERADA'].includes(err.response?.data?.code))setPeriodo({aberto:false,fase:null,mensagem:err.response.data.error})
       showNotification('error', err.response?.data?.error || 'Erro ao salvar')
     } finally {
       setSaving(false)
@@ -258,7 +288,7 @@ export default function FormularioPage() {
   if (loading) return <div style={{ padding: 32 }}>Carregando...</div>
   if (!formulario || !aluno) return <div style={{ padding: 32, color: '#d63031' }}>Formulário ou aluno não encontrado.</div>
 
-  const isEnviada = status === 'FINALIZADO'
+  const isEnviada = status === 'FINALIZADO' && !headersAtividade()['X-Atividade-Confirmada']
   const perguntaEstudoCasoAtiva = formulario.secoes
     .flatMap(secao => secao.perguntas)
     .some(pergunta => isPerguntaAtiva(pergunta) && isPerguntaEstudoCaso(pergunta))
@@ -317,7 +347,7 @@ export default function FormularioPage() {
             <input
               type="checkbox"
               checked={selected}
-              disabled={isEnviada || readOnly}
+              disabled={isEnviada || bloqueado}
               onChange={() => toggleNecessidade(opcao.id)}
               style={{ flex: '0 0 16px', width: 16, height: 16, minWidth: 16, margin: 0 }}
             />
@@ -346,7 +376,7 @@ export default function FormularioPage() {
             {perguntaEstudoCasoAtiva && (
             <button
               type="button"
-              disabled={isEnviada || readOnly}
+              disabled={isEnviada || bloqueado}
               onClick={() => selecionarCaminhoNaoPaee('ESTUDO_CASO')}
               style={{
                 background: caminhoNaoPaee === 'ESTUDO_CASO' ? '#0984e3' : '#fff',
@@ -363,7 +393,7 @@ export default function FormularioPage() {
             )}
             <button
               type="button"
-              disabled={isEnviada || readOnly}
+              disabled={isEnviada || bloqueado}
               onClick={() => selecionarCaminhoNaoPaee('APOIO')}
               style={{
                 background: caminhoNaoPaee === 'APOIO' ? '#0984e3' : '#fff',
@@ -394,7 +424,7 @@ export default function FormularioPage() {
               <button
                 key={opcao}
                 type="button"
-                disabled={isEnviada || readOnly}
+                disabled={isEnviada || bloqueado}
                 onClick={() => setApoioPedagogico(opcao)}
                 style={{
                   background: apoioPedagogico === opcao ? '#0984e3' : '#fff',
@@ -419,7 +449,7 @@ export default function FormularioPage() {
                     <input
                       value={descricaoOutros}
                       onChange={event => setDescricaoOutros(event.target.value)}
-                      disabled={isEnviada || readOnly}
+                      disabled={isEnviada || bloqueado}
                       style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid #dfe6e9', borderRadius: 6, padding: '8px 10px', fontSize: 14 }}
                       placeholder="Descreva outra necessidade de apoio"
                     />
@@ -529,13 +559,18 @@ export default function FormularioPage() {
         )}
       </div>
 
+      {periodo&&<div role={periodo.aberto?'status':'alert'} className="auth-alert" style={{marginBottom:16}}>
+        <strong>{periodo.aberto?'Prazo de preenchimento aberto':'Formulário somente para consulta'}</strong><p>{periodo.mensagem}</p>
+        {periodo.fase&&<p>{periodo.fase.nome}: {periodo.fase.dataInicio.split('-').reverse().join('/')} a {periodo.fase.dataFim.split('-').reverse().join('/')} (horário de Cuiabá).</p>}
+      </div>}
+
       {readOnly && (
         <div style={{ background: '#fff7d6', border: '1px solid #f2c230', borderRadius: 8, padding: '12px 14px', marginBottom: 16, color: '#6d4c00', fontWeight: 700 }}>
           Modo conferência somente leitura: visualizando {viewAs.nome || viewAs.cpf}. Alterações estão bloqueadas.
         </div>
       )}
 
-      {!isEnviada && (
+      {!isEnviada && !bloqueado && (
         <div style={{ background: formularioCompleto ? '#e8f8f3' : '#fff8e1', border: `1px solid ${formularioCompleto ? '#b7eadb' : '#ffe3a3'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#2d3436', fontSize: 14 }}>
           {formularioCompleto
             ? 'Todas as perguntas obrigatórias foram respondidas. O formulário já pode ser finalizado.'
@@ -577,7 +612,7 @@ export default function FormularioPage() {
                       opcoes={pergunta.escala.opcoes}
                       value={respostas[pergunta.id] || null}
                       onChange={(opcaoId) => selecionarResposta(pergunta, opcaoId)}
-                      disabled={isEnviada || readOnly}
+                      disabled={isEnviada || bloqueado}
                       textOnly={isPerguntaFluxoInicial(pergunta)}
                     />
                   ) : (
@@ -595,7 +630,7 @@ export default function FormularioPage() {
             <textarea
               value={observacoes}
               onChange={e => setObservacoes(e.target.value)}
-              disabled={isEnviada || readOnly}
+              disabled={isEnviada || bloqueado}
               rows={4}
               style={{
                 width: '100%', border: '1px solid #dfe6e9', borderRadius: 6, padding: '10px 14px',
@@ -610,16 +645,16 @@ export default function FormularioPage() {
             <div style={{ display: 'flex', gap: 12 }}>
               <button
                 onClick={() => salvar(false)}
-                disabled={saving || readOnly}
+                disabled={saving || bloqueado}
                 style={{ background: '#dfe6e9', color: '#2d3436', padding: '10px 24px', flex: 1 }}
               >
                 {saving ? 'Salvando...' : 'Salvar Rascunho'}
               </button>
               <button
                 onClick={() => salvar(true)}
-                disabled={saving || readOnly || !formularioCompleto}
-                title={readOnly ? 'Modo conferência é somente leitura.' : (!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined)}
-                style={{ background: formularioCompleto && !readOnly ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto && !readOnly ? 'pointer' : 'not-allowed' }}
+                disabled={saving || bloqueado || !formularioCompleto}
+                title={bloqueado ? (readOnly?'Modo conferência é somente leitura.':periodo?.mensagem) : (!formularioCompleto ? 'Responda todas as perguntas para finalizar.' : undefined)}
+                style={{ background: formularioCompleto && !bloqueado ? '#0984e3' : '#b2bec3', color: '#fff', padding: '10px 24px', flex: 2, cursor: formularioCompleto && !bloqueado ? 'pointer' : 'not-allowed' }}
               >
                 {saving ? 'Finalizando...' : 'Finalizar Formulário'}
               </button>

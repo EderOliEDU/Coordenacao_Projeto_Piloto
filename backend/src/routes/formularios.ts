@@ -1,9 +1,12 @@
+import { atividadeSuperadmin, periodoAtividade } from '../middleware/atividadeSuperadmin'
 import { Router, Request, Response } from 'express'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { getPgPool } from '../services/pgPool'
+import { consultarPeriodoFormulario } from '../services/periodoFormulario'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(atividadeSuperadmin)
 function ordenarOpcoesEscala(tipo: string, opcoes: any[]) {
   if (tipo !== 'PEA') return opcoes
 
@@ -25,8 +28,14 @@ function ordenarOpcoesEscala(tipo: string, opcoes: any[]) {
   })
 }
 
+router.get('/periodo',async (_req:AuthRequest,res:Response)=>{
+  res.setHeader('Cache-Control','private, no-store')
+  try{res.json(await periodoAtividade(_req))}
+  catch(error){console.error(error);res.status(503).json({error:'Não foi possível confirmar o prazo de preenchimento. Tente novamente.'})}
+})
+
 // GET /api/formularios/ativo (Postgres)
-router.get('/ativo', async (_req: Request, res: Response) => {
+router.get('/ativo', async (_req: AuthRequest, res: Response) => {
   try {
     const pool = getPgPool()
 
@@ -92,6 +101,7 @@ router.get('/ativo', async (_req: Request, res: Response) => {
       nome: 'Enfoque de observação',
       versao: '1.0.0',
       secoes,
+      periodoPreenchimento: await periodoAtividade(_req),
     }
 
     return res.json(formulario)

@@ -198,9 +198,8 @@ export async function getFaseAtual(): Promise<AvaliacaoFase> {
       ativo AS ativa,
       ordem
     FROM public.avaliacao_fases
-    WHERE ativo = true
     ORDER BY
-      CASE WHEN CURRENT_DATE BETWEEN data_inicio AND data_fim THEN 0 ELSE 1 END,
+      CASE WHEN ativo AND (statement_timestamp() AT TIME ZONE 'America/Cuiaba')::date BETWEEN data_inicio AND data_fim THEN 0 WHEN ativo THEN 1 ELSE 2 END,
       data_inicio DESC,
       ordem DESC,
       id_fase DESC
@@ -210,7 +209,7 @@ export async function getFaseAtual(): Promise<AvaliacaoFase> {
 
   const fase = result.rows[0]
   if (!fase) {
-    throw new Error('Nenhuma fase de avaliacao ativa cadastrada')
+    throw new Error('Nenhuma fase de avaliacao cadastrada')
   }
 
   return fase

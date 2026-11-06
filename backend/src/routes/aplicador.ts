@@ -1,3 +1,7 @@
+import { randomUUID } from 'crypto'
+import type { PoolClient } from 'pg'
+import { abrirAuditoria, concluirAuditoria } from '../services/auditoriaAtividades'
+import { atividadeSuperadmin, atividadeAdmin, cpfAplicacao } from '../middleware/atividadeSuperadmin'
 import { detalheNomeValido } from '../services/escritaNome'
 import { Router, Response, NextFunction, raw } from 'express'
 import { promises as fs } from 'fs'
@@ -51,6 +55,7 @@ function getAudioAbsolutePath(
 }
 
 router.use(authMiddleware)
+router.use(atividadeSuperadmin)
 
 async function requireAplicador(
   req: AuthRequest,
@@ -58,7 +63,7 @@ async function requireAplicador(
   next: NextFunction
 ) {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
 
     if (!cpf || cpf.length !== 11) {
       return res.status(401).json({
@@ -66,7 +71,7 @@ async function requireAplicador(
       })
     }
 
-    const permitido = await usuarioTemPerfil(
+    const permitido = atividadeAdmin(req) || await usuarioTemPerfil(
       cpf,
       ['APLICADOR']
     )
@@ -104,13 +109,14 @@ router.put('/aplicacoes/:id/vogais/:vogal', async (req: AuthRequest, res: Respon
   const client = await getPgPool().connect()
   try {
     await client.query('BEGIN')
+    await abrirAuditoria(req,client,'VERIFICACAO')
     const app = await client.query(`SELECT status FROM public.avaliacao_aplicador_aplicacoes
-      WHERE id_aplicacao=$1 AND cpf_aplicador=$2 FOR UPDATE`, [id, getAuthenticatedCpf(req)])
+      WHERE id_aplicacao=$1 AND cpf_aplicador=$2 FOR UPDATE`, [id, cpfAplicacao(req)])
     if (!app.rowCount) {
       await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Aplicação não encontrada' })
     }
-    if (!['PENDENTE','EM_ANDAMENTO'].includes(app.rows[0].status)) {
+    if (!['PENDENTE','EM_ANDAMENTO'].includes(app.rows[0].status) && !atividadeAdmin(req)) {
       await client.query('ROLLBACK')
       return res.status(409).json({ error: 'Esta aplicação não pode mais receber respostas' })
     }
@@ -123,8 +129,9 @@ router.put('/aplicacoes/:id/vogais/:vogal', async (req: AuthRequest, res: Respon
       RETURNING vogal,acertou,origem,respondido_em AS "respondidoEm"`, [id, vogal, acertou])
     if (!saved.rowCount) throw new Error('Questão de aliteração não cadastrada')
     await client.query(`UPDATE public.avaliacao_aplicador_aplicacoes
-      SET status='EM_ANDAMENTO',iniciado_em=COALESCE(iniciado_em,CURRENT_TIMESTAMP),atualizado_em=CURRENT_TIMESTAMP
+      SET status=CASE WHEN status='PENDENTE' THEN 'EM_ANDAMENTO' ELSE status END,iniciado_em=COALESCE(iniciado_em,CURRENT_TIMESTAMP),atualizado_em=CURRENT_TIMESTAMP
       WHERE id_aplicacao=$1`, [id])
+    await concluirAuditoria(req,client)
     await client.query('COMMIT')
     return res.json(saved.rows[0])
   } catch (error) {
@@ -141,7 +148,7 @@ router.get('/me', async (
   req: AuthRequest,
   res: Response
 ) => {
-  const cpf = getAuthenticatedCpf(req)
+  const cpf = cpfAplicacao(req)
 
   return res.json({
     ok: true,
@@ -159,7 +166,7 @@ router.get('/resumo', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const pool = getPgPool()
 
     const result = await pool.query(
@@ -234,7 +241,7 @@ router.get('/aplicacoes', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const pool = getPgPool()
 
     const result = await pool.query(
@@ -382,7 +389,7 @@ router.get('/aplicacoes/:id', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idAplicacao = Number(req.params.id)
 
     if (
@@ -478,7 +485,7 @@ router.post('/aplicacoes/iniciar', async (
 ) => {
 
   const cpf =
-    getAuthenticatedCpf(req)
+    cpfAplicacao(req)
 
   const idFase =
     Number(req.body?.idFase)
@@ -510,6 +517,8 @@ router.post('/aplicacoes/iniciar', async (
 
     await client.query('BEGIN')
 
+    await abrirAuditoria(req,client,'VERIFICACAO')
+
     // ----------------------------------
     // CONFIRMA ATRIBUIÇÃO DA TURMA
     // ----------------------------------
@@ -536,7 +545,7 @@ router.post('/aplicacoes/iniciar', async (
         ]
       )
 
-    if (atribuicao.rowCount === 0) {
+    if (atribuicao.rowCount === 0 && !atividadeAdmin(req)) {
       await client.query('ROLLBACK')
 
       return res.status(403).json({
@@ -611,6 +620,7 @@ router.post('/aplicacoes/iniciar', async (
       propria.rowCount &&
       propria.rowCount > 0
     ) {
+      await concluirAuditoria(req,client)
       await client.query('COMMIT')
 
       return res.json({
@@ -649,7 +659,7 @@ router.post('/aplicacoes/iniciar', async (
               $2,
               $3,
               $4,
-              $4,
+              $5,
               'PENDENTE',
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP,
@@ -667,9 +677,12 @@ router.post('/aplicacoes/iniciar', async (
             idFase,
             idAluno,
             idTurma,
-            cpf
+            cpf,
+            getAuthenticatedCpf(req)
           ]
         )
+
+      await concluirAuditoria(req,client)
 
       await client.query('COMMIT')
 
@@ -742,7 +755,7 @@ router.post('/aplicacoes/:id/iniciar', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idAplicacao = Number(req.params.id)
 
     if (
@@ -816,7 +829,7 @@ router.get('/aplicacoes/:id/questionario', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idAplicacao = Number(req.params.id)
 
     if (!Number.isInteger(idAplicacao) || idAplicacao <= 0) {
@@ -956,7 +969,7 @@ router.get('/aplicacoes/:id/questionario', async (
 // Observação pertence à aplicação; não altera o cadastro global do aluno.
 router.put('/aplicacoes/:id/observacao', async (req: AuthRequest, res: Response) => {
   const idAplicacao = Number(req.params.id)
-  const cpf = getAuthenticatedCpf(req)
+  const cpf = cpfAplicacao(req)
   if (!Number.isSafeInteger(idAplicacao) || idAplicacao <= 0) {
     return res.status(400).json({ error: 'Aplicação inválida' })
   }
@@ -967,6 +980,7 @@ router.put('/aplicacoes/:id/observacao', async (req: AuthRequest, res: Response)
   const client = await getPgPool().connect()
   try {
     await client.query('BEGIN')
+    await abrirAuditoria(req,client,'VERIFICACAO')
     const aplicacao = await client.query(`
       SELECT status FROM public.avaliacao_aplicador_aplicacoes
       WHERE id_aplicacao = $1 AND cpf_aplicador = $2 FOR UPDATE
@@ -975,7 +989,7 @@ router.put('/aplicacoes/:id/observacao', async (req: AuthRequest, res: Response)
       await client.query('ROLLBACK')
       return res.status(404).json({ error: 'Aplicação não encontrada' })
     }
-    if (!['PENDENTE', 'EM_ANDAMENTO'].includes(aplicacao.rows[0].status)) {
+    if (!['PENDENTE', 'EM_ANDAMENTO'].includes(aplicacao.rows[0].status) && !atividadeAdmin(req)) {
       await client.query('ROLLBACK')
       return res.status(409).json({ error: 'Esta aplicação não pode mais receber alterações.' })
     }
@@ -984,6 +998,7 @@ router.put('/aplicacoes/:id/observacao', async (req: AuthRequest, res: Response)
       SET observacao = $3, atualizado_em = CURRENT_TIMESTAMP
       WHERE id_aplicacao = $1 AND cpf_aplicador = $2
     `, [idAplicacao, cpf, observacao])
+    await concluirAuditoria(req,client)
     await client.query('COMMIT')
     return res.json({ ok: true, observacao })
   } catch (error) {
@@ -1002,7 +1017,7 @@ router.put('/aplicacoes/:id/respostas', async (
   const client = await getPgPool().connect()
 
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idAplicacao = Number(req.params.id)
 
     if (!Number.isInteger(idAplicacao) || idAplicacao <= 0) {
@@ -1022,6 +1037,8 @@ router.put('/aplicacoes/:id/respostas', async (
     }
 
     await client.query('BEGIN')
+
+    await abrirAuditoria(req,client,'VERIFICACAO')
 
     const aplicacao = await client.query(
       `
@@ -1049,7 +1066,7 @@ router.put('/aplicacoes/:id/respostas', async (
 
     if (
       statusAtual !== 'PENDENTE' &&
-      statusAtual !== 'EM_ANDAMENTO'
+      statusAtual !== 'EM_ANDAMENTO' && !atividadeAdmin(req)
     ) {
       await client.query('ROLLBACK')
 
@@ -1260,6 +1277,8 @@ router.put('/aplicacoes/:id/respostas', async (
       ]
     )
 
+    await concluirAuditoria(req,client)
+
     await client.query('COMMIT')
 
     return res.json({
@@ -1312,7 +1331,7 @@ router.get(
   ) => {
     try {
       const cpf =
-        getAuthenticatedCpf(req)
+        cpfAplicacao(req)
 
       const idAplicacao =
         Number(req.params.id)
@@ -1586,7 +1605,7 @@ router.get(
   ) => {
     try {
       const cpf =
-        getAuthenticatedCpf(req)
+        cpfAplicacao(req)
 
       const idAplicacao =
         Number(req.params.id)
@@ -1716,7 +1735,7 @@ router.put(
 
     try {
       const cpf =
-        getAuthenticatedCpf(req)
+        cpfAplicacao(req)
 
       const idAplicacao =
         Number(req.params.id)
@@ -1766,6 +1785,8 @@ router.put(
 
       await client.query('BEGIN')
 
+      await abrirAuditoria(req,client,'VERIFICACAO')
+
       const aplicacao =
         await client.query(
           `
@@ -1796,7 +1817,7 @@ router.put(
 
       if (
         statusAtual !== 'PENDENTE' &&
-        statusAtual !== 'EM_ANDAMENTO'
+        statusAtual !== 'EM_ANDAMENTO' && !atividadeAdmin(req)
       ) {
         await client.query('ROLLBACK')
 
@@ -1911,6 +1932,8 @@ router.put(
         [idAplicacao, cpf]
       )
 
+      await concluirAuditoria(req,client)
+
       await client.query('COMMIT')
 
       return res.json({
@@ -1950,12 +1973,14 @@ router.post(
     req: AuthRequest,
     res: Response
   ) => {
+    let client: PoolClient | undefined
+    let concluida = false
     let arquivoGravado:
       string | null = null
 
     try {
       const cpf =
-        getAuthenticatedCpf(req)
+        cpfAplicacao(req)
 
       const idAplicacao =
         Number(req.params.id)
@@ -2016,10 +2041,12 @@ router.post(
         })
       }
 
-      const pool = getPgPool()
+      client = await getPgPool().connect()
+      await client.query('BEGIN')
+      await abrirAuditoria(req,client,'VERIFICACAO')
 
       const registro =
-        await pool.query(
+        await client.query(
           `
             SELECT
               aa.id_fase AS "idFase",
@@ -2062,7 +2089,7 @@ router.post(
 
       if (
         status !== 'PENDENTE' &&
-        status !== 'EM_ANDAMENTO'
+        status !== 'EM_ANDAMENTO' && !atividadeAdmin(req)
       ) {
         return res.status(409).json({
           error:
@@ -2091,7 +2118,7 @@ router.post(
           idFase,
           idAplicacao,
           idPalavra
-        )
+        ).replace(/\.webm$/, `-${randomUUID()}.webm`)
 
       const absolutePath =
         getAudioAbsolutePath(
@@ -2116,7 +2143,7 @@ router.post(
         absolutePath
 
       const atualizado =
-        await pool.query(
+        await client.query(
           `
             UPDATE public.avaliacao_aplicador_leitura_respostas
             SET
@@ -2146,7 +2173,7 @@ router.post(
           ]
         )
 
-      await pool.query(
+      await client.query(
         `
           UPDATE public.avaliacao_aplicador_aplicacoes
           SET atualizado_em =
@@ -2156,6 +2183,11 @@ router.post(
         `,
         [idAplicacao, cpf]
       )
+
+      await concluirAuditoria(req,client)
+
+      await client.query('COMMIT')
+      concluida = true
 
       return res.json({
         ok: true,
@@ -2183,6 +2215,11 @@ router.post(
         error:
           'Erro ao salvar áudio da leitura'
       })
+    } finally {
+      if (client) {
+        if (!concluida) await client.query('ROLLBACK').catch(()=>{})
+        client.release()
+      }
     }
   }
 )
@@ -2196,7 +2233,7 @@ router.get(
   ) => {
     try {
       const cpf =
-        getAuthenticatedCpf(req)
+        cpfAplicacao(req)
 
       const idAplicacao =
         Number(req.params.id)
@@ -2321,7 +2358,7 @@ router.post('/aplicacoes/:id/finalizar', async (
   const client = await getPgPool().connect()
 
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idAplicacao = Number(req.params.id)
 
     if (!Number.isInteger(idAplicacao) || idAplicacao <= 0) {
@@ -2331,6 +2368,8 @@ router.post('/aplicacoes/:id/finalizar', async (
     }
 
     await client.query('BEGIN')
+
+    await abrirAuditoria(req,client,'VERIFICACAO')
 
     const aplicacao = await client.query(
       `
@@ -2358,7 +2397,7 @@ router.post('/aplicacoes/:id/finalizar', async (
       })
     }
 
-    if (aplicacao.rows[0].status !== 'EM_ANDAMENTO') {
+    if (aplicacao.rows[0].status !== 'EM_ANDAMENTO' && !atividadeAdmin(req)) {
       await client.query('ROLLBACK')
 
       return res.status(409).json({
@@ -2600,6 +2639,8 @@ router.post('/aplicacoes/:id/finalizar', async (
       ]
     )
 
+    await concluirAuditoria(req,client)
+
     await client.query('COMMIT')
 
     return res.json({
@@ -2629,7 +2670,7 @@ router.get('/pendentes/escolas', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const pool = getPgPool()
 
     const result = await pool.query(
@@ -2709,7 +2750,7 @@ router.get('/pendentes/escolas/:idEscola/etapas', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const idEscola = Number(req.params.idEscola)
 
     if (!Number.isInteger(idEscola) || idEscola <= 0) {
@@ -2796,7 +2837,7 @@ router.get(
     res: Response
   ) => {
     try {
-      const cpf = getAuthenticatedCpf(req)
+      const cpf = cpfAplicacao(req)
 
       const idEscola = Number(req.params.idEscola)
       const idEtapa = Number(req.params.idEtapa)
@@ -2893,7 +2934,7 @@ router.get(
     res: Response
   ) => {
     try {
-      const cpf = getAuthenticatedCpf(req)
+      const cpf = cpfAplicacao(req)
 
       const idEscola = Number(req.params.idEscola)
       const idEtapa = Number(req.params.idEtapa)
@@ -2946,7 +2987,7 @@ router.get(
         ]
       )
 
-      if (atribuicao.rowCount === 0) {
+      if (atribuicao.rowCount === 0 && !atividadeAdmin(req)) {
         return res.status(404).json({
           error:
             'Turma não atribuída a este aplicador'
@@ -3050,7 +3091,7 @@ router.get('/em-andamento', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const pool = getPgPool()
 
     const result = await pool.query(
@@ -3119,7 +3160,7 @@ router.get('/concluidas', async (
   res: Response
 ) => {
   try {
-    const cpf = getAuthenticatedCpf(req)
+    const cpf = cpfAplicacao(req)
     const pool = getPgPool()
 
     const result = await pool.query(

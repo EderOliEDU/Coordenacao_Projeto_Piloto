@@ -1,3 +1,5 @@
+import { atividadeSuperadmin, atividadeAdmin } from '../middleware/atividadeSuperadmin'
+import { registrarEvento } from '../services/auditoriaAtividades'
 import { Router, Response, NextFunction } from 'express'
 import { carregarRelatorioTerceiraAvaliacao } from '../services/relatorioTerceiraAvaliacao'
 import { carregarGraficosAplicador } from '../services/aplicadorGraficos'
@@ -138,6 +140,87 @@ async function getProfessorEmailColumns() {
 }
 
 router.use(authMiddleware)
+
+// Lista responsáveis originais, inclusive registros de vínculos já removidos.
+router.post('/atividades/confirmar', requireSuperadmin, atividadeSuperadmin, async (req: AuthRequest,res: Response) => {
+  try {
+    const admin=atividadeAdmin(req)
+    if(!admin) return res.status(400).json({error:'Informe o responsável, a fase e a confirmação.'})
+    const tipo=req.body?.tipo
+    let turmaId=Number(req.body?.turmaId), alunoId=Number(req.body?.alunoId)
+    const aplicacaoId=req.body?.aplicacaoId == null ? undefined : Number(req.body.aplicacaoId)
+    if(tipo!=='FORMULARIO' && tipo!=='VERIFICACAO') return res.status(400).json({error:'Tipo de atividade inválido.'})
+    if(aplicacaoId!==undefined) {
+      if(tipo!=='VERIFICACAO'||!Number.isSafeInteger(aplicacaoId)||aplicacaoId<=0) return res.status(400).json({error:'Aplicação inválida.'})
+      const app=await getPgPool().query(`SELECT id_turma,id_aluno FROM public.avaliacao_aplicador_aplicacoes
+        WHERE id_aplicacao=$1 AND id_fase=$2 AND cpf_aplicador=$3`,[aplicacaoId,admin.faseId,admin.cpf])
+      if(!app.rowCount) return res.status(404).json({error:'Aplicação não encontrada.'})
+      turmaId=app.rows[0].id_turma;alunoId=app.rows[0].id_aluno
+    }
+    if(![turmaId,alunoId].every(n=>Number.isSafeInteger(n)&&n>0)) return res.status(400).json({error:'Turma ou aluno inválidos.'})
+    const aluno=await getPgPool().query(`SELECT 1 FROM public.enturmacao_aluno ea
+      JOIN public.turmas t USING(id_turma) JOIN public.escolas e USING(id_escola)
+      JOIN public.etapas et ON et.id_etapa=t.id_etapa
+      WHERE ea.id_turma=$1 AND ea.id_aluno=$2 AND e.projeto='PJINSTFONI' AND et.projeto='PJINSTFONI'`,[turmaId,alunoId])
+    if(!aluno.rowCount) return res.status(404).json({error:'Aluno não encontrado na turma.'})
+    await registrarEvento(req,getPgPool(),{tipo,faseId:admin.faseId,turmaId,alunoId,aplicacaoId},'CONFIRMACAO',null,{confirmado:true})
+    return res.json({ok:true})
+  }catch(error){console.error(error);return res.status(500).json({error:'Não foi possível registrar a confirmação. A edição não foi liberada.'})}
+})
+
+router.get('/atividades/auditoria', requireSuperadmin, async(req:AuthRequest,res:Response)=>{
+  res.setHeader('Cache-Control','private, no-store')
+  try {
+    const faseId=Number(req.query.faseId),turmaId=Number(req.query.turmaId)
+    if(![faseId,turmaId].every(n=>Number.isSafeInteger(n)&&n>0)) return res.status(400).json({error:'Selecione fase e turma para consultar o histórico.'})
+    const params:unknown[]=[faseId,turmaId]
+    let filtro='fase_id=$1 AND turma_id=$2'
+    if(req.query.alunoId){
+      const alunoId=Number(req.query.alunoId)
+      if(!Number.isSafeInteger(alunoId)||alunoId<=0)return res.status(400).json({error:'Aluno inválido.'})
+      params.push(alunoId);filtro+=' AND aluno_id=$3'
+    }
+    const result=await getPgPool().query(`SELECT * FROM public.auditoria_atividades WHERE ${filtro}
+      ORDER BY ocorrido_em DESC,id DESC LIMIT 100`,params)
+    return res.json(result.rows)
+  }catch(error){console.error(error);return res.status(500).json({error:'Não foi possível consultar a auditoria.'})}
+})
+
+router.get('/atividades', requireSuperadmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const faseId = Number(req.query.faseId)
+    const turmaId = Number(req.query.turmaId)
+    if (!Number.isSafeInteger(faseId) || faseId <= 0 || !Number.isSafeInteger(turmaId) || turmaId <= 0)
+      return res.status(400).json({error:'Selecione fase e turma.'})
+    const tipo = req.query.tipo === 'verificacao' ? 'verificacao' : 'formulario'
+    const cpf = String(req.professor?.cpf || req.professor?.login || '').replace(/\D/g, '')
+    const pool = getPgPool()
+    const result = tipo === 'formulario'
+      ? await pool.query(`SELECT a.id_aluno::text AS "alunoId", a.nome AS "alunoNome",
+          COALESCE(r.cpf,$3) AS cpf, COALESCE(s.status,'NÃO INICIADO') AS status, NULL::text AS "aplicacaoId"
+        FROM public.enturmacao_aluno ea JOIN public.alunos a USING(id_aluno)
+        JOIN public.turmas t USING(id_turma) JOIN public.escolas e USING(id_escola)
+        JOIN public.etapas et ON et.id_etapa=t.id_etapa
+        LEFT JOIN LATERAL (
+          SELECT cpf_professor::text AS cpf FROM public.atribuicao_professor WHERE id_turma=ea.id_turma
+          UNION SELECT cpf_professor::text FROM public.submissoes_pg WHERE id_turma=ea.id_turma AND id_aluno=ea.id_aluno AND id_fase=$1
+        ) r ON true
+        LEFT JOIN public.submissoes_pg s ON s.id_turma=ea.id_turma AND s.id_aluno=ea.id_aluno AND s.id_fase=$1 AND s.cpf_professor=r.cpf
+        WHERE ea.id_turma=$2 AND e.projeto='PJINSTFONI' AND et.projeto='PJINSTFONI' ORDER BY a.nome,r.cpf`,[faseId,turmaId,cpf])
+      : await pool.query(`SELECT a.id_aluno::text AS "alunoId", a.nome AS "alunoNome",
+          COALESCE(aa.cpf_aplicador,r.cpf,$3) AS cpf, COALESCE(aa.status,'NÃO INICIADO') AS status,
+          aa.id_aplicacao::text AS "aplicacaoId"
+        FROM public.enturmacao_aluno ea JOIN public.alunos a USING(id_aluno)
+        JOIN public.turmas t USING(id_turma) JOIN public.escolas e USING(id_escola)
+        JOIN public.etapas et ON et.id_etapa=t.id_etapa
+        LEFT JOIN public.avaliacao_aplicador_aplicacoes aa ON aa.id_turma=ea.id_turma AND aa.id_aluno=ea.id_aluno AND aa.id_fase=$1
+        LEFT JOIN LATERAL (SELECT DISTINCT cpf_aplicador AS cpf FROM public.avaliacao_aplicador_atribuicoes
+          WHERE id_turma=ea.id_turma AND id_fase=$1 AND ativo) r ON aa.id_aplicacao IS NULL
+        WHERE ea.id_turma=$2 AND e.projeto='PJINSTFONI' AND et.projeto='PJINSTFONI' ORDER BY a.nome`,[faseId,turmaId,cpf])
+    res.json(result.rows)
+  } catch(error) { console.error(error); res.status(500).json({error:'Não foi possível listar as atividades.'}) }
+})
+
 
 router.get('/armazenamento', requireSuperadmin, async (_req: AuthRequest,res: Response) => {
  res.setHeader('Cache-Control','private, no-store')

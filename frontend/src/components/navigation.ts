@@ -30,6 +30,7 @@ export function gruposDoMenu(p: Permissoes): MenuGrupo[] {
     { nome: 'Administrar a coleta', destino: '/admin', icone: 'administracao' },
     { nome: 'Fotos das atividades', destino: '/admin/cronograma/fotos', icone: 'acompanhar' })
   if (p.superadmin === true) parametros.push(
+    { nome: 'Preencher e corrigir atividades', destino: '/superadmin/atividades', icone: 'avaliacao' },
     { nome: 'Configurações e cadastros', destino: '/superadmin', icone: 'administracao' },
     { nome: 'Usuários e permissões', destino: '/superadmin#permissoes', icone: 'permissoes' },
     { nome: 'Fases e períodos', destino: '/superadmin#fases', icone: 'calendario' },

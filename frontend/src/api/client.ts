@@ -1,3 +1,4 @@
+import { headersAtividade } from '../atividadeAdmin'
 import axios from 'axios'
 import { clearSession } from '../session'
 
@@ -6,6 +7,7 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  Object.assign(config.headers, headersAtividade())
   const token = sessionStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   let viewAs: any = null

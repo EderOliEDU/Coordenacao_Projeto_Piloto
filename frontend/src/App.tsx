@@ -1,3 +1,5 @@
+import ConfirmarAtividade from './components/ConfirmarAtividade'
+import AtividadesSuperadminPage, { IniciarAtividadeSuperadmin } from './pages/AtividadesSuperadminPage'
 import CronogramaFotosAdminPage from './pages/CronogramaFotosAdminPage'
 import ArmazenamentoPage from './pages/ArmazenamentoPage'
 import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate } from 'react-router-dom'
@@ -42,7 +44,7 @@ function RequireAplicador({ children }: { children: JSX.Element }) {
   )
 
   const podeAcessar =
-    professor?.permissoes?.aplicador === true
+    professor?.permissoes?.aplicador === true || professor?.permissoes?.superadmin === true
 
   if (!podeAcessar) {
     return <Navigate to="/inicio" replace />
@@ -118,6 +120,8 @@ const router = createBrowserRouter(createRoutesFromElements(
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route path="/admin/cronograma/fotos" element={<RequireAdministrador><CronogramaFotosAdminPage /></RequireAdministrador>} />
         <Route path="/superadmin/armazenamento" element={<RequireSuperadmin><ArmazenamentoPage /></RequireSuperadmin>} />
+        <Route path="/superadmin/atividades" element={<RequireSuperadmin><AtividadesSuperadminPage /></RequireSuperadmin>} />
+        <Route path="/superadmin/atividades/iniciar" element={<RequireSuperadmin><ConfirmarAtividade><IniciarAtividadeSuperadmin /></ConfirmarAtividade></RequireSuperadmin>} />
         <Route path="/logout" element={<EncerrarSessao />} />
         <Route path="/admin/aplicador/relatorio-terceira" element={<RequireAdministrador><AplicadorRelatorioPage /></RequireAdministrador>} />
         <Route path="/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
@@ -219,7 +223,7 @@ const router = createBrowserRouter(createRoutesFromElements(
           path="/turmas/:turmaId/alunos/:alunoId/formulario"
           element={
             <RequireAuth>
-              <FormularioPage />
+              <ConfirmarAtividade><FormularioPage /></ConfirmarAtividade>
             </RequireAuth>
           }
         />
@@ -237,7 +241,7 @@ const router = createBrowserRouter(createRoutesFromElements(
           path="/aplicador/aplicacoes/:id"
           element={
             <RequireAplicador>
-              <AplicadorQuestionarioPage />
+              <ConfirmarAtividade><AplicadorQuestionarioPage /></ConfirmarAtividade>
             </RequireAplicador>
           }
         />

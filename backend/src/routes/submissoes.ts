@@ -1,17 +1,23 @@
+import { abrirAuditoria, concluirAuditoria } from '../services/auditoriaAtividades'
+import { atividadeSuperadmin, atividadeAdmin, cpfAtividade, periodoAtividade } from '../middleware/atividadeSuperadmin'
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, blockViewOnlyWrites, getEffectiveProfessorCpf } from '../middleware/auth'
 import { z } from 'zod'
+import type { PoolClient } from 'pg'
 import { getPgPool } from '../services/pgPool'
 import { getFaseAtual } from '../services/avaliacaoFases'
+import { consultarPeriodoFormulario } from '../services/periodoFormulario'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(atividadeSuperadmin)
 
 const STATUS_RASCUNHO = 'RASCUNHO'
 const STATUS_FINALIZADO = 'FINALIZADO'
 
 const salvarRespostaSchema = z.object({
   formularioId: z.string().min(1),
+  faseId: z.coerce.number().int().positive(),
   escolaId: z.string().min(1).optional(), // recebido do frontend; mantido para compatibilidade
   turmaId: z.string().min(1),
   alunoId: z.string().min(1),
@@ -58,9 +64,9 @@ async function assertTurmaAssignment(cpf: string, turmaId: number) {
 // GET /api/submissoes?turmaId=&alunoId=
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = getEffectiveProfessorCpf(req)
+    const cpf = cpfAtividade(req)
     const { turmaId, alunoId, faseId } = req.query as { turmaId?: string; alunoId?: string; faseId?: string }
-    const faseAtual = faseId ? { id: Number(faseId) } : await getFaseAtual()
+    const faseAtual = atividadeAdmin(req) ? { id: atividadeAdmin(req)!.faseId } : faseId ? { id: Number(faseId) } : await getFaseAtual()
 
     const where: string[] = [
       `s.cpf_professor = $1`,
@@ -98,7 +104,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 // GET /api/submissoes/:id
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const cpf = getEffectiveProfessorCpf(req)
+    const cpf = cpfAtividade(req)
     const subId = Number(req.params.id)
     const pool = getPgPool()
 
@@ -150,24 +156,42 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Response) => {
   const parsed = salvarRespostaSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Payload inválido', detalhes: parsed.error.flatten() })
+    return res.status(400).json({ error: req.body?.faseId ? 'Payload inválido' : 'Atualize a página para confirmar a fase antes de salvar o formulário.', detalhes: parsed.error.flatten() })
   }
 
+  let client: PoolClient | undefined
   try {
-    const cpf = getEffectiveProfessorCpf(req)
-    const { formularioId, turmaId, alunoId, respostas, observacoes, status, necessidadesEspecificas } = parsed.data
+    const cpf = cpfAtividade(req)
+    const { formularioId, faseId, turmaId, alunoId, respostas, observacoes, status, necessidadesEspecificas } = parsed.data
     const turmaIdNum = Number(turmaId)
     const alunoIdNum = Number(alunoId)
     const targetStatus = status || STATUS_RASCUNHO
-    const faseAtual = await getFaseAtual()
-
     const ok = await assertTurmaAssignment(cpf, turmaIdNum)
-    if (!ok) return res.status(403).json({ error: 'Acesso negado a esta turma' })
+    if (!ok && !atividadeAdmin(req)) return res.status(403).json({ error: 'Acesso negado a esta turma' })
 
     const pool = getPgPool()
+    const alunoValido = await pool.query(`SELECT 1 FROM public.enturmacao_aluno ea
+      JOIN public.turmas t USING(id_turma) JOIN public.escolas e USING(id_escola)
+      JOIN public.etapas et ON et.id_etapa=t.id_etapa
+      WHERE ea.id_turma=$1 AND ea.id_aluno=$2 AND e.projeto='PJINSTFONI' AND et.projeto='PJINSTFONI'`,[turmaIdNum,alunoIdNum])
+    if(!alunoValido.rowCount) return res.status(400).json({error:'Aluno não pertence a uma turma válida do projeto.'})
+
+    client=await pool.connect()
+    await client.query('BEGIN')
+    await abrirAuditoria(req,client,'FORMULARIO')
+    const periodo=await periodoAtividade(req,client,true)
+    if(!periodo.aberto){
+      await client.query('ROLLBACK')
+      return res.status(423).json({code:'PERIODO_FECHADO',error:periodo.mensagem})
+    }
+    if(faseId!==periodo.fase.id){
+      await client.query('ROLLBACK')
+      return res.status(409).json({code:'FASE_ALTERADA',error:'A fase de preenchimento mudou. Atualize a página antes de responder ao formulário.'})
+    }
+    const faseAtual=periodo.fase
 
     // upsert submissao metadata
-    const upsert = await pool.query(
+    const upsert = await client.query(
       `
       INSERT INTO public.submissoes_pg (cpf_professor, id_turma, id_aluno, formulario_id, status, observacoes, id_fase)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -185,14 +209,13 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
 
     if (respostas && Array.isArray(respostas)) {
       // mantém 1 resposta por pergunta por professor+aluno (escopo simples)
-      await pool.query('BEGIN')
-      try {
+      {
         for (const r of respostas) {
           const perguntaId = Number(r.perguntaId)
           const opcaoId = Number(r.opcaoEscalaId)
 
           // apaga resposta anterior dessa pergunta
-          await pool.query(
+          await client.query(
             `DELETE FROM public.avaliacao_respostas
              WHERE cpf_professor = $1
                AND id_aluno = $2
@@ -202,16 +225,12 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
             [cpf, alunoIdNum, turmaIdNum, perguntaId, faseAtual.id]
           )
 
-          await pool.query(
+          await client.query(
             `INSERT INTO public.avaliacao_respostas (id_aluno, id_turma, cpf_professor, id_pergunta, id_opcao, status, observacao, id_fase)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [alunoIdNum, turmaIdNum, cpf, perguntaId, opcaoId, targetStatus, observacoes || null, faseAtual.id]
           )
         }
-        await pool.query('COMMIT')
-      } catch (e) {
-        await pool.query('ROLLBACK')
-        throw e
       }
     }
 
@@ -220,9 +239,8 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
       const selecionadas = necessidadesEspecificas.selecionadas || []
       const descricaoOutros = (necessidadesEspecificas.descricaoOutros || '').trim()
 
-      await pool.query('BEGIN')
-      try {
-        await pool.query(
+      {
+        await client.query(
           `
           INSERT INTO public.aluno_necessidades_contexto (
             id_aluno,
@@ -252,7 +270,7 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
           ]
         )
 
-        await pool.query(
+        await client.query(
           `
           DELETE FROM public.aluno_necessidades_especificas
           WHERE id_aluno = $1
@@ -264,7 +282,7 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
         )
 
         for (const necessidadeId of selecionadas) {
-          await pool.query(
+          await client.query(
             `
             INSERT INTO public.aluno_necessidades_especificas (
               id_aluno,
@@ -281,7 +299,7 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
         }
 
         if (descricaoOutros && tipo === 'APOIO') {
-          await pool.query(
+          await client.query(
             `
             INSERT INTO public.aluno_necessidades_especificas (
               id_aluno,
@@ -298,17 +316,24 @@ router.post('/respostas', blockViewOnlyWrites, async (req: AuthRequest, res: Res
           )
         }
 
-        await pool.query('COMMIT')
-      } catch (e) {
-        await pool.query('ROLLBACK')
-        throw e
       }
     }
 
+    // Revalida também antes de concluir: uma requisição não pode atravessar o fechamento do prazo.
+    const conclusao=await periodoAtividade(req,client)
+    if(!conclusao.aberto||conclusao.fase.id!==faseAtual.id){
+      await client.query('ROLLBACK')
+      return res.status(423).json({code:'PERIODO_FECHADO',error:'O prazo de preenchimento encerrou ou a fase mudou durante a gravação. Nenhuma alteração foi salva.'})
+    }
+    await concluirAuditoria(req,client)
+    await client.query('COMMIT')
     return res.json({ id: subId, status: targetStatus })
   } catch (err) {
+    if(client)await client.query('ROLLBACK').catch(()=>{})
     console.error(err)
     return res.status(500).json({ error: 'Erro ao salvar' })
+  } finally {
+    client?.release()
   }
 })
 
