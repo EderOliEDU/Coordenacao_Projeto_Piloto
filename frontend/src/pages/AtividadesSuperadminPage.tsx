@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import { agruparAtividades, chaveRegistro, type RegistroAtividade } from '../atividadesSuperadmin'
 
-type Item={alunoId:string;alunoNome:string;cpf:string;status:string;aplicacaoId:string|null}
+type Item = RegistroAtividade
 export default function AtividadesSuperadminPage() {
   const navigate=useNavigate()
   const [fases,setFases]=useState<any[]>([]), [turmas,setTurmas]=useState<any[]>([])
   const [fase,setFase]=useState(''), [turma,setTurma]=useState(''), [tipo,setTipo]=useState('formulario')
   const [historico,setHistorico]=useState(false)
+  const [selecionados,setSelecionados]=useState<Record<string,string>>({})
   const [itens,setItens]=useState<Item[]>([]), [erro,setErro]=useState(''), [loading,setLoading]=useState(false)
   useEffect(()=>{Promise.all([api.get('/superadmin/avaliacao-fases'),api.get('/turmas')]).then(([f,t])=>{setFases(f.data);setTurmas(t.data)}).catch(()=>setErro('Não foi possível carregar fases e turmas. Saia do modo conferência, se estiver ativo.'))},[])
   useEffect(()=>{
-    setItens([]);setHistorico(false)
+    setItens([]);setHistorico(false);setSelecionados({})
     if(!fase||!turma)return
     const controller=new AbortController()
     setLoading(true);setErro('')
@@ -28,12 +30,31 @@ export default function AtividadesSuperadminPage() {
   }
   return <section className="section-card"><h1>Preencher e corrigir atividades</h1>
     <p>Selecione uma atividade. Antes de abrir a edição, será solicitada a confirmação do superadministrador.</p>
+    <p>Cada aluno aparece uma vez. Se houver mais de um responsável ou registro, selecione qual deseja preencher ou corrigir.</p>
     <label>Atividade <select value={tipo} onChange={e=>setTipo(e.target.value)}><option value="formulario">Formulário</option><option value="verificacao">Verificação</option></select></label>{' '}
     <label>Fase <select value={fase} onChange={e=>setFase(e.target.value)}><option value="">Selecione</option>{fases.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</select></label>{' '}
     <label>Turma <select value={turma} onChange={e=>setTurma(e.target.value)}><option value="">Selecione</option>{turmas.map(t=><option key={t.id} value={t.id}>{t.escola.nome} · {t.nome} · {t.turno}</option>)}</select></label>
     {erro&&<p role="alert">{erro}</p>}{loading&&<p>Carregando...</p>}
     <table><thead><tr><th>Aluno</th><th>CPF do responsável</th><th>Situação</th><th>Ação</th></tr></thead>
-    <tbody>{itens.map((item,i)=><tr key={i}><td>{item.alunoNome}</td><td>{item.cpf}</td><td>{item.status}</td><td><button onClick={()=>abrir(item)}>Preencher / corrigir</button></td></tr>)}</tbody></table>
+    <tbody>{agruparAtividades(itens).map(aluno=>{
+      const registro=aluno.registros.length===1 ? aluno.registros[0]
+        : aluno.registros.find(item=>chaveRegistro(item)===selecionados[aluno.alunoId])
+      return <tr key={aluno.alunoId}>
+        <td>{aluno.alunoNome}</td>
+        <td>{aluno.registros.length===1 ? registro?.cpf :
+          <select aria-label={`Responsável pelo registro de ${aluno.alunoNome}`}
+            value={selecionados[aluno.alunoId]||''}
+            onChange={e=>setSelecionados(atuais=>({...atuais,[aluno.alunoId]:e.target.value}))}>
+            <option value="">Selecione o responsável / registro</option>
+            {aluno.registros.map(item=><option key={chaveRegistro(item)} value={chaveRegistro(item)}>
+              {item.cpf} · {item.status}{item.aplicacaoId ? ` · Registro ${item.aplicacaoId}` : ''}
+            </option>)}
+          </select>}
+        </td>
+        <td>{registro?.status||'Selecione um registro'}</td>
+        <td><button disabled={!registro} onClick={()=>{if(registro)abrir(registro)}}>Preencher / corrigir</button></td>
+      </tr>
+    })}</tbody></table>
     <p><button disabled={!fase||!turma} onClick={()=>setHistorico(v=>!v)}>{historico?'Fechar histórico':'Consultar histórico de alterações e confirmações'}</button></p>
     {historico&&<HistoricoAtividades key={fase+':'+turma} fase={fase} turma={turma}/>}
   </section>
