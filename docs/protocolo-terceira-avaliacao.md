@@ -21,7 +21,7 @@ Uma única aplicação concluída por criança no período. Quando há mais de u
 
 A redação é determinística: a mesma entrada gera o mesmo texto e os mesmos cálculos. O sistema não chama modelo de IA nem envia dados a terceiros para criar os relatórios. A função de cálculo não atribui nota geral, diagnóstico, prontidão ou evolução.
 
-## Estrutura da devolutiva
+## Estrutura do relatório exportado
 
 1. Identificação do protocolo e versão, recorte, base e data de geração.
 2. Regras de cálculo e interpretação.
@@ -31,7 +31,7 @@ A redação é determinística: a mesma entrada gera o mesmo texto e os mesmos c
 6. Itens com dados insuficientes, em quantidade e base.
 7. Síntese de limites para a transição ao Ensino Fundamental.
 
-O texto pode ser baixado em TXT ou impresso/salvo como PDF pelo navegador. Metadados de protocolo e recorte acompanham a exportação. O relatório não é salvo como registro imutável no banco: baixar o arquivo preserva o resultado daquela geração; nova consulta pode refletir novos dados. Mudanças futuras de regra exigem versionar o protocolo e seus testes.
+O texto completo pode ser baixado em TXT. A tela organizada por tópicos pode ser impressa/salva como PDF pelo navegador. Metadados de protocolo e recorte acompanham a exportação. O relatório não é salvo como registro imutável no banco: baixar o arquivo preserva o resultado daquela geração; nova consulta pode refletir novos dados. Mudanças futuras de regra exigem versionar o protocolo e seus testes.
 
 ## Verificação
 
@@ -51,14 +51,29 @@ Publicado em 20/10/2026 em https://172.17.2.42:5173/admin/aplicador/relatorio-te
 
 ## Visualização por item
 
-Cada item Q1–Q9 possui gráfico de pizza à direita do texto, com legenda e percentuais sobre respostas válidas. O gráfico usa as contagens e os percentuais do protocolo, sem recalcular a avaliação. Ausências ficam no texto de cobertura; sem respostas válidas, exibe “Sem dados”. No celular, o gráfico passa para baixo do texto. SVG permite impressão/PDF e inclui descrição acessível por item. Categorias pequenas permanecem identificadas na legenda, mesmo quando o percentual não cabe na fatia. Nenhuma alteração nos dados ou nas regras do protocolo.
+As questões Q1–Q5 mantêm gráficos de pizza individuais na janela de detalhamento. Na tela principal, Q1–Q5 aparecem compiladas em barras; Q6, Q7 e Q8 têm pizzas próprias e Q9 reúne as classificações por palavra, com legenda e percentuais sobre registros válidos. O gráfico usa as contagens e os percentuais do protocolo, sem recalcular a avaliação. Ausências ficam no texto de cobertura; sem respostas válidas, exibe “Sem dados”. No celular, o gráfico passa para baixo do texto. SVG permite impressão/PDF e inclui descrição acessível por item. Categorias pequenas permanecem identificadas na legenda, mesmo quando o percentual não cabe na fatia. Nenhuma alteração nos dados ou nas regras do protocolo.
 
 ## Filtro por turma
 
 O relatório permite `escolaId` e `turmaId`. Primeiro seleciona-se a escola, depois uma turma com aplicações registradas na terceira fase. A opção “Todas as turmas” mantém a análise da escola. Trocar de escola limpa a turma. A API valida que a turma pertence à escola e possui aplicações no período; turma sem escola é rejeitada. A regra de uma aplicação por criança é aplicada antes dos filtros. A turma selecionada acompanha o cabeçalho, texto baixado e impressão/PDF, e restringe todos os cálculos e pizzas. Uma turma sem concluídas recebe o estado sem dados. A API não permite trocar o período do protocolo.
 
-A seção “Habilidades demonstradas” apresenta somente a síntese textual. Os gráficos de pizza ficam na análise completa “Resultados por habilidade — Q1 a Q9”, evitando repetição visual.
+A síntese “Habilidades demonstradas” permanece no relatório TXT. A tela principal apresenta os cinco tópicos, evitando repetir a análise de cada item fora de sua seção ou janela de detalhamento.
 
 ### Detalhamento da Q7 no relatório
 
 A tabela cruza o tipo de nome registrado (só o nome, nome composto ou nome completo) com a realização com apoio ou sem apoio. Registros sem tipo informado ficam em uma linha própria, sem inferir o tipo de escrita. A quantidade que não escreveu e a ausência de resposta permanecem distintas. O detalhamento acompanha os filtros do relatório e consta também no arquivo de texto e na impressão.
+
+
+## Interface por tópicos — 06/11/2026
+
+O título “Protocolo de Análise da Terceira Avaliação” aparece antes dos filtros. A tela principal reúne cinco tópicos: Consciência Fonológica (Q1–Q5), Fases da escrita (Q8), Fases da Leitura (Q9), Nome (Q7, gráfico e tabela de tipo/apoio) e Diferenciação Letras × Números (Q6). As regras ficam recolhidas em “Sobre o protocolo e os cálculos”.
+
+Consciência Fonológica apresenta um único gráfico de barras com uma linha por questão, calculada sobre os registros válidos de cada questão. Q2 reúne as cinco vogais; Q5 utiliza somente o resultado geral, sem somar novamente os detalhes por consoante. Ausências continuam separadas. Não se calcula uma nota global a partir dessas bases diferentes.
+
+“Ver questões 1 a 5 separadamente” abre uma janela modal com as análises anteriores, incluindo todas as vogais e consoantes. A janela mantém o recorte de escola/turma, permite fechar pelo botão ou Escape e usa o comportamento de foco do diálogo nativo do navegador.
+
+O gráfico de leitura reúne as classificações registradas por palavra. Seu denominador é o número de registros válidos de leitura, não o número de crianças; uma criança pode contribuir com várias palavras. As classificações originais são preservadas, sem atribuir nova fase global à criança. “Não respondeu” e registro ausente permanecem distintos.
+
+A exportação TXT mantém o relatório completo e suas sínteses. A impressão da tela principal segue os tópicos; com a janela de detalhamento aberta, imprime seu conteúdo. A organização visual não modifica os dados nem as regras do protocolo.
+
+Testes da compilação visual: `node frontend/tests/relatorioTerceira.test.cjs`. Cobrem soma de vogais, exclusão da duplicação de Q5, categorias de leitura, denominadores e ausência de respostas. Os testes existentes do protocolo permanecem válidos.

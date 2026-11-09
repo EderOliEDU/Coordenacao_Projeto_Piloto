@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import ResultadoPizza from '../components/ResultadoPizza'
 import './AplicadorGraficosPage.css'
 
-interface Linha { item: string; habilidade: string; base: number; avaliadas: number; ausentes: number;
-  detalhesNome?: { tipo: string; semApoio: number; comApoio: number; total: number }[];
-  resultados: { codigo: string; descricao: string; n: number; percentual: number | null }[]; interpretacao: string; limite: string }
+import { compilarConscienciaFonologica, compilarResultados, type LinhaRelatorio as Linha } from '../relatorioTerceira'
+import './AplicadorRelatorioPage.css'
+
 interface Relatorio {
   protocolo: { titulo: string; codigo: string; versao: string; regras: string[] }; base: number; linhas: Linha[];
   sintese: { demonstradas: string[]; continuidade: string[]; semDados: string[] }; conclusao: string;
@@ -19,9 +19,15 @@ export default function AplicadorRelatorioPage() {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
   const [revisao, setRevisao] = useState(0)
+  const [detalhes,setDetalhes]=useState(false)
+  const dialog=useRef<HTMLDialogElement>(null)
+  useEffect(()=>{
+    if(detalhes&&!dialog.current?.open)dialog.current?.showModal()
+    if(!detalhes&&dialog.current?.open)dialog.current.close()
+  },[detalhes])
   const query = params.toString()
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setErro('')
+    const controller = new AbortController(); setLoading(true); setErro('');setDetalhes(false)
     api.get<Relatorio>(`/superadmin/aplicador/relatorio-terceira?${query}`, { signal: controller.signal })
       .then(r => { if (!controller.signal.aborted) setDados(r.data) })
       .catch(e => { if (!controller.signal.aborted) setErro(e.response?.data?.error || 'Erro ao gerar relatório.') })
@@ -43,7 +49,7 @@ export default function AplicadorRelatorioPage() {
     const a = document.createElement('a'); a.href = url; a.download = `relatorio-terceira-avaliacao-v1${d.filtros.turmaId ? `-turma-${d.filtros.turmaId}` : ''}.txt`; a.click(); URL.revokeObjectURL(url)
   }
   return <div className="ag-page">
-    <div className="ag-heading"><div><h1>Relatório padronizado da terceira avaliação</h1><p>Resultados dos aplicadores e continuidade pedagógica na transição para o Ensino Fundamental.</p></div><Link to="/admin/aplicador/graficos?faseId=3">Ver gráficos</Link></div>
+    <div className="ag-heading"><div><h1>Protocolo de Análise da Terceira Avaliação</h1><p>Resultados dos aplicadores e continuidade pedagógica na transição para o Ensino Fundamental.</p></div><Link to="/admin/aplicador/graficos?faseId=3">Ver gráficos</Link></div>
     <div className="ag-filtros"><label>Escola<select disabled={loading} value={params.get('escolaId') || ''} onChange={e => setParams(e.target.value ? { escolaId: e.target.value } : {})}>
       <option value="">Todas as escolas</option>{d?.filtros.escolas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}</select></label>
       <label>Turma<select disabled={loading || !params.get('escolaId')} value={params.get('turmaId') || ''} onChange={e => {
@@ -57,30 +63,70 @@ export default function AplicadorRelatorioPage() {
       <button disabled={loading || !!erro || !d} onClick={() => window.print()}>Imprimir / PDF</button></div>
     {loading && <p role="status">Gerando o relatório…</p>}{erro && <p role="alert">{erro}</p>}
     {!loading && !erro && d && <>
-      <section className="ag-card"><h2>{d.protocolo.titulo}</h2><p>{d.protocolo.codigo} · versão {d.protocolo.versao}</p>
-        <p>Período: {d.filtros.fases.find(f => f.id === d.filtros.faseId)?.nome} · {escola} · {turma}<br />{d.base} crianças com aplicação concluída · Gerado em {new Date(d.geradoEm).toLocaleString('pt-BR')}</p>
-        <h3>Regras de cálculo e interpretação</h3><ul>{d.protocolo.regras.map(r => <li key={r}>{r}</li>)}</ul></section>
-      {!d.base ? <p className="ag-card">{d.conclusao}</p> : <>
-        <section className="ag-card"><h2>Resultados por habilidade — Q1 a Q9</h2><p>Percentuais sobre respostas válidas de cada item. A ausência de resultado é informada separadamente.</p>
-          {d.linhas.map(l => <article className="ar-item" key={l.item}><div className="ar-item-text"><h3>{l.item} — {l.habilidade}</h3>
-            <p>Avaliadas: {l.avaliadas} de {l.base} · Sem resultado registrado: {l.ausentes}</p>
-            <p>{l.interpretacao}</p>
-            {l.detalhesNome && <><h4>Escrita do nome por tipo e apoio</h4>
-              <div className="ag-scroll"><table><caption>Quantidade de crianças por tipo de nome registrado</caption>
-                <thead><tr><th scope="col">Tipo de nome</th><th scope="col">Sem apoio</th><th scope="col">Com apoio</th><th scope="col">Total</th></tr></thead>
-                <tbody>{l.detalhesNome.map(r => <tr key={r.tipo}><th scope="row">{r.tipo}</th><td>{r.semApoio}</td><td>{r.comApoio}</td><td>{r.total}</td></tr>)}</tbody>
-              </table></div>
-              <p>Não escreveram o nome: {l.resultados.find(r => r.codigo === 'NAO_ESCREVE')?.n ?? 0} crianças.</p>
-              <p><small>O tipo de nome é apresentado conforme registrado pelo aplicador. A falta desse detalhe não significa que a criança não escreveu.</small></p>
-            </>}
-            <p><small>Limite da conclusão: {l.limite}</small></p></div><ResultadoPizza item={l.item} avaliadas={l.avaliadas} resultados={l.resultados} /></article>)}</section>
-        <section className="ag-card"><h2>Habilidades demonstradas</h2>
-          {d.sintese.demonstradas.length ? <ul>{d.sintese.demonstradas.map(texto => <li key={texto}>{texto}</li>)}</ul> : <p>Nenhum apontamento neste recorte.</p>}
+      <p className="ag-context">{d.filtros.fases.find(f=>f.id===d.filtros.faseId)?.nome} · {escola} · {turma} · {d.base} crianças com aplicação concluída</p>
+      <details className="ar-metodo"><summary>Sobre o protocolo e os cálculos</summary>
+        <p>{d.protocolo.codigo} · versão {d.protocolo.versao} · Gerado em {new Date(d.geradoEm).toLocaleString('pt-BR',{timeZone:'America/Cuiaba'})}</p>
+        <ul>{d.protocolo.regras.map(r=><li key={r}>{r}</li>)}</ul>
+      </details>
+      {!d.base ? <p className="ag-card">{d.conclusao}</p> : <div className="ar-topicos">
+        <section className="ag-card ar-topico" aria-labelledby="topico-consciencia">
+          <header><span className="ar-etiqueta">Q1 a Q5</span><h2 id="topico-consciencia">Consciência Fonológica</h2><p>Compilação das respostas registradas nas cinco questões.</p></header>
+          <GraficoConsciencia linhas={compilarConscienciaFonologica(d.linhas)}/>
+          <button className="ar-detalhar" onClick={()=>setDetalhes(true)}>Ver questões 1 a 5 separadamente</button>
         </section>
-        {([['Necessidades de continuidade pedagógica', d.sintese.continuidade], ['Habilidades com dados insuficientes', d.sintese.semDados]] as const).map(([titulo, linhas]) =>
-          <section className="ag-card" key={titulo}><h2>{titulo}</h2>{linhas.length ? <ul>{linhas.map(l => <li key={l}>{l}</li>)}</ul> : <p>Nenhum apontamento neste recorte.</p>}</section>)}
-        <section className="ag-card"><h2>Síntese para a transição ao Ensino Fundamental</h2><p>{d.conclusao}</p></section>
-      </>}
+        <section className="ag-card ar-topico" aria-labelledby="topico-escrita">
+          <header><span className="ar-etiqueta">Q8</span><h2 id="topico-escrita">Fases da escrita</h2></header><ResultadoTopico linha={d.linhas.find(l=>l.item==='Q8')}/>
+        </section>
+        <section className="ag-card ar-topico" aria-labelledby="topico-leitura">
+          <header><span className="ar-etiqueta">Q9</span><h2 id="topico-leitura">Fases da Leitura</h2></header>
+          <ResultadoTopico linha={compilarResultados(d.linhas.filter(l=>l.item.startsWith('Q9-')),'Q9','Leitura por palavra')} leitura/>
+        </section>
+        <section className="ag-card ar-topico" aria-labelledby="topico-nome">
+          <header><span className="ar-etiqueta">Q7</span><h2 id="topico-nome">Nome</h2></header><ResultadoTopico linha={d.linhas.find(l=>l.item==='Q7')} nome/>
+        </section>
+        <section className="ag-card ar-topico" aria-labelledby="topico-diferenciacao">
+          <header><span className="ar-etiqueta">Q6</span><h2 id="topico-diferenciacao">Diferenciação Letras × Números</h2></header><ResultadoTopico linha={d.linhas.find(l=>l.item==='Q6')}/>
+        </section>
+      </div>}
+      <dialog ref={dialog} className="ar-detail-dialog" aria-labelledby="titulo-detalhes-fonologicos" onClose={()=>setDetalhes(false)}>
+        <header className="ar-dialog-heading"><div><h2 id="titulo-detalhes-fonologicos">Consciência Fonológica — questões 1 a 5</h2><p>{escola} · {turma} · {d.base} crianças com aplicação concluída</p></div>
+          <button onClick={()=>dialog.current?.close()} aria-label="Fechar detalhamento">Fechar</button></header>
+        <p>Resultados separados por questão, vogal e consoante, com os mesmos filtros do relatório.</p>
+        {d.linhas.filter(l=>/^Q[1-5](?:-|$)/.test(l.item)).map(l=><article className="ar-item" key={l.item}>
+          <div className="ar-item-text"><h3>{l.item} — {l.habilidade}</h3><p>Avaliadas: {l.avaliadas} de {l.base} · Sem resultado registrado: {l.ausentes}</p>
+            <p>{l.interpretacao}</p><p><small>Limite da conclusão: {l.limite}</small></p></div>
+          <ResultadoPizza item={l.item} avaliadas={l.avaliadas} resultados={l.resultados}/>
+        </article>)}
+      </dialog>
     </>}
   </div>
+}
+
+function GraficoConsciencia({linhas}:{linhas:Linha[]}) {
+  const percentual=(n:number,base:number)=>base?(n/base*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'—'
+  return <figure className="ar-compilacao"><figcaption>Percentuais sobre as respostas válidas de cada questão</figcaption>
+    <div className="ar-legenda"><span><i className="ar-sim"/>Demonstrou</span><span><i className="ar-nao"/>Não demonstrou</span></div>
+    {linhas.map(l=>{
+      const sim=l.resultados.find(r=>r.codigo==='SIM')?.n||0,nao=l.resultados.find(r=>r.codigo==='NAO')?.n||0
+      return <div className="ar-compilacao-linha" key={l.item}>
+        <div><strong>{l.item} · {l.habilidade}</strong><small>{l.avaliadas} {l.item==='Q2'?(l.avaliadas===1?'resposta por vogal':'respostas por vogal'):(l.avaliadas===1?'resposta válida':'respostas válidas')} · {l.ausentes} sem registro</small></div>
+        <div><div className="ar-barra-composta" role="img" aria-label={`${l.item}: demonstrou ${sim} (${percentual(sim,l.avaliadas)}); não demonstrou ${nao} (${percentual(nao,l.avaliadas)}); sem registro ${l.ausentes}`}>
+          {l.avaliadas?<><span className="ar-sim" style={{width:`${sim/l.avaliadas*100}%`}}/><span className="ar-nao" style={{width:`${nao/l.avaliadas*100}%`}}/></>:<span className="ar-sem-dados">Sem dados</span>}
+        </div><small>Demonstrou: {sim} ({percentual(sim,l.avaliadas)}) · Não demonstrou: {nao} ({percentual(nao,l.avaliadas)})</small></div>
+      </div>
+    })}
+    <p>Q2 reúne os registros por vogal. As demais questões representam respostas por criança. Os percentuais são calculados separadamente; registros ausentes não são tratados como erros.</p>
+  </figure>
+}
+function ResultadoTopico({linha,nome=false,leitura=false}:{linha:Linha|undefined;nome?:boolean;leitura?:boolean}) {
+  if(!linha)return <p>Não há resultados disponíveis para esta questão.</p>
+  return <div className="ar-item"><div className="ar-item-text"><h3>{linha.habilidade}</h3>
+    {leitura?<><p>{linha.avaliadas} {linha.avaliadas===1?'registro válido de leitura':'registros válidos de leitura'} · {linha.ausentes} sem registro.</p><p>Compilação das classificações por palavra. Cada criança pode contribuir com mais de um registro; o gráfico não atribui uma fase global de leitura à criança.</p></>:
+      <><p>Avaliadas: {linha.avaliadas} de {linha.base} · Sem resultado registrado: {linha.ausentes}</p></>}
+    {nome&&linha.detalhesNome&&<><div className="ag-scroll"><table><caption>Escrita do nome por tipo e apoio</caption>
+      <thead><tr><th scope="col">Tipo de nome</th><th scope="col">Sem apoio</th><th scope="col">Com apoio</th><th scope="col">Total</th></tr></thead>
+      <tbody>{linha.detalhesNome.map(r=><tr key={r.tipo}><th scope="row">{r.tipo}</th><td>{r.semApoio}</td><td>{r.comApoio}</td><td>{r.total}</td></tr>)}</tbody>
+    </table></div><p>Não escreveram o nome: {linha.resultados.find(r=>r.codigo==='NAO_ESCREVE')?.n??0} crianças.</p><p><small>O tipo de nome é apresentado conforme registrado pelo aplicador. A falta desse detalhe não significa que a criança não escreveu.</small></p></>}
+    {!leitura&&<p><small>Limite da conclusão: {linha.limite}</small></p>}
+  </div><ResultadoPizza item={linha.item} avaliadas={linha.avaliadas} resultados={linha.resultados} unidade={leitura?(linha.avaliadas===1?'registro válido de leitura':'registros válidos de leitura'):undefined}/></div>
 }
