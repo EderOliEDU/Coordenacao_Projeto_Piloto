@@ -1,0 +1,6 @@
+# Cálculos dos cinco painéis — 17/11/2026
+
+Escopo: Consciência Fonológica, Fases da escrita, Fases da Leitura, Nome completo sem apoio, Diferenciação Letras × Números.
+Consciência: calcula média Q1–Q5 disponíveis por criança, pesos iguais; Q2 acertos/vogais registradas, sem exigir cinco. Agrega por quantidade de crianças participantes. Ausência não vira zero e não exclui respostas válidas em outras tarefas. A média de referência considera números avaliados de cada turma/escola. Metadado conscienciaParticipantesTurmas separado dos escores completos existentes.
+Escrita, nome e letras/números: categorias divididas pelos respectivos registros válidos. Leitura: categoria dividida pelos registros válidos por palavra, não crianças. Esses quatro já usavam denominadores válidos e médias proporcionais; regras preservadas. Sem cobertura mínima. Quantidades avaliadas visíveis nos painéis.
+Índice Desempenho das turmas em aprendizagem alfabética: permanece APRENDIZAGEM-ALFABETICA-Q1Q9-V2. Coorte completa e pesos 5/5/5/5/10/2/10/23/35 preservados; referência aritmética entre índices das turmas preservada. Nenhuma alteração às respostas nem migração de dados. Painel de práticas para compartilhamento não criado.

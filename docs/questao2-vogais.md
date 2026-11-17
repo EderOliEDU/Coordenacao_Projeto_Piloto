@@ -35,3 +35,8 @@ Executar o build do backend antes de `node --test backend/tests/vogais.integrati
 Para testar pela tela: iniciar uma nova avaliação e conferir que apenas A aparece. Responder SIM ou NÃO, conferir a liberação de E e repetir. Recarregar e conferir persistência. Avaliar as cinco antes de finalizar. Abrir uma avaliação antiga concluída e conferir a resposta histórica e a edição bloqueada. Os testes de apresentação ficam em `frontend/tests/vogais.test.cjs`.
 
 Antes de uma futura publicação em produção, fazer backup próprio, executar a migração com `psql -v ON_ERROR_STOP=1`, conceder os privilégios necessários à conta da aplicação nas novas tabela e view e publicar backend/frontend correspondentes. Reverter apenas o código antigo após novas respostas exigiria tratar essas respostas: o formato genérico não representa cinco vogais.
+
+
+## Regra de desempenho confirmada em 17/11/2026
+
+Aplica-se a todos os cálculos de Q2 dos relatórios e índices, incluindo Q1–Q5 e Q1–Q9: TRUE é resposta válida correta; FALSE é resposta válida incorreta; NULL é resposta não válida. Desempenho = TRUE/(TRUE+FALSE). Uma resposta válida correta vale 100%, independentemente da quantidade não apresentada. Todas NULL: sem dados. Não se exige cinco vogais respondidas para incluir Q2 nos índices. Cobertura é metadado separado, não reduz o desempenho. Pesos e demais critérios dos índices permanecem iguais. Esta regra substitui as exigências de cinco resultados para cálculo descritas posteriormente nos documentos dos índices. Regras de finalização por versão continuam preservadas, assim como os registros históricos.

@@ -81,7 +81,7 @@ export default function AppLayout() {
       aria-label={rotulo} aria-current={ativo ? 'page' : undefined} title={compacto ? rotulo : undefined}>
       <Icone nome={link.icone} /><span className="pif-label">{link.nome}</span></Link>
   }
-  return <div className={`pif-layout${compacto ? ' pif-compacto' : ''}`}>
+  return <div className={`pif-layout${compacto ? ' pif-compacto' : ''}${location.pathname === '/admin/aplicador/relatorio-terceira' ? ' pif-dashboard-theme' : ''}`}>
     <a href="#conteudo-principal" className="pif-skip">Ir para o conteúdo</a>
     {mobile && aberto && <button className="pif-overlay" type="button" tabIndex={-1} aria-label="Fechar menu" onClick={() => setAberto(false)} />}
     <aside id="menu-lateral" ref={asideRef} className="pif-sidebar" hidden={mobile && !aberto} onKeyDown={teclado}

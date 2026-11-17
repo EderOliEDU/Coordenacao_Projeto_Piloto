@@ -25,3 +25,27 @@ test('sem respostas não inventa percentuais e não transforma ausência em erro
  assert.equal(r.avaliadas,0);assert.equal(r.ausentes,4);assert.ok(r.resultados.every(r=>r.percentual===null))
  assert.deepEqual(compilarResultados([],'Q9','Leitura').resultados,[])
 })
+
+test('índice mostra cobertura e distingue zero de ausência de avaliações completas',()=>{
+ const {textoIndiceQ1Q5:f}=modulo.exports
+ assert.match(f({media:72,completas:18,base:22}),/72\/100.*18 de 22/)
+ assert.match(f({media:0,completas:1,base:2}),/0\/100/)
+ assert.match(f({media:null,completas:0,base:2}),/sem avaliações completas.*0 de 2/)
+})
+
+test('referência pondera crianças completas, ignora ausências e preserva zero',()=>{
+ const {referenciasEscolas:f}=modulo.exports
+ assert.deepEqual(f([{media:80,completas:3},{media:40,completas:1},{media:null,completas:0}]),{media:70,maior:80,menor:40})
+ assert.deepEqual(f([{media:0,completas:1}]),{media:0,maior:0,menor:0})
+ assert.equal(f([{media:null,completas:0}]),null)
+ assert.equal(f([{media:72.3,mediaExata:72.25,completas:2}]).media,72.25)
+})
+
+test('paginação mostra cinco por painel e mantém todos os grupos sem duplicação',()=>{
+ const {paginarGrupos:p}=modulo.exports,escolas=Array.from({length:11},(_,i)=>i)
+ assert.deepEqual(p(escolas,0).itens,[0,1,2,3,4])
+ assert.deepEqual(p(escolas,1).itens,[5,6,7,8,9])
+ assert.deepEqual(p(escolas,2).itens,[10])
+ assert.equal(p(escolas,99).atual,2)
+ assert.deepEqual(p([],0).itens,[])
+})

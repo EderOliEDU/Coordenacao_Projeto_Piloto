@@ -10,6 +10,7 @@ export const PROTOCOLO = {
     'Ausências são apresentadas separadamente dos resultados e não contam como erros.',
     'Q2 por vogal; Q5 pela consoante aplicada; Q7, Q8 e Q9 preservam suas categorias.',
     'Sem nota geral, diagnóstico, comparação entre fases ou classificação de prontidão para o Ensino Fundamental.',
+    'Índice complementar TAREFAS-Q1-Q5-V1: média por criança de Q1, Q2, Q3, Q4 e Q5, com pesos iguais; Q2 = TRUE/(TRUE+FALSE), considerando apenas respostas válidas. NULL não entra no cálculo; sem respostas válidas, desempenho indefinido. Média do recorte apenas entre avaliações completas; ausências não são erros. Desempenho nas tarefas, sem equivalência com fase ou porcentagem de consciência fonológica.',
     'Texto produzido por regras fixas, vinculado às respostas registradas; sem inferir evidências ausentes.',
   ],
 }
@@ -94,7 +95,7 @@ export function avaliarTerceiraAvaliacao(d: Awaited<ReturnType<typeof carregarGr
     return []
   })
   const semDados = linhas.filter(l => l.ausentes > 0).map(l => `${l.item}: ${l.ausentes} de ${l.base} crianças sem resultado registrado para este item.`)
-  return { protocolo: PROTOCOLO, base, linhas,
+  return { protocolo: PROTOCOLO, base, linhas, indiceQ1Q5: d.indiceQ1Q5 ?? null, indiceQ1Q5Escolas: d.indiceQ1Q5Escolas ?? [], indiceQ1Q5Turmas: d.indiceQ1Q5Turmas ?? [],
     sintese: { demonstradas, continuidade, semDados },
     conclusao: base ? 'Esta avaliação descreve habilidades demonstradas nas tarefas e necessidades de continuidade pedagógica na transição para o Ensino Fundamental. Não permite concluir prontidão global, evolução entre fases ou diagnóstico.' : 'Não há aplicações concluídas neste recorte para elaborar a análise.' }
 }
@@ -103,5 +104,19 @@ export async function carregarRelatorioTerceiraAvaliacao(escolaId?: number, turm
   const faseId = Number(process.env.TERCEIRA_AVALIACAO_FASE_ID || '3')
   if (!Number.isSafeInteger(faseId) || faseId <= 0) throw new Error('Configuração da terceira fase inválida.')
   const d = await carregarGraficosAplicador({ faseId, escolaId, turmaId, unicaConcluidaPorAluno: true })
-  return { ...avaliarTerceiraAvaliacao(d), filtros: d.filtros, geradoEm: d.geradoEm }
+  return { ...avaliarTerceiraAvaliacao(d),
+    indiceQ1Q5Turmas: d.indiceQ1Q5Turmas.map(t => ({
+      ...t, turma: t.turma.split(' · ')[0],
+      professoras: [...new Set(d.classificacaoTurmas.filter(c => c.turmaId === t.turmaId).flatMap(c => c.professoras))],
+    })),
+    filtros: d.filtros, geradoEm: d.geradoEm,
+    referenciasQ1Q5: d.referenciasQ1Q5,
+    resumoProjeto: d.resumoProjeto,
+    resumosAgrupamento: d.resumosAgrupamento,
+    pontuacaoTurmasProjeto: d.pontuacaoTurmasProjeto,
+    distribuicoesTurmasProjeto: d.distribuicoesTurmasProjeto,
+    indicesAlfabeticosTurmasProjeto: d.indicesAlfabeticosTurmasProjeto,
+    conscienciaParticipantesTurmas: d.conscienciaParticipantesTurmas,
+    professorasTurma: turmaId ? [...new Set(d.classificacaoTurmas.filter(t => t.turmaId === turmaId).flatMap(t => t.professoras))] : [],
+  }
 }

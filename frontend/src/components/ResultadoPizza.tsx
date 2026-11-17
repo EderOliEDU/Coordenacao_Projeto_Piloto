@@ -2,6 +2,7 @@ import { useId } from 'react'
 
 interface Resultado { codigo: string; descricao: string; n: number; percentual: number | null }
 const cores: Record<string, string> = {
+  COMPLETO_SEM_APOIO: '#287a66', OUTROS_RESULTADOS_NOME: '#738196',
   SIM: '#287a66', NAO: '#bd654a', COM_APOIO: '#c08b25', SEM_APOIO: '#287a66', NAO_ESCREVE: '#bd654a',
   NAO_ESCREVEU: '#738196', PRE_ALFABETICA: '#bd654a', ALFABETICA_PARCIAL: '#c08b25', ALFABETICA_COMPLETA: '#2867a5', ALFABETICA_CONSOLIDADA: '#287a66',
   NAO_UTILIZA_SONS: '#bd654a', UTILIZA_ALGUNS_SONS: '#c08b25', DECODIFICA: '#2867a5', LE_AUTONOMIA: '#287a66', NAO_RESPONDEU: '#738196',
@@ -14,9 +15,10 @@ const rotulos: Record<string, string> = {
 const percentual = (n: number | null) => n === null ? '—' : `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 const ponto = (angulo: number, raio: number) => [100 + raio * Math.cos(angulo), 100 + raio * Math.sin(angulo)]
 
-export default function ResultadoPizza({ item, avaliadas, resultados, unidade = avaliadas === 1 ? 'resposta válida' : 'respostas válidas' }: { item: string; avaliadas: number; resultados: Resultado[]; unidade?: string }) {
+export default function ResultadoPizza({ item, avaliadas, resultados, unidade = avaliadas === 1 ? 'resposta válida' : 'respostas válidas', usarDescricao = false, unidadeQuantidade }: { item: string; avaliadas: number; resultados: Resultado[]; unidade?: string; usarDescricao?: boolean; unidadeQuantidade?: string }) {
   const id = useId()
-  const titulo = `${item}: ${avaliadas ? resultados.map(r => `${rotulos[r.codigo] || r.descricao}: ${r.n} (${percentual(r.percentual)})`).join('; ') : 'Sem dados: nenhuma resposta válida'}`
+  const quantidade=(n:number)=>unidadeQuantidade?`${n.toLocaleString('pt-BR')} ${unidadeQuantidade}`:String(n)
+  const titulo = `${item}: ${avaliadas ? resultados.map(r => `${(usarDescricao ? r.descricao : rotulos[r.codigo] || r.descricao)}: ${quantidade(r.n)} (${percentual(r.percentual)})`).join('; ') : 'Sem dados: nenhuma resposta válida'}`
   let inicio = -Math.PI / 2
   return <figure className="ar-pizza">
     <svg viewBox="0 0 200 200" role="img" aria-labelledby={id}>
@@ -38,7 +40,7 @@ export default function ResultadoPizza({ item, avaliadas, resultados, unidade = 
       <span className="ar-pizza-base">{avaliadas} {unidade}</span>
       {avaliadas > 0 && <ul>{resultados.filter(r => r.n > 0).map(r => <li key={r.codigo}>
         <i aria-hidden="true" style={{ background: cores[r.codigo] || '#526477' }} />
-        <span>{rotulos[r.codigo] || r.descricao}: {r.n} ({percentual(r.percentual)})</span>
+        <span>{(usarDescricao ? r.descricao : rotulos[r.codigo] || r.descricao)}: {quantidade(r.n)} ({percentual(r.percentual)})</span>
       </li>)}</ul>}
     </figcaption>
   </figure>
