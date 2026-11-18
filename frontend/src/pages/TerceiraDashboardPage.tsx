@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react'
-import {Link,useSearchParams} from 'react-router-dom'
+import {useSearchParams} from 'react-router-dom'
 import api from '../api/client'
 import DashboardColunas,{numeroDashboard} from '../components/DashboardColunas'
 import DashboardPizza from '../components/DashboardPizza'
@@ -19,11 +19,11 @@ export function DashboardPainel({d,painel,scope,onOpen,fixo=false}:{d:DashboardD
     {painel.id==='nome'&&<div className="td-category-summary">Nome completo sem apoio</div>}
     <div className="td-metric-label">{tituloCategoria}{painel.unidade==='%'?' · percentual dos registros válidos':''}</div>
     {fixo?<div className="td-panel-scope td-panel-scope-global">Todas as escolas · turmas do projeto</div>:escolaPainel&&<div className="td-panel-scope" aria-label={`Escola deste painel: ${escolaPainel}`}>{escolaPainel}</div>}
-    {painel.item==='LEITURA'&&<div className="td-reading-unit">Registros por palavra · não são quantidades de crianças</div>}
+    {painel.item==='LEITURA_CRIANCAS'&&<div className="td-reading-unit">Média por criança · pesos 0 / 33 / 67 / 100</div>}
     <div className="td-reading-unit">{painel.item==='LEITURA'?'Registros válidos por palavra':'Alunos com resposta válida'}: {visiveis.reduce((s,g)=>s+g.avaliadas,0)} / {visiveis.reduce((s,g)=>s+g.base,0)} · Sem mínimo de cobertura</div>
     <div className={fixo?"td-panel-visuals td-only-columns":"td-panel-visuals"}>
-    <DashboardColunas key={`${categoria}-${fixo?'fixo':scope.escola+'-'+scope.turma}`} grupos={visiveis} referencias={referenciasDashboard(globais,painel.item==='Q1Q5')} unidade={painel.unidade} titulo={fixo?'Desempenho global das turmas':painel.titulo+' — '+tituloCategoria} nivel={nivel} onOpen={fixo?undefined:onOpen} nota={painel.nota} mostrarQuantidade={painel.id==='nome'} unidadeRegistro={painel.item==='LEITURA'?'Leituras por palavra':undefined}/>
-    {!fixo&&<DashboardPizza d={d} item={painel.item} titulo={painel.titulo} scope={scope}/>}
+    <DashboardColunas key={`${categoria}-${fixo?'fixo':scope.escola+'-'+scope.turma}`} grupos={visiveis} referencias={referenciasDashboard(globais,['Q1Q5','LEITURA_CRIANCAS'].includes(painel.item))} unidade={painel.unidade} titulo={fixo?'Desempenho global das turmas':painel.titulo+' — '+tituloCategoria} nivel={nivel} onOpen={fixo?undefined:onOpen} nota={painel.nota} mostrarQuantidade={painel.id==='nome'} unidadeRegistro={painel.item==='LEITURA'?'Leituras por palavra':undefined}/>
+    {!fixo&&<DashboardPizza d={d} item={painel.id==='nome'?'NOME_DETALHADO':painel.item} titulo={painel.titulo} scope={scope}/>}
     </div>
 
   </section>
@@ -69,8 +69,6 @@ export function DashboardConteudo({d,scope,onScope,atualizar,atualizando=false,a
   const todas=d.pontuacaoTurmasProjeto
   const turmas=todas.filter(t=>(!scope.escola||t.escolaId===scope.escola)&&(!scope.turma||t.turmaId===scope.turma))
   const criancas=turmas.reduce((s,t)=>s+t.base,0)
-  const gruposConsciencia=recorteDashboard(gruposDashboard(d,'Q1Q5','INDICE','turma'),scope.escola,scope.turma,'turma')
-  const media=referenciasDashboard(gruposConsciencia,true)?.media??null
   const resumo=d.resumoProjeto
   const cobertura=resumo?.cobertura ?? null
   const escola=todas.find(t=>t.escolaId===scope.escola)?.escola||'Escola não encontrada'
@@ -78,13 +76,12 @@ export function DashboardConteudo({d,scope,onScope,atualizar,atualizando=false,a
   const abrir=(g:GrupoDashboard)=>onScope(scope.escola?{escola:scope.escola,turma:g.id}:{escola:g.id,turma:null})
   return <div className="td-dashboard">
     <header className="td-heading"><div><span className="td-eyebrow">PROJETO INSTRUÇÃO FÔNICA</span><h1>Terceira avaliação<span className="td-heading-dot">.</span></h1>
-<p>Um olhar sobre as aprendizagens.</p></div><div className="td-heading-actions">{onAgrupamento&&<label className="td-group-filter">Agrupamento <select aria-label="Agrupamento" value={agrupamento??''} onChange={e=>onAgrupamento(Number(e.target.value)||null)}><option value="">Todos</option><option value="4">4º agrupamento</option><option value="5">5º agrupamento</option></select></label>}<button onClick={atualizar} disabled={atualizando}>{atualizando?'Atualizando…':'↻ Atualizar'}</button><button onClick={()=>contexto.current?.showModal()}>Sobre os dados</button><Link to="/admin/aplicador/relatorio-terceira-old">Versão anterior ↗</Link></div></header>
+<p>Um olhar sobre as aprendizagens.</p></div><div className="td-heading-actions">{onAgrupamento&&<label className="td-group-filter">Agrupamento <select aria-label="Agrupamento" value={agrupamento??''} onChange={e=>onAgrupamento(Number(e.target.value)||null)}><option value="">Todos</option><option value="4">4º agrupamento</option><option value="5">5º agrupamento</option></select></label>}<button onClick={atualizar} disabled={atualizando}>{atualizando?'Atualizando…':'↻ Atualizar'}</button><button onClick={()=>contexto.current?.showModal()}>Sobre os dados</button></div></header>
     <nav className="td-breadcrumb" aria-label="Recorte do dashboard">{agrupamento&&<strong>{agrupamento}º agrupamento ·</strong>}<button disabled={!scope.escola} onClick={()=>onScope({escola:null,turma:null})}>Todas as escolas</button>{scope.escola&&<><span>›</span><button disabled={!scope.turma} onClick={()=>onScope({escola:scope.escola,turma:null})}>{escola}</button></>}{scope.turma&&<><span>›</span><strong>{turma}</strong></>}</nav>
     <section className="td-kpis" aria-label="Indicadores gerais do projeto">
       <article className="td-kpi td-kpi-featured"><span>{agrupamento?'Crianças do agrupamento':'Crianças do projeto'} <i>◉</i></span><strong>{resumo?.total.toLocaleString('pt-BR')??'—'}</strong><small>{agrupamento?agrupamento+'º agrupamento · cadastro atual':'Projeto inteiro · cadastro atual'}</small></article>
       <article className="td-kpi"><span>Avaliadas <i>✓</i></span><strong>{resumo?.avaliadas.toLocaleString('pt-BR')??'—'}</strong><small>3ª avaliação concluída</small></article>
       <article className="td-kpi"><span>Não avaliadas <i>◷</i></span><strong>{resumo?.naoAvaliadas.toLocaleString('pt-BR')??'—'}</strong><small>Sem conclusão na 3ª avaliação</small></article>
-      <article className="td-kpi"><span>Pontuação média <i>▥</i></span><strong>{media===null?'—':numeroDashboard(media)}<em>/100</em></strong><small>Consciência Fonológica · recorte atual</small></article>
       <article className="td-kpi"><span>{agrupamento?'Escolas do agrupamento':'Escolas do projeto'} <i>▦</i></span><strong>{resumo?.escolas??'—'}</strong><small>Com crianças cadastradas</small></article>
       <article className="td-kpi td-kpi-coverage"><span>{agrupamento?'Cobertura do agrupamento':'Cobertura do projeto'} <i>◎</i></span><strong>{cobertura===null?'—':numeroDashboard(cobertura)}<em>%</em></strong><small>{agrupamento?'Avaliadas ÷ total do agrupamento':'Avaliadas ÷ total do projeto'}</small></article>
     </section>

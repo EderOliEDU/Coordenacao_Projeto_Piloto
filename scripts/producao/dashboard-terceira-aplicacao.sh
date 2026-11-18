@@ -86,6 +86,11 @@ const {getPgPool}=require('./dist/services/pgPool');
  const pesos=[.05,.05,.05,.05,.10,.02,.10,.23,.35];
  assert.ok(Array.isArray(r.indicesAlfabeticosTurmasProjeto));
  assert.ok(Array.isArray(r.conscienciaParticipantesTurmas));
+ assert.ok(Array.isArray(r.leituraCriancasTurmas));
+ assert.equal(r.leituraCriancasTurmas.reduce((s,p)=>s+p.n,0),r.pontuacaoTurmasProjeto.reduce((s,t)=>s+t.base,0));
+ assert.ok(r.leituraCriancasTurmas.every(p=>p.nota===null||(p.nota>=0&&p.nota<=100&&['NAO_UTILIZA_SONS','UTILIZA_ALGUNS_SONS','DECODIFICA','LE_AUTONOMIA','NAO_RESPONDEU'].includes(p.perfil))));
+ assert.equal(r.distribuicoesTurmasProjeto.filter(p=>p.item==='NOME_DETALHADO').reduce((s,p)=>s+p.n,0),q7.avaliadas);
+
  for(const t of r.indicesAlfabeticosTurmasProjeto){
   assert.equal(t.versao,'APRENDIZAGEM-ALFABETICA-Q1Q9-V2');
   assert.equal(t.completas+t.incompletas,t.base);
@@ -101,7 +106,7 @@ const {getPgPool}=require('./dist/services/pgPool');
  WHERE v.id_aplicacao=a.id_aplicacao AND p.codigo='ALITERACAO' AND v.acertou IS NOT NULL)
  GROUP BY a.id_turma`,[Number(process.env.TERCEIRA_AVALIACAO_FASE_ID||3)]);
  for(const row of db.rows){const t=r.indicesAlfabeticosTurmasProjeto.find(t=>t.turmaId===row.id_turma);assert.ok(t);assert.equal(t.validasPorQuestao[1],row.n)}
- console.log(JSON.stringify({protocolo:r.protocolo.codigo,criancas:r.base,turmas:r.indicesAlfabeticosTurmasProjeto.length,q2RespostasValidas:true,detalhamentoQ7:true}));
+ console.log(JSON.stringify({protocolo:r.protocolo.codigo,criancas:r.base,turmas:r.indicesAlfabeticosTurmasProjeto.length,q2RespostasValidas:true,leituraPorCrianca:true,pizzaNomeDetalhada:true,detalhamentoQ7:true}));
 })().catch(e=>{console.error(e.message);process.exitCode=1}).finally(()=>getPgPool().end());
 JS
 

@@ -38,9 +38,9 @@ test('leitura conta registros por palavra e não crianças; referências não de
  assert.equal(r([],false),null)
  assert.equal(c(ts,999,null,'turma').length,0)
 })
-test('rota antiga preserva o componente anterior e ambas exigem administrador',()=>{
+test('somente dashboard atual permanece e exige administrador',()=>{
  const app=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8')
- assert.match(app,/relatorio-terceira-old" element={<RequireAdministrador><AplicadorRelatorioPage/)
+ assert.ok(!app.includes('relatorio-terceira-old'));assert.ok(!app.includes('AplicadorRelatorioPage'))
  assert.match(app,/relatorio-terceira" element={<RequireAdministrador><TerceiraDashboardPage/)
 })
 
@@ -105,13 +105,6 @@ test('Nome compara 15/17 e 17/22 por percentual, mantendo totais 32/39',()=>{
  const pizza=modulo.exports.pizzaDashboard(x,'NOME_COMPLETO_SEM_APOIO',{escola:null,turma:null})
  assert.equal(pizza.resultados[0].n,32);assert.equal(pizza.avaliadas,39)
 })
-test('rótulos de leitura mudam sem converter ou substituir os códigos registrados',()=>{
- const c=modulo.exports.PAINEIS.find(p=>p.id==='leitura').categorias
- assert.deepEqual(c.slice(0,4),[['NAO_UTILIZA_SONS','Pré-alfabética'],['UTILIZA_ALGUNS_SONS','Alfabética parcial'],['DECODIFICA','Alfabética completa'],['LE_AUTONOMIA','Alfabética consolidada']])
- assert.deepEqual(c[4],['NAO_RESPONDEU','Não respondeu'])
-})
-
-
 test('V2 exige cálculo individual do servidor, mantém zero e rejeita versão antiga',()=>{
  const x=d(),f=modulo.exports.desempenhoAlfabetico
  assert.ok(f(x).every(t=>t.valor===null))
@@ -155,4 +148,32 @@ test('cinco painéis: consciência inclui participantes parciais proporcionalmen
  assert.equal(grupos[0].avaliadas,6);assert.equal(grupos[0].valor,50)
  assert.equal(r(g(x,'Q1Q5','INDICE','turma'),true).media,50)
  assert.equal(modulo.exports.desempenhoAlfabetico(x)[0].valor,null)
+})
+
+test('leitura por criança: médias 67 e 100 têm pesos iguais mesmo com 10 e 2 palavras',()=>{
+ const x=d();x.leituraCriancasTurmas=[{turmaId:1,nota:67,registros:10,perfil:'DECODIFICA',n:1},{turmaId:1,nota:100,registros:2,perfil:'LE_AUTONOMIA',n:1},{turmaId:1,nota:null,registros:0,n:2},{turmaId:2,nota:0,registros:1,n:1},{turmaId:2,nota:null,registros:0,n:1}]
+ const ts=g(x,'LEITURA_CRIANCAS','INDICE','turma')
+ assert.equal(ts[0].valor,83.5);assert.equal(ts[0].avaliadas,2);assert.equal(ts[0].base,4)
+ assert.equal(ts.find(t=>t.id===2).valor,0);assert.equal(ts.find(t=>t.id===3).valor,null)
+ assert.equal(r(ts,true).media,167/3)
+ const p=modulo.exports.pizzaDashboard(x,'LEITURA_CRIANCAS',{escola:10,turma:1})
+ assert.deepEqual([p.base,p.avaliadas,p.ausentes],[4,2,2]);assert.deepEqual(p.resultados.map(r=>r.n),[0,0,1,1,0])
+ assert.equal(p.resultados.reduce((s,r)=>s+r.n,0),2)
+ assert.equal(modulo.exports.PAINEIS.find(p=>p.id==='leitura').unidade,'pontos')
+})
+
+test('pizza distingue não leu de pré-alfabética e ausência sem duplicar criança',()=>{
+ const x=d();x.leituraCriancasTurmas=[{turmaId:1,nota:0,registros:2,naoLeu:true,perfil:'NAO_RESPONDEU',n:1},{turmaId:1,nota:0,registros:2,naoLeu:false,perfil:'NAO_UTILIZA_SONS',n:1},{turmaId:1,nota:null,registros:0,naoLeu:null,n:2}]
+ const p=modulo.exports.pizzaDashboard(x,'LEITURA_CRIANCAS',{escola:10,turma:1})
+ assert.deepEqual(p.resultados.map(r=>r.n),[1,0,0,0,1]);assert.equal(p.avaliadas,2);assert.equal(p.ausentes,2)
+})
+
+test('pizza Nome detalha nove possibilidades por criança e preserva critério das colunas',()=>{
+ const x=d();x.distribuicoesTurmasProjeto=[{turmaId:1,item:'NOME_DETALHADO',categoria:'COM_APOIO_NOME',n:1},{turmaId:1,item:'NOME_DETALHADO',categoria:'SEM_APOIO_NOME_COMPLETO',n:1},{turmaId:1,item:'NOME_DETALHADO',categoria:'COM_APOIO_NAO_INFORMADO',n:1},{turmaId:1,item:'NOME_DETALHADO',categoria:'NAO_ESCREVE',n:1},{turmaId:2,item:'NOME_DETALHADO',categoria:'SEM_APOIO_NOME_COMPOSTO',n:2}]
+ const p=modulo.exports.pizzaDashboard(x,'NOME_DETALHADO',{escola:10,turma:1})
+ assert.equal(p.resultados.length,9);assert.equal(p.avaliadas,4);assert.equal(p.ausentes,0)
+ assert.equal(p.resultados.filter(r=>r.n===0).length,5)
+ assert.equal(p.resultados.find(r=>r.codigo==='COM_APOIO_NAO_INFORMADO').percentual,25)
+ assert.equal(modulo.exports.pizzaDashboard(x,'NOME_DETALHADO',{escola:10,turma:null}).avaliadas,6)
+ assert.equal(modulo.exports.PAINEIS.find(p=>p.id==='nome').item,'NOME_COMPLETO_SEM_APOIO')
 })

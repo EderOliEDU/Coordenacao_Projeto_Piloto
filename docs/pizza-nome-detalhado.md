@@ -1,0 +1,4 @@
+# Pizza do painel Nome completo sem apoio
+
+DEV, 17/11/2026. A pizza passa a mostrar todos os resultados válidos da Q7: COM_APOIO e SEM_APOIO cruzados com NOME, NOME_COMPOSTO e NOME_COMPLETO; NAO_ESCREVE como categoria única; COM_APOIO_NAO_INFORMADO e SEM_APOIO_NAO_INFORMADO para tipo ausente/desconhecido. Cada criança contada uma vez na última aplicação concluída da fase, seguindo a base do relatório. Ausência da resposta Q7 aparece fora da pizza como sem dados. Legenda inclui categorias com zero; quantidades são crianças. Os percentuais usam todos os registros válidos da Q7, incluindo tipo não informado.
+Coluna mantém seu próprio denominador: nome completo sem apoio entre Q7 com tipo avaliável, não escreve incluído como não atingiu. Índice geral, pesos e demais painéis preservados. Consulta anônima por turma; nenhuma mudança às respostas ou ao banco. Filtros de agrupamento/escola/turma aplicados como nos demais gráficos.

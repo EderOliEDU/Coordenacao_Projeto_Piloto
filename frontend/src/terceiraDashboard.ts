@@ -4,6 +4,7 @@ export interface Distribuicao {turmaId:number;item:string;categoria:string;n:num
 export interface GrupoDashboard {id:number;escolaId:number;nome:string;subtitulo:string;base:number;avaliadas:number;n:number;valor:number|null}
 export interface IndiceAlfabeticoTurma {turmaId:number;versao:string;base:number;completas:number;incompletas:number;notas:(number|null)[];mediaExata:number|null;validasPorQuestao:number[]}
 export interface DashboardData {
+  leituraCriancasTurmas?:{turmaId:number;nota:number|null;registros:number;naoLeu?:boolean|null;perfil?:string|null;n:number}[];
   conscienciaParticipantesTurmas?:{turmaId:number;participantes:number;mediaExata:number|null}[];
   indicesAlfabeticosTurmasProjeto?:IndiceAlfabeticoTurma[];
   pontuacaoTurmasProjeto:TurmaProjeto[];distribuicoesTurmasProjeto:Distribuicao[];
@@ -14,7 +15,7 @@ export interface DashboardData {
 export const PAINEIS=[
   {id:'consciencia',titulo:'Consciência Fonológica',item:'Q1Q5',unidade:'pontos',padrao:'INDICE',categorias:[['INDICE','Pontuação Q1–Q5']],nota:'Média por criança das tarefas Q1–Q5 com resposta válida, com pesos iguais entre tarefas disponíveis. Q2 considera a proporção de acertos nas vogais registradas. Todas as crianças com alguma resposta válida participam; ausência não é erro. Não altera o índice geral Q1–Q9.'},
   {id:'escrita',titulo:'Fases da escrita',item:'NIVEL_ESCRITA',unidade:'%',padrao:'ALFABETICA_COMPLETA',categorias:[['NAO_ESCREVEU','Não escreveu'],['PRE_ALFABETICA','Pré-alfabética'],['ALFABETICA_PARCIAL','Alfabética parcial'],['ALFABETICA_COMPLETA','Alfabética completa'],['ALFABETICA_CONSOLIDADA','Alfabética consolidada']],nota:'Percentual da categoria de escrita registrada pelo aplicador, sobre respostas válidas da questão.'},
-  {id:'leitura',titulo:'Fases da Leitura',item:'LEITURA',unidade:'%',padrao:'DECODIFICA',categorias:[['NAO_UTILIZA_SONS','Pré-alfabética'],['UTILIZA_ALGUNS_SONS','Alfabética parcial'],['DECODIFICA','Alfabética completa'],['LE_AUTONOMIA','Alfabética consolidada'],['NAO_RESPONDEU','Não respondeu']],nota:'Percentual sobre registros válidos por palavra. Rótulos de apresentação correspondentes às categorias originais; não atribuem fase global à criança.'},
+  {id:'leitura',titulo:'Fases da Leitura',item:'LEITURA_CRIANCAS',unidade:'pontos',padrao:'INDICE',categorias:[['INDICE','Pontuação média por criança']],nota:'Nota individual: média das palavras com classificação válida. Não utiliza sons = 0; utiliza alguns sons = 33; decodifica = 67; lê com autonomia = 100; não respondeu registrado = 0. Ausências ficam fora do cálculo. A média do grupo dá o mesmo peso a cada criança avaliada; não atribui fase global de Ehri.'},
   {id:'nome',titulo:'Nome completo sem apoio',item:'NOME_COMPLETO_SEM_APOIO',unidade:'%',padrao:'COMPLETO_SEM_APOIO',categorias:[['COMPLETO_SEM_APOIO','Nome completo sem apoio']],nota:'Percentual que escreveu o nome completo sem apoio entre registros Q7 com critério avaliável. Outros resultados avaliáveis permanecem na base. Tipo de nome não informado fica fora do denominador, sem virar erro.'},
   {id:'letras',titulo:'Diferenciação Letras × Números',item:'LETRAS_NUMEROS',unidade:'%',padrao:'SIM',categorias:[['SIM','Demonstrou'],['NAO','Não demonstrou']],nota:'Percentual de crianças que demonstraram ou não demonstraram a habilidade na tarefa aplicada.'},
 ]
@@ -26,7 +27,11 @@ export function gruposDashboard(d:DashboardData,item:string,categoria:string,niv
     let g=grupos.get(id)
     if(!g){g={id,escolaId:t.escolaId,nome:nivel==='escola'?t.escola:t.turma,subtitulo:nivel==='escola'?'':(t.professoras?.join(' · ')||'Professora não informada'),base:0,avaliadas:0,n:0,valor:null};grupos.set(id,g)}
     g.base+=t.base*(item==='LEITURA'?palavras:1)
-    if(item==='Q1Q5') {
+    if(item==='LEITURA_CRIANCAS') {
+      const rs=(d.leituraCriancasTurmas??[]).filter(p=>p.turmaId===t.turmaId&&p.nota!==null)
+      g.avaliadas+=rs.reduce((s,p)=>s+p.n,0)
+      g.n+=rs.reduce((s,p)=>s+p.nota!*p.n,0)
+    } else if(item==='Q1Q5') {
       const parcial=d.conscienciaParticipantesTurmas?.find(p=>p.turmaId===t.turmaId)
       const n=parcial?parcial.participantes:t.completas
       const media=parcial?parcial.mediaExata:(t.mediaExata??t.media)
@@ -37,7 +42,7 @@ export function gruposDashboard(d:DashboardData,item:string,categoria:string,niv
       g.n+=rs.filter(r=>r.categoria===categoria).reduce((s,r)=>s+r.n,0)
     }
   }
-  return [...grupos.values()].map(g=>({...g,valor:g.avaliadas?g.n/g.avaliadas*(item==='Q1Q5'?1:100):null}))
+  return [...grupos.values()].map(g=>({...g,valor:g.avaliadas?g.n/g.avaliadas*(['Q1Q5','LEITURA_CRIANCAS'].includes(item)?1:100):null}))
     .sort((a,b)=>a.valor===null?(b.valor===null?a.nome.localeCompare(b.nome,'pt-BR')||a.id-b.id:1):b.valor===null?-1:b.valor-a.valor||a.nome.localeCompare(b.nome,'pt-BR')||a.id-b.id)
 }
 export function referenciasDashboard(grupos:GrupoDashboard[],indice:boolean) {
@@ -52,8 +57,23 @@ export function recorteDashboard(grupos:GrupoDashboard[],escola:number|null,turm
 export function pizzaDashboard(d:DashboardData,item:string,scope:{escola:number|null;turma:number|null}) {
   const turmas=d.pontuacaoTurmasProjeto.filter(t=>(!scope.escola||t.escolaId===scope.escola)&&(!scope.turma||t.turmaId===scope.turma))
   const ids=new Set(turmas.map(t=>t.turmaId))
+  if(item==='LEITURA_CRIANCAS') {
+    const rs=(d.leituraCriancasTurmas??[]).filter(p=>ids.has(p.turmaId)&&p.nota!==null)
+    const categorias=[['NAO_UTILIZA_SONS','Pré-alfabética'],['UTILIZA_ALGUNS_SONS','Alfabética parcial'],['DECODIFICA','Alfabética completa'],['LE_AUTONOMIA','Alfabética consolidada'],['NAO_RESPONDEU','Não leu']]
+    const classificados=rs.filter(p=>categorias.some(([c])=>c===p.perfil))
+    const avaliadas=classificados.reduce((s,p)=>s+p.n,0),base=turmas.reduce((s,t)=>s+t.base,0)
+    return {base,avaliadas,ausentes:Math.max(0,base-avaliadas),resultados:categorias.map(([codigo,descricao])=>{
+      const n=classificados.filter(p=>p.perfil===codigo).reduce((s,p)=>s+p.n,0)
+      return {codigo,descricao,n,percentual:avaliadas?Math.round(n/avaliadas*1000)/10:null}
+    })}
+  }
+
   const registros=d.distribuicoesTurmasProjeto.filter(r=>ids.has(r.turmaId)&&r.item===item)
-  const categorias=item==='NOME_COMPLETO_SEM_APOIO'?[['COMPLETO_SEM_APOIO','Nome completo sem apoio'],['OUTROS_RESULTADOS_NOME','Outros resultados']]:PAINEIS.find(p=>p.item===item)?.categorias||[['SIM','Demonstrou'],['NAO','Não demonstrou']]
+  const categorias=item==='NOME_DETALHADO'?[
+    ['COM_APOIO_NOME','Com apoio · só o nome'],['COM_APOIO_NOME_COMPOSTO','Com apoio · nome composto'],['COM_APOIO_NOME_COMPLETO','Com apoio · nome completo'],
+    ['SEM_APOIO_NOME','Sem apoio · só o nome'],['SEM_APOIO_NOME_COMPOSTO','Sem apoio · nome composto'],['SEM_APOIO_NOME_COMPLETO','Sem apoio · nome completo'],
+    ['NAO_ESCREVE','Não escreveu'],['COM_APOIO_NAO_INFORMADO','Com apoio · tipo de nome não informado'],['SEM_APOIO_NAO_INFORMADO','Sem apoio · tipo de nome não informado']
+  ]:item==='NOME_COMPLETO_SEM_APOIO'?[['COMPLETO_SEM_APOIO','Nome completo sem apoio'],['OUTROS_RESULTADOS_NOME','Outros resultados']]:(item==='LEITURA'?[['NAO_UTILIZA_SONS','Pré-alfabética'],['UTILIZA_ALGUNS_SONS','Alfabética parcial'],['DECODIFICA','Alfabética completa'],['LE_AUTONOMIA','Alfabética consolidada'],['NAO_RESPONDEU','Não respondeu']]:PAINEIS.find(p=>p.item===item)?.categorias)||[['SIM','Demonstrou'],['NAO','Não demonstrou']]
   const contagens=categorias.map(([codigo,descricao])=>({codigo,descricao,n:registros.filter(r=>r.categoria===codigo).reduce((s,r)=>s+r.n,0)}))
   const avaliadas=contagens.reduce((s,r)=>s+r.n,0)
   const multiplicador=item==='ALITERACAO'?5:item==='LEITURA'?d.linhas.filter(l=>l.item.startsWith('Q9-')).length:1

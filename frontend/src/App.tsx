@@ -6,7 +6,6 @@ import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, N
 import AppLayout, { EncerrarSessao } from './components/AppLayout'
 import AplicadorAcompanhamentoPage from './pages/AplicadorAcompanhamentoPage'
 import AplicadorGraficosPage from './pages/AplicadorGraficosPage'
-import AplicadorRelatorioPage from './pages/AplicadorRelatorioPage'
 import TerceiraDashboardPage from './pages/TerceiraDashboardPage'
 import LoginPage from './pages/LoginPage'
 import InicioPage from './pages/InicioPage'
@@ -125,7 +124,6 @@ const router = createBrowserRouter(createRoutesFromElements(
         <Route path="/superadmin/atividades/iniciar" element={<RequireSuperadmin><ConfirmarAtividade><IniciarAtividadeSuperadmin /></ConfirmarAtividade></RequireSuperadmin>} />
         <Route path="/logout" element={<EncerrarSessao />} />
         <Route path="/admin/aplicador/relatorio-terceira" element={<RequireAdministrador><TerceiraDashboardPage /></RequireAdministrador>} />
-        <Route path="/admin/aplicador/relatorio-terceira-old" element={<RequireAdministrador><AplicadorRelatorioPage /></RequireAdministrador>} />
         <Route path="/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
         <Route path="/admin/aplicador/graficos" element={<RequireAdministrador><AplicadorGraficosPage /></RequireAdministrador>} />
         <Route path="/admin/aplicador/acompanhamento" element={<RequireAdministrador><AplicadorAcompanhamentoPage /></RequireAdministrador>} />

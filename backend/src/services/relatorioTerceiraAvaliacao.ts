@@ -117,6 +117,7 @@ export async function carregarRelatorioTerceiraAvaliacao(escolaId?: number, turm
     distribuicoesTurmasProjeto: d.distribuicoesTurmasProjeto,
     indicesAlfabeticosTurmasProjeto: d.indicesAlfabeticosTurmasProjeto,
     conscienciaParticipantesTurmas: d.conscienciaParticipantesTurmas,
+    leituraCriancasTurmas: d.leituraCriancasTurmas,
     professorasTurma: turmaId ? [...new Set(d.classificacaoTurmas.filter(t => t.turmaId === turmaId).flatMap(t => t.professoras))] : [],
   }
 }

@@ -2,6 +2,8 @@ import { useId } from 'react'
 
 interface Resultado { codigo: string; descricao: string; n: number; percentual: number | null }
 const cores: Record<string, string> = {
+  COM_APOIO_NOME:'#d5aa63',COM_APOIO_NOME_COMPOSTO:'#b88432',COM_APOIO_NOME_COMPLETO:'#8e651d',SEM_APOIO_NOME:'#70a8c6',SEM_APOIO_NOME_COMPOSTO:'#397eaa',SEM_APOIO_NOME_COMPLETO:'#287a66',COM_APOIO_NAO_INFORMADO:'#9a8f9e',SEM_APOIO_NAO_INFORMADO:'#65748b',
+  NOTA_0_33:'#bd654a',NOTA_33_67:'#c08b25',NOTA_67_100:'#2867a5',NOTA_100:'#287a66',
   COMPLETO_SEM_APOIO: '#287a66', OUTROS_RESULTADOS_NOME: '#738196',
   SIM: '#287a66', NAO: '#bd654a', COM_APOIO: '#c08b25', SEM_APOIO: '#287a66', NAO_ESCREVE: '#bd654a',
   NAO_ESCREVEU: '#738196', PRE_ALFABETICA: '#bd654a', ALFABETICA_PARCIAL: '#c08b25', ALFABETICA_COMPLETA: '#2867a5', ALFABETICA_CONSOLIDADA: '#287a66',
@@ -15,7 +17,7 @@ const rotulos: Record<string, string> = {
 const percentual = (n: number | null) => n === null ? '—' : `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 const ponto = (angulo: number, raio: number) => [100 + raio * Math.cos(angulo), 100 + raio * Math.sin(angulo)]
 
-export default function ResultadoPizza({ item, avaliadas, resultados, unidade = avaliadas === 1 ? 'resposta válida' : 'respostas válidas', usarDescricao = false, unidadeQuantidade }: { item: string; avaliadas: number; resultados: Resultado[]; unidade?: string; usarDescricao?: boolean; unidadeQuantidade?: string }) {
+export default function ResultadoPizza({ item, avaliadas, resultados, unidade = avaliadas === 1 ? 'resposta válida' : 'respostas válidas', usarDescricao = false, unidadeQuantidade, mostrarZerados = false }: { item: string; avaliadas: number; resultados: Resultado[]; unidade?: string; usarDescricao?: boolean; unidadeQuantidade?: string; mostrarZerados?: boolean }) {
   const id = useId()
   const quantidade=(n:number)=>unidadeQuantidade?`${n.toLocaleString('pt-BR')} ${unidadeQuantidade}`:String(n)
   const titulo = `${item}: ${avaliadas ? resultados.map(r => `${(usarDescricao ? r.descricao : rotulos[r.codigo] || r.descricao)}: ${quantidade(r.n)} (${percentual(r.percentual)})`).join('; ') : 'Sem dados: nenhuma resposta válida'}`
@@ -38,7 +40,7 @@ export default function ResultadoPizza({ item, avaliadas, resultados, unidade = 
     </svg>
     <figcaption>
       <span className="ar-pizza-base">{avaliadas} {unidade}</span>
-      {avaliadas > 0 && <ul>{resultados.filter(r => r.n > 0).map(r => <li key={r.codigo}>
+      {avaliadas > 0 && <ul>{resultados.filter(r => mostrarZerados || r.n > 0).map(r => <li key={r.codigo}>
         <i aria-hidden="true" style={{ background: cores[r.codigo] || '#526477' }} />
         <span>{(usarDescricao ? r.descricao : rotulos[r.codigo] || r.descricao)}: {quantidade(r.n)} ({percentual(r.percentual)})</span>
       </li>)}</ul>}

@@ -230,6 +230,26 @@ CASE WHEN count(*) FILTER(WHERE p.codigo='NIVEL_ESCRITA')=1 THEN max(CASE WHEN p
     const indicesAlfabeticosTurmasProjeto=catalogoTurmasProjeto.map(t=>({turmaId:t.turmaId,
       ...calcularIndiceAlfabetico(escoresAlfabeticos.filter(e=>e.id_turma===t.turmaId).map(e=>({notas:Array.from({length:9},(_,i)=>e['q'+(i+1)]===null?null:Number(e['q'+(i+1)]))})))}))
 
+    // Painel de leitura: padrões anônimos; cada aplicação selecionada representa uma criança.
+    const leituraCriancasTurmas = filtros.unicaConcluidaPorAluno ? await queryGlobal(`
+      , notas_leitura AS (
+        SELECT a.id_turma,a.id_aplicacao,
+          (SELECT rr.classificacao FROM public.avaliacao_aplicador_leitura_respostas rr
+           WHERE rr.id_aplicacao=a.id_aplicacao AND rr.classificacao IN ('NAO_RESPONDEU','NAO_UTILIZA_SONS','UTILIZA_ALGUNS_SONS','DECODIFICA','LE_AUTONOMIA')
+           GROUP BY rr.classificacao ORDER BY count(*) DESC,
+             CASE rr.classificacao WHEN 'NAO_RESPONDEU' THEN 0 WHEN 'NAO_UTILIZA_SONS' THEN 1 WHEN 'UTILIZA_ALGUNS_SONS' THEN 2 WHEN 'DECODIFICA' THEN 3 WHEN 'LE_AUTONOMIA' THEN 4 END
+           LIMIT 1) AS perfil,
+
+          avg(CASE lr.classificacao WHEN 'NAO_UTILIZA_SONS' THEN 0 WHEN 'UTILIZA_ALGUNS_SONS' THEN 33 WHEN 'DECODIFICA' THEN 67 WHEN 'LE_AUTONOMIA' THEN 100 WHEN 'NAO_RESPONDEU' THEN 0 END)::float8 AS nota,
+          count(CASE WHEN lr.classificacao IN ('NAO_UTILIZA_SONS','UTILIZA_ALGUNS_SONS','DECODIFICA','LE_AUTONOMIA','NAO_RESPONDEU') THEN 1 END)::int AS registros,
+          bool_and(lr.classificacao='NAO_RESPONDEU') FILTER (WHERE lr.classificacao IN ('NAO_UTILIZA_SONS','UTILIZA_ALGUNS_SONS','DECODIFICA','LE_AUTONOMIA','NAO_RESPONDEU')) AS nao_leu
+        FROM base a LEFT JOIN public.avaliacao_aplicador_leitura_respostas lr USING(id_aplicacao)
+        WHERE a.status='CONCLUIDA' GROUP BY a.id_turma,a.id_aplicacao
+      )
+      SELECT id_turma AS "turmaId",nota,registros,perfil,nao_leu AS "naoLeu",count(*)::int AS n
+      FROM notas_leitura GROUP BY id_turma,nota,registros,perfil,nao_leu
+      ORDER BY id_turma,nota NULLS LAST,registros
+    `) : []
     const distribuicoesTurmasProjeto = filtros.unicaConcluidaPorAluno ? await queryGlobal(`
       SELECT a.id_turma AS "turmaId",p.codigo AS item,o.codigo AS categoria,count(*)::int AS n
       FROM base a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
@@ -250,6 +270,16 @@ CASE WHEN count(*) FILTER(WHERE p.codigo='NIVEL_ESCRITA')=1 THEN max(CASE WHEN p
       WHERE a.status='CONCLUIDA' AND p.codigo='ESCRITA_NOME'
         AND (o.codigo='NAO_ESCREVE' OR (o.codigo IN ('SEM_APOIO','COM_APOIO')
           AND r.nome_escrito IN ('NOME','NOME_COMPOSTO','NOME_COMPLETO')))
+      GROUP BY 1,3
+      UNION ALL
+      SELECT a.id_turma,'NOME_DETALHADO',
+        CASE WHEN o.codigo='NAO_ESCREVE' THEN 'NAO_ESCREVE'
+          ELSE o.codigo || '_' || CASE WHEN r.nome_escrito IN ('NOME','NOME_COMPOSTO','NOME_COMPLETO') THEN r.nome_escrito ELSE 'NAO_INFORMADO' END END,
+        count(*)::int
+      FROM base a JOIN public.avaliacao_aplicador_respostas r USING(id_aplicacao)
+      JOIN public.avaliacao_aplicador_perguntas p USING(id_pergunta)
+      JOIN public.avaliacao_aplicador_opcoes o ON o.id_opcao=r.id_opcao AND o.id_pergunta=r.id_pergunta
+      WHERE a.status='CONCLUIDA' AND p.codigo='ESCRITA_NOME' AND o.codigo IN ('COM_APOIO','SEM_APOIO','NAO_ESCREVE')
       GROUP BY 1,3
       UNION ALL
       SELECT a.id_turma,'ALITERACAO',CASE WHEN v.acertou THEN 'SIM' ELSE 'NAO' END,count(*)::int
@@ -389,7 +419,7 @@ CASE WHEN count(*) FILTER(WHERE p.codigo='NIVEL_ESCRITA')=1 THEN max(CASE WHEN p
     }
     await client.query('COMMIT')
     return { filtros: { faseId, escolaId: filtros.escolaId ?? null, versao: filtros.versao ?? null, turmaId: filtros.turmaId ?? null, fases, escolas, turmas },
-      resumo, versoes, perguntas, vogais, consoantes, leitura, palavras, escritaNome, classificacaoTurmas, indiceQ1Q5, indiceQ1Q5Escolas, indiceQ1Q5Turmas, pontuacaoTurmasProjeto, distribuicoesTurmasProjeto, indicesAlfabeticosTurmasProjeto, conscienciaParticipantesTurmas, referenciasQ1Q5, resumoProjeto, resumosAgrupamento, geradoEm: new Date().toISOString() }
+      resumo, versoes, perguntas, vogais, consoantes, leitura, palavras, escritaNome, classificacaoTurmas, indiceQ1Q5, indiceQ1Q5Escolas, indiceQ1Q5Turmas, pontuacaoTurmasProjeto, distribuicoesTurmasProjeto, indicesAlfabeticosTurmasProjeto, conscienciaParticipantesTurmas, leituraCriancasTurmas, referenciasQ1Q5, resumoProjeto, resumosAgrupamento, geradoEm: new Date().toISOString() }
   } catch (error) {
     await client.query('ROLLBACK')
     throw error
